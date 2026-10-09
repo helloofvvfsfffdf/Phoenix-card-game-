@@ -1,0 +1,1 @@
+{"name":"phoenix-multiplayer","version":"1.0.0","private":true,"scripts":{"start":"node server.js","test":"node tests/run-tests.js"},"dependencies":{"npm":"^12.2.0","start":"^5.1.0","ws":"^8.18.0"}}

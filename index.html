@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Phoenix - a five-player card game prototype: you against ChatGPT, Claude, Gemini and Copilot." />
+<link rel="stylesheet" href="css/styles.css" />
+<link rel="stylesheet" href="css/menu-v2.css" /><link rel="stylesheet" href="css/online.css" /><link rel="stylesheet" href="css/allies.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128293;</text></svg>" />
+<title>Phoenix</title>
+</head>
+<body>
+
+<section id="phoenix-menu" class="phoenix-menu">
+  <div class="menu-shell">
+    <div class="menu-left">
+      <p class="menu-eyebrow">THE CARD GAME</p>
+      <h1>PHOENIX</h1>
+      <p class="menu-subtitle">RISE · PLAY · SURVIVE</p>
+      <nav class="menu-actions" aria-label="Main menu">
+        <button type="button" id="menu-single" class="menu-primary"><span class="menu-symbol">▶</span> SINGLE PLAYER <small>CREATOR ONLY</small></button>
+        <button type="button" id="menu-test"><span class="menu-symbol">⚗</span> MULTIPLAYER TESTING <small>LOCAL · CONTROL ALL PLAYERS</small></button>
+        <button type="button" id="menu-multi"><span class="menu-symbol">♟</span> MULTIPLAYER <small>PRIVATE ROOMS · INVITE CODE</small></button>
+        <button type="button" id="menu-cards"><span class="menu-symbol">▣</span> CARD COLLECTION <small>COMING SOON</small></button>
+        <button type="button" id="menu-settings"><span class="menu-symbol">⚙</span> SETTINGS <small>COMING SOON</small></button>
+      </nav>
+      <p id="menu-feedback" aria-live="polite"></p>
+      <p class="menu-footer">PHOENIX · PROTOTYPE BUILD · RESTRICTED ACCESS</p>
+    </div>
+    <div class="menu-photo">
+      <img src="assets/phoenix.jpg" alt="Phoenix the leopard gecko">
+      <span><small>THE LEGENDARY</small>PHOENIX</span>
+    </div>
+  </div>
+</section>
+<section id="ally-picker" class="ally-picker" hidden><div class="ally-shell"><button id="ally-back" type="button" class="ally-back">← MAIN MENU</button><div class="ally-heading"><span>PHOENIX • PLAYER PROFILE</span><h2>CHOOSE YOUR ALLY</h2><p>Choose your companion. Other players can choose the same one!</p></div><div id="ally-grid" class="ally-grid"></div><div class="ally-bottom"><div id="ally-selection">Select an ally</div><button id="ally-confirm" type="button" disabled>CONFIRM ALLY →</button></div><p id="ally-feedback" aria-live="polite"></p></div></section><section id="online-screen" hidden><div class="online-shell"><div class="online-top"><h1>PHOENIX · ONLINE MULTIPLAYER</h1><button id="online-back" type="button">← MAIN MENU</button></div><p id="online-feedback" role="status"></p><div id="online-setup" class="online-panel"><h2>Create or join a private match</h2><p>Only the owner can create a room. Anyone with an invite code can join.</p><p>Five real players, five devices. Each player chooses an ally first. Duplicates are allowed.</p><div class="online-form"><input id="online-name" maxlength="22" placeholder="Your player name" aria-label="Player name"><input id="online-owner-password" type="password" autocomplete="off" maxlength="256" placeholder="Owner password" aria-label="Owner password"><button class="online-primary" id="online-create" type="button">CREATE ROOM</button></div><hr><div class="online-form"><input id="online-code-input" maxlength="6" placeholder="6-character invite code" aria-label="Invite code"><button class="online-primary" id="online-join" type="button">JOIN ROOM</button></div></div><div id="online-room" hidden><div class="online-panel"><h2>Room <span id="online-room-code"></span> <button id="online-copy" type="button">COPY CODE</button></h2><p id="online-phase"></p><label>Rounds <select id="online-rounds"><option value="5">5</option><option value="10" selected>10</option><option value="15">15</option><option value="20">20</option></select></label><div id="online-seats" class="online-seats"></div></div><div class="online-layout"><div class="online-panel"><div id="online-actions"></div><div id="online-hand"></div></div><div class="online-panel"><h3>Table log</h3><ol id="online-log"></ol></div></div></div></div></section><div class="game-toolbar" id="game-toolbar" hidden><button type="button" id="back-to-menu">← Main menu</button><strong id="game-mode-label">Single Player</strong></div><section class="testing-panel" id="testing-panel" hidden><div class="testing-head"><h2>⚗ Multiplayer Testing</h2><span>Local pass-and-play • You control all five players</span></div><p id="testing-status"></p><div id="testing-scores" class="testing-scores"></div><h3 class="testing-hand-title">Available moves — click a card to play it</h3><div id="testing-cards" class="testing-cards"></div><p id="testing-feedback" role="status"></p></section>
+<div class="app" id="phoenix-game" hidden>
+
+  <!-- ============================ MASTHEAD ============================ -->
+  <header class="masthead">
+    <div class="brand">
+      <h1>Phoenix</h1>
+      <p class="tagline">You vs ChatGPT &middot; Claude &middot; Gemini &middot; Copilot</p>
+    </div>
+
+    <div class="masthead-status">
+      <div class="status-block">
+        <span class="status-label">Round</span>
+        <span class="status-value" id="round-label">1 / 10</span>
+      </div>
+      <div class="status-block status-block-wide">
+        <span class="status-label">Now playing</span>
+        <span class="status-value" id="turn-label">&mdash;</span>
+      </div>
+    </div>
+
+    <div class="masthead-actions">
+      <label class="field">
+        <span>Rounds</span>
+        <select id="rounds-select">
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
+          <option value="15">15</option>
+          <option value="20">20</option>
+        </select>
+      </label>
+      <button class="btn btn-primary" id="btn-new" type="button">New Game</button>
+    </div>
+  </header>
+
+  <!-- ============================== BOARD ============================== -->
+  <section class="board" id="board" aria-label="Players"></section>
+
+  <!-- ============================ SEAT SWITCHES ========================= -->
+  <section class="seats-panel">
+    <div class="seats-head">
+      <h2>AI players</h2>
+      <p class="seats-note" id="seats-note"></p>
+    </div>
+    <div class="seat-switches" id="seat-switches"></div>
+  </section>
+
+  <!-- ============================== HAND =============================== -->
+  <section class="hand-panel">
+    <div class="hand-head">
+      <h2>Your hand</h2>
+      <div class="hand-meta">
+        <span class="pile pile-draw" id="pile-draw">
+          <span class="pile-label">Deck</span>
+          <span class="pile-count">&mdash;</span>
+        </span>
+        <span class="pile pile-discard" id="pile-discard">
+          <span class="pile-label">Discard</span>
+          <span class="pile-count">&mdash;</span>
+        </span>
+        <span class="pile pile-destroyed" id="pile-destroyed" hidden>
+          <span class="pile-label">Destroyed</span>
+          <span class="pile-count">0</span>
+        </span>
+      </div>
+      <p class="hand-note" id="hand-note">You draw a card at the start of your turn, then play one.</p>
+    </div>
+    <div class="hand" id="hand"></div>
+    <div class="reveals" id="reveals" hidden>
+      <h3 class="reveals-title">Hands revealed to you</h3>
+      <div class="reveals-list" id="reveals-list"></div>
+    </div>
+  </section>
+
+  <!-- ====================== FORCED CHOICE ============================= -->
+  <!-- Steal a Turn and Alvin hand the decision to the player who cast them, which
+       is not necessarily the player whose turn it is. That is why this is its own
+       panel rather than part of the hand. -->
+  <section class="choice-panel" id="choice-panel" hidden aria-live="polite">
+    <div class="choice-head">
+      <h2 id="choice-title">Choose a card</h2>
+      <p class="choice-help" id="choice-help"></p>
+      <p class="choice-error" id="choice-error"></p>
+    </div>
+    <div class="choice-grid" id="choice-grid"></div>
+    <div class="choice-targets" id="choice-targets" hidden></div>
+  </section>
+
+  <!-- ============================ AI RELAY ============================= -->
+  <section class="ai-panel" id="ai-panel" hidden aria-live="polite">
+    <div class="ai-head">
+      <div>
+        <h2 id="ai-title">AI's turn</h2>
+        <p class="ai-help" id="ai-help"></p>
+      </div>
+      <div class="ai-waiting">
+        <span class="ai-waiting-label">Waiting for a reply from</span>
+        <strong class="ai-waiting-name" id="ai-waiting">&mdash;</strong>
+      </div>
+    </div>
+
+    <div class="ai-step">
+      <div class="ai-step-head">
+        <h3><span class="step-num">1</span> Copy this prompt into the AI</h3>
+        <button class="btn btn-primary" id="btn-copy-prompt" type="button">Copy Prompt</button>
+      </div>
+      <pre class="prompt-preview" id="prompt-preview" tabindex="0"></pre>
+    </div>
+
+    <div class="ai-step">
+      <div class="ai-step-head">
+        <h3><span class="step-num">2</span> Paste the AI's reply here</h3>
+      </div>
+      <textarea
+        id="ai-response"
+        class="ai-response"
+        rows="5"
+        spellcheck="false"
+        placeholder="PLAY: Zombie&#10;TARGET: Gemini"></textarea>
+      <div class="ai-actions">
+        <button class="btn btn-primary" id="btn-submit-ai" type="button">Submit AI Move</button>
+        <span class="ai-hint">Accepted format: <code>PLAY: &lt;card&gt;</code> and, when the card needs one, <code>TARGET: &lt;player&gt;</code></span>
+      </div>
+      <pre class="ai-error" id="ai-error" hidden></pre>
+    </div>
+
+    <details class="ai-legal">
+      <summary>What this AI may play right now</summary>
+      <pre id="legal-moves"></pre>
+    </details>
+  </section>
+
+  <!-- =========================== TARGET PICKER ========================= -->
+  <section class="target-panel" id="target-panel" hidden>
+    <div class="target-head">
+      <h2 id="target-title">Choose a target</h2>
+      <button class="btn btn-ghost" id="btn-cancel-target" type="button">Cancel</button>
+    </div>
+    <div class="target-grid" id="target-grid"></div>
+    <p class="target-warning" id="target-warning" hidden></p>
+  </section>
+
+  <!-- =============================== LOG =============================== -->
+  <section class="log-panel">
+    <h2>Table log</h2>
+    <ol class="log" id="log"></ol>
+  </section>
+
+  <!-- ============================== HELP ============================== -->
+  <section class="help">
+    <h2>How it works</h2>
+    <ul>
+      <li>Cards come from a <strong>40-card deck</strong> and everybody is dealt five. Each turn you draw one, then play one of your cards. When the deck runs out the discard pile is reshuffled into a new deck, so a game never stalls.</li>
+      <li>Five players, one turn each per round, in rotating order. The game runs for the round count set above and the highest score wins.</li>
+      <li><strong>You</strong> play by clicking a card in your hand, then choosing a target if the card needs one. You draw one card at the start of your turn and play one of the cards you are holding.</li>
+      <li><strong>ChatGPT, Claude, Gemini and Copilot are external AIs.</strong> When one of their turns comes the game waits. Copy the prompt into that AI, paste its reply back, and the game plays exactly what it chose. Nothing is played automatically and there are no network calls.</li>
+      <li><strong>Eliminated for 1 round</strong> means you miss exactly one turn and are then back in play. An eliminated player still keeps their points.</li>
+      <li><strong>Hunter</strong> does one thing only: if someone throws a Zombie at a Hunter, the thrower is the one eliminated. Knife and Steal Points still land normally on a Hunter.</li>
+    </ul>
+  </section>
+
+</div>
+
+<!-- ============================= WIN SCREEN ============================= -->
+<div class="modal" id="win-screen" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="win-title">
+    <h2 id="win-title">Game over</h2>
+    <p id="win-sub"></p>
+    <ol class="win-table" id="win-summary"></ol>
+    <button class="btn btn-primary btn-lg" id="btn-play-again" type="button">Play Again</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
+
+<script src="js/cards.js"></script>
+<script src="js/rules.js"></script>
+<script src="js/parser.js"></script>
+<script src="js/prompt.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/prototype.js"></script>
+<script src="js/allies.js"></script>
+<script src="js/online.js"></script>
+</body>
+</html>
