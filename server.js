@@ -49,6 +49,8 @@ function validOwnerPassword(input) {
   return crypto.timingSafeEqual(supplied, expected);
 }
 const rooms = new Map();
+const INSTANCE_ID = crypto.randomBytes(4).toString('hex');
+console.log(`[PHOENIX diagnostic] Server started: instance=${INSTANCE_ID}, pid=${process.pid}`);
 const mime = {'.html':'text/html','.js':'text/javascript','.css':'text/css','.jpg':'image/jpeg','.png':'image/png','.ico':'image/x-icon','.svg':'image/svg+xml','.json':'application/json'};
 const httpServer = http.createServer((req,res)=>{
   let pathname;
@@ -90,7 +92,10 @@ function handle(ws,data){
  }
  if(data.type==='join'){
   if(ws.member)return error(ws,'Already in a room.');
-  const room=rooms.get(String(data.code||'').trim().toUpperCase());if(!room)return error(ws,'Room not found. Check the invite code.');
+  const requestedCode=String(data.code||'').trim().toUpperCase();
+   const room=rooms.get(requestedCode);
+   console.log(`[PHOENIX diagnostic] JOIN instance=${INSTANCE_ID} room=${requestedCode} found=${!!room} totalRooms=${rooms.size} knownRooms=${[...rooms.keys()].join(',')}`);
+   if(!room)return error(ws,'Room not found. Check the invite code.');
   if(room.state)return error(ws,'This match has already started.');
   if(room.members.length>=5)return error(ws,'Room is full.');
   const m={seat:room.members.length,name:cleanName(data.name),ally:ally(data.ally),ws,room};room.members.push(m);ws.member=m;room.log.push(m.name+' joined.');broadcast(room);return;
@@ -121,7 +126,7 @@ function handle(ws,data){
 function ally(id){return ['phoenix','tilly','maple','louie','simba','elsie'].includes(id)?id:'phoenix';}
 wss.on('connection',ws=>{
  ws.on('message',raw=>{try{handle(ws,JSON.parse(raw.toString()));}catch(e){error(ws,'Invalid request.');}});
- ws.on('close',()=>{const m=ws.member;if(!m)return;const room=m.room;m.ws=null;if(!room.state){room.members.splice(m.seat,1);room.members.forEach((p,i)=>p.seat=i);if(!room.members.length)rooms.delete(room.code);}else{room.log.push(m.name+' disconnected. Match paused.');}broadcast(room);});
+ ws.on('close',()=>{const m=ws.member;if(!m)return;const room=m.room;m.ws=null;if(!room.state){room.members.splice(m.seat,1);room.members.forEach((p,i)=>p.seat=i);if(!room.members.length){rooms.delete(room.code);console.log(`[PHOENIX diagnostic] DELETE instance=${INSTANCE_ID} room=${room.code} reason=host-disconnected`);}}else{room.log.push(m.name+' disconnected. Match paused.');}broadcast(room);});
 });
-httpServer.listen(PORT,'0.0.0.0',()=>console.log(`PHOENIX multiplayer server: http://localhost:${PORT}`));
+httpServer.listen(PORT,'0.0.0.0',()=>console.log(`PHOENIX multiplayer server: http://localhost:${PORT} instance=${INSTANCE_ID}`));
 
