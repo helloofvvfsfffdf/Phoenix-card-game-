@@ -1,10 +1,9 @@
 'use strict';
+const { WebSocketServer, WebSocket } = require('ws');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-const socket = new WebSocket(`${protocol}//${window.location.host}`);
 const Rules = require('./js/rules.js');
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
