@@ -605,11 +605,21 @@
       const discard = el('div', 'phoenix-pile');
       discard.append(el('h3', '', '🎴 DISCARD PILE'));
 
-      const discardCard = el('div', 'card phoenix-pile-card');
-      discardCard.append(el('span', 'card-art', '🐾'));
-      discardCard.append(el('span', 'card-name', 'PLAYED CARDS'));
-      discard.append(discardCard);
+            // Display the actual card on top of the discard pile.
+      const lastCard = s.lastDiscard
+        ? window.PhoenixCards.byId(s.lastDiscard)
+        : null;
 
+      if (lastCard) {
+        const discardCard = cardFace(lastCard, false);
+        discardCard.classList.add('phoenix-pile-card');
+        discard.append(discardCard);
+      } else {
+        const discardCard = el('div', 'card phoenix-pile-card');
+        discardCard.append(el('span', 'card-art', '🐾'));
+        discardCard.append(el('span', 'card-name', 'NO CARDS YET'));
+        discard.append(discardCard);
+      }
       discard.append(el(
         'p',
         '',
