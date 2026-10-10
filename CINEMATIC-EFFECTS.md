@@ -225,3 +225,10 @@ same-origin frame verified no settings overflow, match pause, return resume and
 Disabled remaining silent. Browser output was silenced deliberately to avoid
 leaving test music audible; these are functional checks, not subjective listening
 or physical-device validation. Test tabs and temporary servers are closed afterward.
+# Phoenix-only quality experiment
+
+The `experiment/phoenix-fire-takeover` branch replaces only the legendary Phoenix
+card's small overlay with locally bundled photographed fire, original giant
+bird artwork and a 4.4-second full-screen stage. See `PHOENIX-EXPERIMENT.md` for
+the preview button, authoritative timing, licensing and validation. All other
+card/ally/result designs described below remain unchanged.

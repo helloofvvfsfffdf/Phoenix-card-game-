@@ -84,6 +84,13 @@
   ]];
   DESIGNS.defeat = ['Quiet fallen-banner coda: low breath, soft body and fading resonance', [L('cloth',0,.45,.3,500),L('halo',.12,1.28,.17,146.83),L('breath',.17,1.15,.2,650,280)]];
   DESIGNS.draw = ['Balanced unresolved coda: two gentle resonances and settling air', [L('halo',0,1.17,.16,196),L('halo',.09,1.19,.14,293.66),L('air',.22,.83,.15,900,400)]];
+  // Phoenix-only fallback if the recorded local mix cannot be decoded. The
+  // production player prefers assets/phoenix/fire-roar.mp3. No other recipe changes.
+  DESIGNS.phoenix = ['Full-screen Phoenix: rising fire intake, pressure release and sustained roaring embers', [
+    L('air',0,1.2,.4,450,2300),L('fire',.15,3.85,.9,900,350),
+    L('rumble',.4,3.4,.6,78),L('impact',1.15,1.1,.3,68),L('crackle',.6,3.4,.3,2900)
+  ]];
+  MAGIC.phoenix = [];
   function recipe(key, inert) {
     if (!Object.prototype.hasOwnProperty.call(DESIGNS, key)) return null;
     var layers = inert ? [L('wood',0,.13,.22,330),L('cloth',.06,.19,.18,800)] : DESIGNS[key][1].concat(MAGIC[key] || []);

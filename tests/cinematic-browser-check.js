@@ -98,6 +98,7 @@ async function main() {
         window.WebSocket=class extends Native{constructor(...args){super(...args);track(this);window.smokeHost=this;}};
         const next=ws=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>{ws.removeEventListener('message',handler);reject(new Error('snapshot timeout'));},5000);function handler(e){const s=JSON.parse(e.data);if(!['state','error'].includes(s.type))return;clearTimeout(timer);ws.removeEventListener('message',handler);s.type==='error'?reject(new Error(s.message)):resolve(s);}ws.addEventListener('message',handler);});
         const action=async(ws,data)=>{const waits=smokePeers.map(next);ws.send(JSON.stringify(data));return Promise.all(waits);};
+        window.smokeAction=action;window.smokeTrack=track;window.smokeNative=Native;window.smokeNext=next;
         const a=document.getElementById('phoenix-music');PhoenixMusicPlayer.select('epic');await a.play();PhoenixOnline.enter();
         document.getElementById('online-name').value='Browser Host';document.getElementById('online-owner-password').value=${JSON.stringify(process.env.PHOENIX_BROWSER_OWNER_PASSWORD)};
         document.getElementById('online-create').click();await next(smokeHost);
@@ -106,8 +107,8 @@ async function main() {
         while(['turnDice','allyDice'].includes(smokeStates.get(smokeHost).phase)){if(guard++>150)throw new Error('dice');await action(smokePeers[smokeStates.get(smokeHost).dice.next],{type:'roll'});}
         const allies=['ted','phoenix','elsie'];while(smokeStates.get(smokeHost).phase==='draft')await action(smokePeers[smokeStates.get(smokeHost).draftTurn],{type:'chooseAlly',ally:allies.shift()});
         await new Promise(r=>setTimeout(r,500));const matchPaused=a.paused;let moves=0;
-        while(!smokeStates.get(smokeHost).over&&moves++<150){const ws=smokePeers.find(w=>smokeStates.get(w).acting),s=smokeStates.get(ws),m=s.moves.find(m=>!(s.mapleBlocked||[]).includes(m.cardId));await action(ws,{type:'move',cardId:m.cardId,targetId:m.targetId});}
-        const final=smokeStates.get(smokeHost),result=PhoenixEffects.matchResult(final),stage=PhoenixCinematics.diagnostics().celebration;
+        while(!smokeStates.get(smokeHost).over&&moves++<150){const ws=smokePeers.find(w=>smokeStates.get(w).acting),s=smokeStates.get(ws),m=s.moves.find(m=>m.cardId!=='phoenix'&&!(s.mapleBlocked||[]).includes(m.cardId))||s.moves.find(m=>!(s.mapleBlocked||[]).includes(m.cardId));await action(ws,{type:'move',cardId:m.cardId,targetId:m.targetId});}
+        const final=smokeStates.get(smokeHost),result=PhoenixEffects.matchResult(final),stage=PhoenixCinematics.diagnostics().celebration;window.smokeWinner=final.winner;
         await new Promise(r=>setTimeout(r,5500));const cleaned=PhoenixCinematics.diagnostics();
         // Repeated authoritative state uses the actual message handler again.
         smokeHost.onmessage({data:JSON.stringify(final)});const duplicate=PhoenixCinematics.diagnostics().celebration;
@@ -117,6 +118,48 @@ async function main() {
       assert(multiplayer.over && multiplayer.matchPaused && multiplayer.musicResumed);
       assert(multiplayer.stage.includes(multiplayer.result));assert.strictEqual(multiplayer.duplicate,null);
       assert.strictEqual(multiplayer.cleaned.voices,0);console.log('PASS: real three-player match, confirmed '+multiplayer.result+', cleanup, deduplication and music lifecycle');
+    }
+    if (process.env.PHOENIX_FIRE_CHECK) {
+      await call('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});
+      const fire = await evaluate(`(async()=>{
+        await new Promise(r=>setTimeout(r,200));PhoenixMusicSettings.open();document.getElementById('settings-phoenix-cinematic').click();
+        await new Promise(r=>setTimeout(r,1500));const n=document.querySelector('.phoenix-takeover'),canvas=n.querySelector('canvas');
+        return {phase:n.dataset.phase,media:n.dataset.media,width:canvas.width,height:canvas.height,audio:PhoenixCinematics.diagnostics().phoenixAudio,mutedVideo:true,overflow:document.documentElement.scrollWidth>innerWidth};
+      })()`);
+      assert(fire.phase==='impact' && fire.media==='filmed-fire' && fire.audio==='recorded-mix' && !fire.overflow);
+      const shot=await call('Page.captureScreenshot',{format:'png'}), screenshot=path.join(temp,'phoenix-fire-desktop.png');fs.writeFileSync(screenshot,Buffer.from(shot.data,'base64'));
+      await evaluate(`new Promise(r=>setTimeout(()=>r(true),3100))`);
+      assert.strictEqual(await evaluate(`PhoenixCinematics.diagnostics().phoenix`),null);
+      await evaluate(`PhoenixCinematics.stopPreview();PhoenixMusicSettings.leave();true`);
+      await call('Emulation.setDeviceMetricsOverride',{width:375,height:812,deviceScaleFactor:1,mobile:true});
+      const mobile=await evaluate(`(async()=>{PhoenixMusicSettings.open();document.getElementById('settings-phoenix-cinematic').click();await new Promise(r=>setTimeout(r,1450));const n=document.querySelector('.phoenix-takeover'),c=n.querySelector('canvas');const result={pixels:c.width*c.height,media:n.dataset.media,overflow:document.documentElement.scrollWidth>innerWidth};n.querySelector('button').click();result.stopped=PhoenixCinematics.diagnostics().phoenix===null;PhoenixMusicSettings.leave();return result;})()`);
+      assert(mobile.pixels<=750000 && mobile.media==='filmed-fire' && !mobile.overflow && mobile.stopped);
+      await call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+      const reduced=await evaluate(`(async()=>{await new Promise(r=>setTimeout(r,100));PhoenixMusicSettings.open();document.getElementById('settings-phoenix-cinematic').click();await new Promise(r=>setTimeout(r,200));const n=document.querySelector('.phoenix-takeover');const result={static:n.className.includes('phoenix-static'),canvasHidden:n.querySelector('canvas').hidden};PhoenixCinematics.stopPreview();PhoenixMusicSettings.leave();return result;})()`);
+      assert(reduced.static && reduced.canvasHidden);await call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
+      console.log('PASS: Phoenix filmed-fire takeover, decoded recorded mix, desktop/mobile and reduced motion');console.log('Phoenix screenshot: '+screenshot);
+      if(process.env.PHOENIX_BROWSER_OWNER_PASSWORD && await evaluate(`!!smokeWinner`)) {
+        const legendary=await evaluate(`(async()=>{
+          await new Promise(r=>setTimeout(r,200));window.smokePeers=[];window.smokeStates=new Map();PhoenixOnline.enter();
+          document.getElementById('online-name').value='Phoenix Test Host';document.getElementById('online-owner-password').value=${JSON.stringify(process.env.PHOENIX_BROWSER_OWNER_PASSWORD)};document.getElementById('online-create').click();await smokeNext(smokeHost);
+          for(const name of ['Phoenix Observer','Phoenix Third']){const ws=smokeTrack(new smokeNative('ws://'+location.host));await new Promise(r=>ws.addEventListener('open',r,{once:true}));await smokeAction(ws,{type:'join',name,code:smokeStates.get(smokeHost).code});}
+          await smokeAction(smokeHost,{type:'start',rounds:10});let guard=0;while(['turnDice','allyDice'].includes(smokeStates.get(smokeHost).phase)){if(guard++>150)throw Error('dice');await smokeAction(smokePeers[smokeStates.get(smokeHost).dice.next],{type:'roll'});}
+          const allies=['ted','phoenix','elsie'];while(smokeStates.get(smokeHost).phase==='draft')await smokeAction(smokePeers[smokeStates.get(smokeHost).draftTurn],{type:'chooseAlly',ally:allies.shift()});
+          const initial=smokePeers.map(ws=>({seat:smokeStates.get(ws).seat,moves:smokeStates.get(ws).moves}));let fired=false,actorIsBrowser=false,totalBefore=0,totalAfter=0;guard=0;
+          while(!smokeStates.get(smokeHost).over&&guard++<200){const ws=smokePeers.find(w=>smokeStates.get(w).acting),s=smokeStates.get(ws);const allowed=s.moves.filter(m=>!(s.mapleBlocked||[]).includes(m.cardId));
+            const m=allowed.find(m=>m.cardId==='phoenix')||allowed.find(m=>['bonus','hunter','ghost','reveal','trick'].includes(m.cardId))||allowed[0];if(!m)throw Error('no legal move');
+            if(m.cardId==='phoenix'){totalBefore=s.players.reduce((a,p)=>a+p.points,0);actorIsBrowser=ws===smokeHost;await smokeAction(ws,{type:'move',cardId:m.cardId,targetId:m.targetId});fired=true;totalAfter=smokeStates.get(ws).players[smokeStates.get(ws).seat].points;break;}
+            await smokeAction(ws,{type:'move',cardId:m.cardId,targetId:m.targetId});}
+          if(!fired)throw Error('earned Phoenix never became legally available: '+JSON.stringify({previousWinner:smokeWinner,initial}));
+          const observed=smokePeers.map(ws=>smokeStates.get(ws).effects.events.filter(e=>e.key==='phoenix').length);
+          const state=smokeStates.get(smokeHost);await new Promise(r=>setTimeout(r,1500));const stage=PhoenixCinematics.diagnostics().phoenix;await new Promise(r=>setTimeout(r,3100));
+          smokeHost.onmessage({data:JSON.stringify(state)});const duplicate=PhoenixCinematics.diagnostics().phoenix;
+          PhoenixOnline.leave();smokePeers.forEach(ws=>ws.close());return {fired,actorIsBrowser,totalBefore,totalAfter,observed,stage,duplicate};
+        })()`);
+        assert(legendary.fired && legendary.observed.every(n=>n===1) && legendary.totalBefore===legendary.totalAfter && legendary.stage==='impact' && legendary.duplicate===null);
+        console.log('PASS: genuinely earned Phoenix played through real server; three recipients, exact point transfer, no repeat; browser was '+(legendary.actorIsBrowser?'actor':'opponent'));
+      }
+      await call('Emulation.setDeviceMetricsOverride',{width:1280,height:900,deviceScaleFactor:1,mobile:false});
     }
     // Isolated authoritative-shaped fixture exercises the spectacular winner
     // stage independently of who won the random live match; does not mutate it.

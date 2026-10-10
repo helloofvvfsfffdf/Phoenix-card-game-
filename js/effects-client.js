@@ -12,6 +12,7 @@
   var network = E.cursor();
   var endings = E.endCursor(), celebration = null, previewing = false, previewSerial = 0;
   var warmup = null;
+  var phoenix = null, pendingEnd = null, phoenixBuffer = null, phoenixLoad = null, phoenixContext = null;
 
   function isAudioBlocked() { return prefs.sound && prefs.volume > 0 && audioBlocked; }
   function refreshButton() {
@@ -43,6 +44,7 @@
   }
   function stopSounds() { voices.slice().forEach(disposeVoice); }
   function bufferFor(key, inert) {
+    if (key === 'phoenix' && !inert && phoenixBuffer && phoenixContext === context) return phoenixBuffer;
     var cacheKey = key + (inert ? ':inert' : ':active');
     if (!soundBuffers[cacheKey]) {
       var recipe = E.soundRecipe(key, inert), seed = 173;
@@ -52,6 +54,18 @@
       buffer.getChannelData(0).set(samples); soundBuffers[cacheKey] = buffer;
     }
     return soundBuffers[cacheKey];
+  }
+  function preparePhoenixAudio(current) {
+    if (!current || !current.decodeAudioData || !window.fetch) return null;
+    if (phoenixContext === current && phoenixLoad) return phoenixLoad;
+    phoenixContext = current; phoenixBuffer = null;
+    phoenixLoad = window.fetch('assets/phoenix/fire-roar.mp3').then(function (response) {
+      if (!response.ok) throw new Error('Phoenix sound unavailable');
+      return response.arrayBuffer();
+    }).then(function (bytes) { return current.decodeAudioData(bytes); }).then(function (buffer) {
+      if (context === current && phoenixContext === current) phoenixBuffer = buffer;
+    }).catch(function () { /* Original Phoenix-only fire synthesis fallback. */ });
+    return phoenixLoad;
   }
   function warmVictory() {
     // The long fanfare is normally prepared during lobby idle time, never
@@ -78,6 +92,7 @@
     if (!prefs.sound || prefs.volume === 0) { audioBlocked = false; stopSounds(); }
     clearVisuals();
     if (celebration && E.motion(prefs, media.matches) !== 'full') finishCelebration();
+    if (phoenix && E.motion(prefs, media.matches) !== 'full') finishPhoenix(true);
     sync();
   }
   // Called synchronously by genuine input, never after a network callback.
@@ -102,6 +117,7 @@
         if (context !== current) return;
         audioBlocked = current.state !== 'running';
         if (!audioBlocked) warmVictory();
+        if (!audioBlocked) preparePhoenixAudio(current);
         sync();
       }, function () { if (context === current) { audioBlocked = true; sync(); } });
       else { audioBlocked = context.state !== 'running'; if (!audioBlocked) warmVictory(); sync(); }
@@ -125,8 +141,9 @@
       voice.nodes.push(source);
       source.connect(master);
       source.start(context.currentTime);
-      source.stop(context.currentTime + duration + (recipe.tail || 0.08));
-      voice.timer = setTimeout(function () { disposeVoice(voice); }, (duration + (recipe.tail || 0.08) + 0.07) * 1000);
+      var length = source.buffer.duration || duration + (recipe.tail || 0.08);
+      source.stop(context.currentTime + length);
+      voice.timer = setTimeout(function () { disposeVoice(voice); }, (length + 0.07) * 1000);
     } catch (e) { disposeVoice(voice); }
   }
   function anchor(seat, scope) {
@@ -143,6 +160,12 @@
     var definition = E.DEFINITIONS[safe.key];
     if (celebration) return; // End fanfare has priority; consume still advances IDs.
     if (previewing && scope !== 'settings') stopPreview();
+    if (phoenix) return; // All public IDs still advance, but avoid SFX pile-up.
+    if (safe.key === 'phoenix' && safe.outcome !== 'inert' && window.PhoenixFireScene) {
+      var modal = document.getElementById('settings');
+      if (scope !== 'settings' && modal && !modal.hidden) { sound('phoenix',false); return; }
+      startPhoenix(false); return;
+    }
     sound(safe.key, safe.outcome === 'inert');
     var settings = document.getElementById('settings');
     if (scope !== 'settings' && settings && !settings.hidden) return;
@@ -186,7 +209,28 @@
     record.timer = setTimeout(function () { cleanupVisual(record); }, mode === 'reduced' ? 650 : 1500);
     node.addEventListener('animationend', function (event) { if (event.target === node) cleanupVisual(record); });
   }
-  function consume(packet) { network.consume(packet).slice(-8).forEach(function (event) { show(event, 'online-screen'); }); }
+  function displayBatch(events, scope) {
+    // A legendary card must not be discarded by the ordinary eight-event cap.
+    var legendary = events.find(function (event) { return event.key === 'phoenix' && event.outcome !== 'inert'; });
+    if (legendary && window.PhoenixFireScene) { show(legendary, scope); return; }
+    (scope === 'online-screen' ? events.slice(-8) : events).forEach(function (event) { show(event, scope); });
+  }
+  function consume(packet) { displayBatch(network.consume(packet), 'online-screen'); }
+  function finishPhoenix(runEnd) {
+    var stage = phoenix; phoenix = null;
+    if (stage) { stage.stop(false); stopSounds(); }
+    var kind = pendingEnd; pendingEnd = null;
+    if (runEnd && kind) celebrate(kind);
+  }
+  function startPhoenix(isPreview) {
+    finishPhoenix(false); clearVisuals(); stopSounds();
+    var mode = E.motion(prefs,media.matches);
+    if (mode === 'off') { sound('phoenix',false); return; }
+    phoenix = window.PhoenixFireScene.start({ reduced:mode === 'reduced', preview:isPreview,
+      restoreFocus:document.getElementById(isPreview?'settings-phoenix-cinematic':'online-settings'),
+      onFinish:function(){finishPhoenix(true);} });
+    sound('phoenix',false);
+  }
   function finishCelebration() {
     if (!celebration) return;
     var c = celebration, focused = document.activeElement === c.skip; celebration = null;
@@ -241,36 +285,41 @@
     document.body.appendChild(node);
     celebration = { node: node, skip: skip, timer: setTimeout(finishCelebration, kind === 'victory' ? 5000 : 2400) };
   }
-  function match(snapshot) { var kind = endings.consume(snapshot); if (kind) celebrate(kind); }
+  function match(snapshot) { var kind = endings.consume(snapshot); if (kind) { if (phoenix) pendingEnd = kind; else celebrate(kind); } }
   function stopPreview() {
     if (!previewing) return;
-    previewSerial++; previewing = false; stopSounds(); clearVisuals();
+    previewSerial++; previewing = false; finishPhoenix(false); stopSounds(); clearVisuals();
     var status = document.getElementById('settings-preview-status'); if (status) status.textContent = 'Preview stopped.';
   }
-  function preview(key) {
+  function preview(key, fullPhoenix) {
     if (!E.previews().some(function (p) { return p.key === key; })) return false;
-    finishCelebration(); stopSounds(); clearVisuals(); previewing = true;
+    finishPhoenix(false); finishCelebration(); stopSounds(); clearVisuals(); previewing = true;
     var ticket = ++previewSerial, ready = unlock();
     function play() {
       if (ticket !== previewSerial || !previewing || document.hidden) return;
-      sound(key, false);
+      if (key === 'phoenix' && fullPhoenix && window.PhoenixFireScene) startPhoenix(true); else sound(key, false);
       var status = document.getElementById('settings-preview-status');
       if (status) status.textContent = !prefs.sound || prefs.volume === 0 ? 'Sound effects are muted. Adjust SFX settings to hear this preview.' :
         isAudioBlocked() ? 'Audio is blocked. Tap Play preview again to enable it.' : 'Preview: ' + E.previews().find(function (p) { return p.key === key; }).label + '.';
     }
-    if (ready && ready.then && context && context.state !== 'running') ready.then(play, function () {
+    function afterUnlock() {
+      var mediaReady = key === 'phoenix' ? preparePhoenixAudio(context) : null;
+      if (mediaReady && mediaReady.then) mediaReady.then(play); else play();
+    }
+    if (ready && ready.then && context && context.state !== 'running') ready.then(afterUnlock, function () {
       if (ticket === previewSerial) document.getElementById('settings-preview-status').textContent = 'Audio is blocked. Tap Play preview again to enable it.';
-    }); else play();
+    }); else afterUnlock();
     return true;
   }
-  function cleanup() { finishCelebration(); clearVisuals(); stopSounds(); previewSerial++; previewing = false; }
+  function cleanup() { finishPhoenix(false); finishCelebration(); clearVisuals(); stopSounds(); previewSerial++; previewing = false; }
   window.PhoenixCinematics = {
     show: show, consume: consume, match: match, preview: preview, stopPreview: stopPreview, skipCelebration: finishCelebration,
     resetNetwork: function () { network.reset(); endings.reset(); cleanup(); },
-    rules: function (events) { E.fromRules(events).forEach(function (event) { show(event, 'phoenix-game'); }); },
+    rules: function (events) { displayBatch(E.fromRules(events), 'phoenix-game'); },
     unlock: unlock, isAudioBlocked: isAudioBlocked, update: update,
     prefs: function () { return Object.assign({}, prefs); }, cleanup: cleanup,
-    diagnostics: function () { return { visuals: active.length, voices: voices.length, celebration: celebration ? celebration.node.className : null,
+    diagnostics: function () { return { visuals: active.length + (phoenix ? 1 : 0), voices: voices.length, phoenix:phoenix ? phoenix.node.dataset.phase : null,
+      phoenixAudio:phoenixBuffer ? 'recorded-mix' : 'procedural-fallback', celebration: celebration ? celebration.node.className : null,
       audio: context ? context.state : 'uninitialised', motion: E.motion(prefs, media.matches) }; }
   };
   document.addEventListener('DOMContentLoaded', function () {
@@ -283,15 +332,17 @@
     choices.addEventListener('change', stopPreview);
     document.getElementById('settings-effects-preview').addEventListener('click', function () { preview(choices.value); });
     document.getElementById('settings-effects-stop').addEventListener('click', stopPreview);
+    document.getElementById('settings-phoenix-cinematic').addEventListener('click', function(){preview('phoenix',true);});
+    if (window.PhoenixFireScene) window.PhoenixFireScene.prepare(E.motion(prefs,media.matches) === 'full');
     document.getElementById('settings-back').addEventListener('click', stopPreview);
     document.addEventListener('click', unlock, true);
     document.addEventListener('keydown', function (event) { if (event.target !== document.getElementById('music-enable-button')) unlock(); }, true);
     sync();
   });
   document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape') { stopPreview(); if (document.getElementById('settings').hidden) finishCelebration(); }
+    if (event.key === 'Escape') { stopPreview(); if (document.getElementById('settings').hidden) { finishPhoenix(true); finishCelebration(); } }
   }, true);
-  if (media.addEventListener) media.addEventListener('change', function () { clearVisuals(); finishCelebration(); sync(); });
+  if (media.addEventListener) media.addEventListener('change', function () { clearVisuals(); finishPhoenix(true); finishCelebration(); sync(); });
   document.addEventListener('visibilitychange', function () { if (document.hidden) cleanup(); });
   window.addEventListener('pagehide', function () {
     cleanup();
@@ -299,5 +350,7 @@
     warmup = null;
     if (context) { context.close().catch(function () {}); context = null; master = null; }
     soundBuffers = Object.create(null);
+    phoenixBuffer=null;phoenixLoad=null;phoenixContext=null;
+    if (window.PhoenixFireScene) window.PhoenixFireScene.release();
   });
 }());

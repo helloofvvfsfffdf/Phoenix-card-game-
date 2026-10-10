@@ -189,3 +189,10 @@ listening verdict**. I cannot certify that players will identify every effect
 without seeing it, or that synthetic animal sounds are fully convincing. Human
 listening on headphones/phone speakers and physical mobile-device performance
 remain outstanding; the desktop frame is a layout check, not real mobile audio.
+# Phoenix-only recorded-fire exception
+
+On `experiment/phoenix-fire-takeover`, the legendary Phoenix card prefers a
+locally bundled CC0 recorded-fire mix rather than only procedural synthesis.
+All other recipes and settings remain unchanged. See `PHOENIX-EXPERIMENT.md`
+and `assets/phoenix/LICENSES.md` for provenance, processing, fallback and tests.
+Earlier all-procedural provenance statements below describe the prior design.

@@ -12,7 +12,7 @@ module.exports = function (test, equal, deepEqual, assert) {
         var rms = Math.sqrt(energy/pcm.length);
         assert(rms > .008 && rms <= .141, 'audible but comfortable sustained energy');
         assert(Math.abs(dc/pcm.length) < .03, 'no sustained DC');
-        assert(pcm.length <= Math.ceil(rate*(key === 'victory' ? 5 : 1.9)), 'bounded cinematic tails');
+        assert(pcm.length <= Math.ceil(rate*(key === 'victory' ? 5 : key === 'phoenix' ? 4.4 : 1.9)), 'bounded cinematic tails');
         equal(pcm[0], 0, 'soft onset');
         equal(pcm[pcm.length-1], 0, 'tail has ended');
       });

@@ -1,0 +1,36 @@
+{
+  "sources": [
+    {
+      "name": "flame.mov",
+      "url": "https://archive.org/download/fire-footage-300-fps/Jolon's%20Fire%20Stock%20Footage%2FIndividual%20Explosions%2FL-R%20Fire%20Explosion00001.mov",
+      "sha256": "dd384e10da636433adf3051c74df40e68c9f3655ab21027d4080a1cafde04809"
+    },
+    {
+      "name": "fire.mp3",
+      "url": "https://cdn.freesound.org/previews/508/508110_6657854-hq.mp3",
+      "sha256": "b413b8b99bf8c54fee3460ee0d1d3d71069b584705f15dad13cafff1e69471ca"
+    }
+  ],
+  "derivatives": [
+    {
+      "name": "fire-surge.mp4",
+      "bytes": 526171,
+      "sha256": "f28e38f8983f4f5d71f5c3e21c50556bbd9a3ca7dbf94f803a65e822c9a3f0fb"
+    },
+    {
+      "name": "fire-poster.jpg",
+      "bytes": 31151,
+      "sha256": "4c2fdf55c002a94900aafdbc06e1561650ee7b8dc97623df6dd1c140d909edd5"
+    },
+    {
+      "name": "fire-roar.mp3",
+      "bytes": 92517,
+      "sha256": "648f6019a4727d708f220ab1b917976d0c5e383c1ad1507e5a7c75b5e2e42f02"
+    }
+  ],
+  "mix": {
+    "sampleRate": 44100,
+    "stagedPeak": 0.68,
+    "stagedRms": 0.1043577377278539
+  }
+}

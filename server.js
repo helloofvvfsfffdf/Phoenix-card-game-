@@ -585,7 +585,8 @@ const mime = {
   '.ico': 'image/x-icon',
   '.svg': 'image/svg+xml',
   '.json': 'application/json',
-  '.mp3': 'audio/mpeg'
+  '.mp3': 'audio/mpeg',
+  '.mp4': 'video/mp4'
 };
 
 const httpServer = http.createServer((req, res) => {

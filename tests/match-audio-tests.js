@@ -76,7 +76,7 @@ module.exports = function (test, equal, deepEqual, assert) {
       var recipe = E.soundRecipe(key);
       equal(JSON.stringify(E.DEFINITIONS[key]), visual, 'sound recipe leaves visual catalogue unchanged');
       assert(recipe.layers.length >= 2, 'implemented effects have layered material sounds');
-      assert(recipe.duration > 0 && recipe.duration <= 1.6);
+      assert(recipe.duration > 0 && recipe.duration <= (key === 'phoenix' ? 4.4 : 1.6));
       var inert = E.soundRecipe(key, true);
       equal(inert.duration, 0.25);
       var unique = implemented.filter(function (other) { return JSON.stringify(E.soundRecipe(other)) === JSON.stringify(recipe); });
