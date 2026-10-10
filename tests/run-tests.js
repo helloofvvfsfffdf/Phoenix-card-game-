@@ -15,6 +15,7 @@ var Parser = require(path.join(__dirname, '..', 'js', 'parser.js'));
 var Prompt = require(path.join(__dirname, '..', 'js', 'prompt.js'));
 var GameApi = require(path.join(__dirname, '..', 'js', 'game.js'));
 var Maple = require(path.join(__dirname, '..', 'js', 'maple.js'));
+var Music = require(path.join(__dirname, '..', 'js', 'music.js'));
 
 var BONUS = Rules.BONUS_POINTS;
 
@@ -470,6 +471,68 @@ function nextSeed() {
   SEED += 7919;
   return SEED;
 }
+
+/* ===================================================================== */
+/* Background music                                                       */
+/* ===================================================================== */
+
+suite('Background music');
+
+test('the four licensed choices, Disabled, and the Epic default are defined', function () {
+  deepEqual(Music.TRACKS.map(function (track) { return track.id; }),
+    ['epic', 'mysterious', 'retro', 'calm', 'off']);
+  equal(Music.TRACKS[4].name, 'Disabled');
+  equal(Music.defaultPrefs().track, 'epic');
+  equal(Music.defaultPrefs().volume, 0.4);
+  Music.TRACKS.slice(0, 4).forEach(function (track) {
+    assert(track.file.indexOf('assets/music/') === 0, track.id + ' uses a local soundtrack');
+  });
+});
+
+test('each track resolves to its own source and Disabled resolves to silence', function () {
+  Music.TRACKS.slice(0, 4).forEach(function (track) {
+    var resolved = Music.resolve({ track: track.id, volume: 0.65 });
+    equal(resolved.playing, true, track.id + ' plays');
+    equal(resolved.src, track.file, track.id + ' selects its source');
+    equal(resolved.volume, 0.65, track.id + ' keeps the selected volume');
+  });
+  deepEqual(Music.resolve({ track: 'off', volume: 0.25 }),
+    { playing: false, src: null, volume: 0.25 });
+});
+
+test('separate browser stores retain independent music preferences across reloads', function () {
+  function makeStorage() {
+    var data = {};
+    return {
+      getItem: function (key) { return data[key] || null; },
+      setItem: function (key, value) { data[key] = value; }
+    };
+  }
+
+  var playerOne = makeStorage();
+  var playerTwo = makeStorage();
+  var first = { track: 'retro', volume: 0.72 };
+  var second = { track: 'off', volume: 0.18 };
+
+  assert(Music.savePrefs(playerOne, first), 'player one preferences save');
+  assert(Music.savePrefs(playerTwo, second), 'player two preferences save');
+  deepEqual(Music.loadPrefs(playerOne), first, 'player one preferences reload');
+  deepEqual(Music.loadPrefs(playerTwo), second, 'player two preferences reload');
+});
+
+test('invalid saved values fall back safely and failed storage writes are reported', function () {
+  var invalidStorage = {
+    getItem: function () { return '{"track":"not-a-track","volume":5}'; },
+    setItem: function () { throw new Error('storage unavailable'); }
+  };
+  deepEqual(Music.loadPrefs(invalidStorage), { track: 'epic', volume: 1 });
+  equal(Music.savePrefs(invalidStorage, { track: 'epic', volume: 0.4 }), false);
+});
+
+test('only a changed source requires a track reload', function () {
+  equal(Music.needsReload({ src: 'assets/music/epic.mp3' }, { src: 'assets/music/epic.mp3' }), false);
+  equal(Music.needsReload({ src: 'assets/music/epic.mp3' }, { src: 'assets/music/retro.mp3' }), true);
+});
 
 /* ===================================================================== */
 /* The deck                                                               */
