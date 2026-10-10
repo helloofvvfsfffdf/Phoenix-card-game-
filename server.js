@@ -153,7 +153,7 @@ function snapshot(room,member){
  const mine=Rules.SEATS[member.seat].id;
  const acting=s&&!s.over&&((pending&&pending.chooserId===mine)||(!pending&&current.id===mine));
  const moves=acting?(pending?pending.options:Rules.legalMoves(s,s.turnInRound).map(m=>({cardId:m.cardId,targetId:m.targetId}))):[];
- return {type:'state',phase:room.phase||'lobby',dice:room.dice?{next:room.dice.group[room.dice.next],rolls:room.dice.rolls,order:room.dice.order}:null,draftTurn:room.phase==='draft'?room.allyOrder[room.draftIndex]:null,availableAllies:ALLIES.filter(a=>!room.members.some(m=>m.ally===a)),code:room.code,host:member.seat===0,seat:member.seat,started:!!s,players,round:s?s.round:0,rounds:s?s.rounds:0,over:s?!!s.over:false,winner:s&&s.over&&s.winnerSeat>=0?s.players[s.winnerSeat].id:null,current:current?current.id:null,hand:s?(s.hands[mine]||[]):[],deckCount:s?s.deck.length:0,discardCount:s?s.discard.length:0,acting:!!acting,pending:pending?{kind:pending.kind,chooserId:pending.chooserId,targetId:pending.targetId}:null,moves,tedObscured:!!(s&&room.tedHiddenUntil&&room.tedHiddenUntil[member.seat]>=s.round),log:room.log.slice(-35)};
+ return {type:'state',phase:room.phase||'lobby',dice:room.dice?{next:room.dice.group[room.dice.next],rolls:room.dice.rolls,order:room.dice.order}:null,draftTurn:room.phase==='draft'?room.allyOrder[room.draftIndex]:null,availableAllies:ALLIES.filter(a=>(a!=='ted'||room.members.length>=3)&&!room.members.some(m=>m.ally===a)),code:room.code,host:member.seat===0,seat:member.seat,started:!!s,players,round:s?s.round:0,rounds:s?s.rounds:0,over:s?!!s.over:false,winner:s&&s.over&&s.winnerSeat>=0?s.players[s.winnerSeat].id:null,current:current?current.id:null,hand:s?(s.hands[mine]||[]):[],deckCount:s?s.deck.length:0,discardCount:s?s.discard.length:0,acting:!!acting,pending:pending?{kind:pending.kind,chooserId:pending.chooserId,targetId:pending.targetId}:null,moves,tedObscured:!!(s&&room.tedHiddenUntil&&room.tedHiddenUntil[member.seat]>=s.round),log:room.log.slice(-35)};
 }
 function broadcast(room){room.members.forEach(m=>send(m.ws,snapshot(room,m)));}
 function error(ws,msg){send(ws,{type:'error',message:msg});}
@@ -199,6 +199,7 @@ function handle(ws,data){
  if(data.type==='chooseAlly'){
   if(room.phase!=='draft')return error(ws,'Not choosing allies now.');
   if(room.members[room.allyOrder[room.draftIndex]]!==m)return error(ws,'Not your turn to choose an ally.');
+  if(data.ally==='ted'&&room.members.length<3)return error(ws,'Ted requires at least 3 players. 4 or more players are recommended.');
   if(!ALLIES.includes(data.ally)||room.members.some(p=>p.ally===data.ally))return error(ws,'That ally is not available.');
   m.ally=data.ally;addLog(room,m.name+' chose '+data.ally.toUpperCase()+'.');
   room.draftIndex++;
