@@ -4296,6 +4296,50 @@ test('Maple is not given a card, and owns none - she is not on the board', funct
   equal(Maple.NOT_NICE.indexOf('maple'), -1, 'and she does not block herself');
 });
 
+test('a Maple-restricted player with nothing playable forfeits instead of deadlocking', function () {
+  // The bug this guards: "it says it is my turn, and there is nothing I may play."
+  //
+  // Maple takes six cards off a player's menu, and the ENGINE does not know that -
+  // legalMoves is the card rules. So a player whose whole hand is aggressive still
+  // looked to the engine like they had moves, so the server never skipped them, so
+  // the snapshot told them they were acting, while the client - which does honour
+  // the restriction - offered nothing. The match stopped there, with a human
+  // sitting on their turn unable to go.
+  //
+  // playableMoves is the single filter both the skip logic and the snapshot use.
+  var room = mapleRoom(3, 2);
+  var victim = Maple.apply(room, Rules, function () { return 0.01; });
+  assert(victim !== null, 'Maple lands on somebody');
+
+  // An engine move list that is ALL aggressive cards - what the player holds.
+  var hand = ['zombie', 'knife', 'steal'];
+  var engineMoves = hand.map(function (id) { return { cardId: id, targetId: null }; });
+
+  // The engine is happy with all three. That is exactly the trap.
+  equal(engineMoves.length, 3, 'the engine sees three legal moves');
+
+  // The filter the server and the snapshot both use sees none.
+  var playable = Maple.playableMoves(room, victim, engineMoves);
+  equal(playable.length, 0,
+    'so after Maple there is nothing this player may play');
+
+  // Which is why skipUnplayableTurns must break on THIS and not on the engine's
+  // list - otherwise the turn is never skipped and the deadlock stands. The
+  // filter strictly reducing the list is what lets the skip fire at all.
+  assert(playable.length < engineMoves.length,
+    'the filter strictly reduces the list, which is what lets the skip fire');
+
+  // One nice card is enough to keep the turn.
+  room.state.round = 2;
+  var withNice = engineMoves.concat([{ cardId: 'bonus', targetId: null }]);
+  equal(Maple.playableMoves(room, victim, withNice).length, 1,
+    'one nice card and the player keeps their turn');
+
+  // And an unrestricted player is untouched.
+  equal(Maple.playableMoves(room, victim === 0 ? 1 : 0, engineMoves).length, 3,
+    'somebody else is unaffected');
+});
+
 suite('Cards against each other');
 
 test('a Hunter holding up across a whole round changes nothing', function () {
