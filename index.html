@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="css/styles.css" />
 <link rel="stylesheet" href="css/menu-v2.css" />
 <link rel="stylesheet" href="css/online.css" />
+<link rel="stylesheet" href="css/gallery.css" />
 <link rel="stylesheet" href="css/allies.css" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128293;</text></svg>" />
 <title>Phoenix</title>
@@ -23,6 +24,7 @@
         <button type="button" id="menu-single" class="menu-primary"><span class="menu-symbol">▶</span> SINGLE PLAYER <small>CREATOR ONLY</small></button>
         <button type="button" id="menu-test"><span class="menu-symbol">⚗</span> MULTIPLAYER TESTING <small>LOCAL · CONTROL ALL PLAYERS</small></button>
         <button type="button" id="menu-multi"><span class="menu-symbol">♟</span> MULTIPLAYER <small>PRIVATE ROOMS · INVITE CODE</small></button>
+        <button type="button" id="menu-gallery"><span class="menu-symbol">▦</span> GALLERY <small>PRIVATE · INVITE CODE</small></button>
         <button type="button" id="menu-cards"><span class="menu-symbol">▣</span> CARD COLLECTION <small>COMING SOON</small></button>
         <button type="button" id="menu-settings"><span class="menu-symbol">⚙</span> SETTINGS <small>COMING SOON</small></button>
       </nav>
@@ -208,9 +210,72 @@
   </div>
 </div>
 
+<!-- ========================= PHOENIX GALLERY =========================
+     Two screens. The gate is the doorway (owner creates with the same password
+     used for multiplayer rooms; guests enter an invitation code). The gallery
+     itself is read-only browsing, and is entirely per-visitor: nothing a visitor
+     clicks is ever sent to the server, so two visitors cannot affect each other.
+     Neither screen touches ws.member, so a guest cannot reach any game state. -->
+  <section id="gallery-gate" class="gallery-gate" hidden aria-label="PHOENIX Gallery access">
+    <div class="gallery-gate-card">
+      <header class="gallery-gate-head">
+        <p class="gallery-eyebrow">THE CARD GAME</p>
+        <h2>PHOENIX &#183; GALLERY</h2>
+        <p>A private, read-only look at every ally and every card in the game. Nothing here can change a match.</p>
+      </header>
+
+      <div class="gallery-panel" id="gallery-create-panel">
+        <h3>Open a gallery</h3>
+        <p>Use the same owner password you use to create multiplayer rooms. You will get a six-character invitation code to share.</p>
+        <div class="gallery-form">
+          <input id="gallery-owner-password" type="password" autocomplete="off" maxlength="256" placeholder="Owner password" aria-label="Owner password">
+          <button class="gallery-primary" id="gallery-create" type="button">OPEN GALLERY</button>
+        </div>
+      </div>
+
+      <hr>
+
+      <div class="gallery-panel" id="gallery-join-panel">
+        <h3>Join with an invitation code</h3>
+        <p>No password needed &#8212; just the code the owner gave you.</p>
+        <div class="gallery-form">
+          <input id="gallery-code-input" maxlength="6" placeholder="6-character code" aria-label="Gallery invitation code">
+          <button class="gallery-primary" id="gallery-join" type="button">ENTER</button>
+        </div>
+      </div>
+
+      <p id="gallery-gate-feedback" aria-live="polite"></p>
+      <button class="gallery-back" id="gallery-gate-back" type="button">&#8592; MAIN MENU</button>
+    </div>
+  </section>
+
+  <section id="gallery" class="gallery" hidden aria-label="PHOENIX Gallery">
+    <header class="gallery-top">
+      <div class="gallery-title">
+        <h1>PHOENIX &#183; GALLERY</h1>
+        <p id="gallery-code-line"></p>
+      </div>
+      <div class="gallery-top-actions">
+        <button class="gallery-back" id="gallery-leave" type="button">&#8592; MAIN MENU</button>
+        <button class="gallery-close" id="gallery-close" type="button" hidden>CLOSE GALLERY</button>
+      </div>
+    </header>
+
+    <nav class="gallery-tabs" aria-label="Gallery sections">
+      <button type="button" data-gallery-tab="allies" class="is-active">ALLIES</button>
+      <button type="button" data-gallery-tab="cards">CARDS</button>
+    </nav>
+
+    <div id="gallery-view"></div>
+  </section>
+
 <div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
 
 <script src="js/cards.js"></script>
+<!-- maple.js is pure rules data (what Sweet Tooth forbids, how long it lasts).
+     The gallery reads it to describe the restriction accurately instead of
+     restating it in prose that could drift away from the rule. -->
+<script src="js/maple.js"></script>
 <script src="js/rules.js"></script>
 <script src="js/parser.js"></script>
 <script src="js/prompt.js"></script>
@@ -222,5 +287,7 @@
      is the NODE SERVER (require/http/ws) and threw "require is not defined" in
      the browser; npm start runs the root server.js instead. -->
 <script src="js/online-client.js"></script>
+<script src="js/gallery-net.js"></script>
+<script src="js/gallery-client.js"></script>
 </body>
 </html>

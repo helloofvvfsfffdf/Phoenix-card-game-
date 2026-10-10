@@ -4340,6 +4340,151 @@ test('a Maple-restricted player with nothing playable forfeits instead of deadlo
     'somebody else is unaffected');
 });
 
+suite('PHOENIX Gallery');
+
+var Gallery = require(path.join(__dirname, '..', 'js', 'gallery.js'));
+
+/** A deterministic code generator, so the tests never depend on chance. */
+function galleryCodes(...codes) {
+  var queue = codes.slice();
+  return function () {
+    if (!queue.length) throw new Error('ran out of gallery codes in the test');
+    return queue.shift();
+  };
+}
+
+test('a gallery code is six characters, and joining needs only that', function () {
+  var store = new Map();
+  var code = Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+
+  equal(code, 'ABC123', 'the code is returned to the owner');
+  equal(code.length, 6, 'and it is six characters');
+  assert(/^[A-F0-9]{6}$/i.test(code), 'uppercase hex, so it reads aloud cleanly: ' + code);
+
+  // A guest joins with the code and NOTHING else. No password, no room code.
+  var joined = Gallery.join(store, code, 2000);
+  assert(joined, 'a guest can join with the code alone');
+  equal(joined.code, code, 'and lands in the right session');
+  equal(joined.ownerId, 'owner-1', 'which still belongs to the owner');
+});
+
+test('codes are normalised, because people type them badly', function () {
+  var store = new Map();
+  Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+
+  ['abc123', ' ABC123 ', 'AbC123'].forEach(function (typed) {
+    assert(Gallery.join(store, typed, 2000),
+      'joined with "' + typed + '" - people paste and retype these');
+  });
+});
+
+test('an unknown code is refused, and expiry is never distinguishable', function () {
+  var store = new Map();
+  Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+
+  equal(Gallery.join(store, 'ZZZZZZ', 2000), null, 'a code nobody has is refused');
+  equal(Gallery.join(store, '', 2000), null, 'an empty code is refused');
+  equal(Gallery.join(store, null, 2000), null, 'and so is no code at all');
+
+  // Every refusal is null for the same reason, so a guest cannot probe for codes
+  // that exist by watching which answer they get.
+  assert(Gallery.create(store, 'owner-2', 1000, galleryCodes('DEF456')) !== null,
+    'a second gallery exists');
+  equal(Gallery.join(store, 'DEF456', 999999999999), null, 'an expired one is refused');
+  equal(Gallery.join(store, 'ZZZZZZ', 999999999999), null, 'and so is a fake one');
+});
+
+test('a session expires on schedule and can never be joined afterwards', function () {
+  var store = new Map();
+  var start = 1000;
+  var code = Gallery.create(store, 'owner-1', start, galleryCodes('ABC123'));
+  var ttl = Gallery.TTL_MS;
+
+  assert(Gallery.join(store, code, start), 'live at the instant it opens');
+  assert(Gallery.join(store, code, start + ttl - 1), 'live one millisecond before it lapses');
+
+  equal(Gallery.join(store, code, start + ttl), null, 'refused the moment it lapses');
+  equal(store.has(code), false, 'and it is swept out of the store, not merely hidden');
+
+  // Sweeping catches anything nobody asked about, so a stale code cannot linger.
+  var store2 = new Map();
+  Gallery.create(store2, 'owner-1', 0, galleryCodes('AAA111'));
+  Gallery.create(store2, 'owner-2', 0, galleryCodes('BBB222'));
+  equal(Gallery.sweep(store2, Gallery.TTL_MS + 1).length, 2, 'sweep drops everything stale');
+  equal(store2.size, 0, 'leaving nothing behind');
+});
+
+test('only the owner can close a gallery, and closing revokes it at once', function () {
+  var store = new Map();
+  var code = Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+
+  equal(Gallery.close(store, code, 'a-guest', 2000), false,
+    'a guest holding the code cannot close it');
+  assert(Gallery.join(store, code, 2000), 'and the gallery is still open after trying');
+
+  equal(Gallery.close(store, code, 'owner-1', 2000), true, 'the owner can');
+  equal(Gallery.join(store, code, 2000), null, 'and the code is dead the same instant');
+  equal(store.size, 0, 'with nothing left in the store');
+
+  equal(Gallery.close(store, code, 'owner-1', 2000), false, 'closing twice is harmless');
+});
+
+test("a gallery dies with the connection that opened it", function () {
+  // An open gallery is a hole in the front door. One whose owner has walked away
+  // should not stay live for the rest of its TTL because somebody wrote the code
+  // down.
+  var store = new Map();
+  var mine = Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+  var theirs = Gallery.create(store, 'owner-2', 1000, galleryCodes('DEF456'));
+
+  equal(Gallery.closeOwnedBy(store, 'owner-1').length, 1, 'one session belonged to them');
+  equal(Gallery.join(store, mine, 2000), null, 'so that code is dead');
+  assert(Gallery.join(store, theirs, 2000), "another owner's gallery is untouched");
+});
+
+test('codes never repeat while a session is live', function () {
+  var store = new Map();
+  var gen = galleryCodes('ABC123', 'ABC123', 'ABC123', 'DEF456');
+
+  var first = Gallery.create(store, 'o1', 1000, gen);
+  equal(first, 'ABC123', 'the first code');
+
+  // The generator insists on a colliding code twice; create must keep asking
+  // rather than handing out a duplicate.
+  var second = Gallery.create(store, 'o2', 1000, gen);
+  assert(second && second !== first, 'the collision is resolved, not reused: ' + second);
+  equal(new Set([first, second]).size, 2, 'and the two sessions have different codes');
+});
+
+test('the gallery holds no game data at all', function () {
+  // The privacy claim, asserted rather than promised. A session is a code and two
+  // timestamps; if it ever grows a player, a hand or a room reference, this fails.
+  var store = new Map();
+  var code = Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+  var session = Gallery.join(store, code, 2000);
+
+  deepEqual(Object.keys(session).sort(), ['code', 'createdAt', 'expiresAt', 'ownerId'],
+    'a session is only a code, an owner and two timestamps');
+  assert(session.player === undefined && session.room === undefined &&
+    session.hand === undefined && session.hand === undefined,
+    'and carries no player, room or hand');
+});
+
+test('a session cannot be created, and the ceiling is enforced', function () {
+  var store = new Map();
+  var gen = function () {
+    var n = 0;
+    return function () { return ('X' + (n++) + 'Y').slice(0, 6).toUpperCase(); };
+  }();
+
+  for (var i = 0; i < Gallery.MAX_SESSIONS; i++) {
+    assert(Gallery.create(store, 'owner-' + i, 1000, gen) !== null,
+      'session ' + (i + 1) + ' opens');
+  }
+  equal(Gallery.create(store, 'one-too-many', 1000, gen), null,
+    'and the next is refused rather than silently overwriting one');
+});
+
 suite('Cards against each other');
 
 test('a Hunter holding up across a whole round changes nothing', function () {
