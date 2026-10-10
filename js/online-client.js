@@ -43,17 +43,43 @@
   let socket = null;
   let state = null;
 
-  // Display titles for the draft picker. The server owns WHICH allies exist and
-  // which are still available; these are only labels, so a mismatch can never
-  // offer something the server would refuse.
-  const titles = {
-    phoenix: 'Sneaky Snatcher',
-    tilly: 'Trouble Maker',
-    ted: 'Slobbery Surprise',
-    louie: 'Puppet Master',
-    simba: 'Card Sabotage',
-    elsie: 'Untouchable'
-  };
+  /**
+   * Everything the game already knows about one ally: name, title, description,
+   * portrait and colour.
+   *
+   * Read from js/allies.js - the same catalogue the main menu's ally picker draws
+   * from, already on the page as window.PhoenixAllies. That file is the single
+   * source of truth for what an ally does, so the draft shows the game's own
+   * wording rather than a second copy that could drift away from it. This file
+   * used to carry its own hardcoded title table, which is exactly how one ally
+   * ends up described two different ways on the same screen.
+   *
+   * The server still owns WHICH allies are offered; this only describes the id it
+   * sent, so it can never offer something the server would refuse.
+   *
+   * @returns {?{name: string, title: string, desc: string, color: string, src: string}}
+   */
+  function allyInfo(id) {
+    var allies = window.PhoenixAllies;
+    if (!allies) return null;
+
+    var all = (allies.roster || []).slice();
+
+    // Maple is not drafted - the server never sends her id - but she is in the
+    // same catalogue, so including her means a description exists if that changes.
+    if (allies.maple) all.push(allies.maple);
+
+    var found = all.filter(function (a) { return a.id === id; })[0];
+    if (!found) return null;
+
+    return {
+      name: found.name || id.toUpperCase(),
+      title: found.title || '',
+      desc: found.desc || '',
+      color: found.color || '',
+      src: found.src || ('assets/allies/' + id + '.jpg')
+    };
+  }
 
   function el(tag, cls, text) {
     const node = document.createElement(tag);
@@ -322,30 +348,36 @@
     if (mine) {
       actions.append(el('p', '', 'Choose your ally. Each ally can only be taken once.'));
 
-      // The portrait, not just the name. The draft is the one moment the player
-      // actually picks, and a wall of uppercase words is not a choice between
-      // seven animals.
-      //
-      // The path is built from the ally id the SERVER sent in availableAllies,
-      // exactly as the seat tiles do: assets/allies/<id>.jpg. That is the layout
-      // on disk (phoenix, tilly, louie, simba, elsie, ted - plus maple, which
-      // the server never offers because she is not drafted), so no filename is
-      // invented here and a name the server did not send cannot reach an <img>.
+      // A grid, because these carry a description now and a full-width stack of
+      // five tall tiles reads as a wall. auto-fill does the resizing, so the same
+      // markup is three across on a desktop and one on a phone.
+      const grid = el('div', 'online-draft-grid');
+
+      // The portrait, the name AND what the ally actually does. The draft is the one
+      // moment the player picks, and choosing between seven animals on sight alone
+      // means guessing. The description is the game's own wording from
+      // js/allies.js, so it cannot disagree with the rest of the game.
       state.availableAllies.forEach(id => {
+        const info = allyInfo(id);
         const button = el('button', 'online-draft-choice');
 
+        if (info && info.color) button.style.setProperty('--ally-color', info.color);
+
         const picture = el('img', 'online-portrait');
-        picture.src = 'assets/allies/' + id + '.jpg';
-        picture.alt = id;
+        picture.src = info ? info.src : ('assets/allies/' + id + '.jpg');
+        picture.alt = info ? info.name : id;
         button.append(picture);
 
-        button.append(el('strong', '', id.toUpperCase()));
-        if (titles[id]) button.append(el('small', '', titles[id]));
+        button.append(el('strong', '', info ? info.name : id.toUpperCase()));
+        if (info && info.title) button.append(el('small', '', info.title));
+        if (info && info.desc) button.append(el('p', 'online-draft-desc', info.desc));
 
         button.type = 'button';
         button.onclick = () => send({ type: 'chooseAlly', ally: id });
-        actions.append(button);
+        grid.append(button);
       });
+
+      actions.append(grid);
 
       if (!state.availableAllies.length) {
         actions.append(el('p', '', 'No allies left to choose.'));
@@ -595,11 +627,14 @@
       const meta = el('div', 'online-seat-meta');
       meta.append(el('strong', '', player.name + (index === state.seat ? ' (you)' : '')));
 
+      const info = player.ally ? allyInfo(player.ally) : null;
+
       meta.append(el(
         'small',
         '',
         player.ally
-          ? player.ally.toUpperCase() + (titles[player.ally] ? ' — ' + titles[player.ally] : '')
+          ? (info ? info.name : player.ally.toUpperCase()) +
+            (info && info.title ? ' — ' + info.title : '')
           : 'Ally not chosen yet'
       ));
 
