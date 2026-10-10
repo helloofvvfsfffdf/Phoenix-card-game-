@@ -351,41 +351,99 @@
         ));
       }
 
-      // Playable cards
+      
+      // Playable cards — show each card once, then choose a target.
       const movesGrid = el('div', 'online-card-grid');
+      const cardIds = [...new Set(s.moves.map(move => move.cardId))];
 
-      s.moves.forEach((move, moveIndex) => {
-        const card = window.PhoenixCards.byId(move.cardId);
+      cardIds.forEach((cardId, cardIndex) => {
+        const card = window.PhoenixCards.byId(cardId);
         if (!card) return;
 
-        const target =
-          s.players.find(p => p.id === move.targetId);
-
-        const option = el('div', 'online-card-option');
-        const button = s.tedObscured ? hiddenCard(s.hand.indexOf(move.cardId) >= 0 ? s.hand.indexOf(move.cardId) : moveIndex, true) : cardFace(card, true);
+        const button = s.tedObscured
+          ? hiddenCard(
+              s.hand.indexOf(cardId) >= 0
+                ? s.hand.indexOf(cardId)
+                : cardIndex,
+              true
+            )
+          : cardFace(card, true);
 
         button.onclick = () => {
-          send({
-            type: 'move',
-            cardId: move.cardId,
-            targetId: move.targetId || null
+          const possibleMoves = s.moves.filter(
+            move => move.cardId === cardId
+          );
+
+          const targetMoves = possibleMoves.filter(
+            move => move.targetId != null
+          );
+
+          // No target needed.
+          if (!targetMoves.length) {
+            send({
+              type: 'move',
+              cardId,
+              targetId: null
+            });
+            return;
+          }
+
+          // Show the target picker.
+          movesGrid.replaceChildren();
+
+          movesGrid.append(el(
+            'h3',
+            '',
+            '🎯 Pick your target'
+          ));
+
+          const targetGrid = el('div', 'online-card-grid');
+
+          targetMoves.forEach(move => {
+            const player = s.players.find(
+              p => p.id === move.targetId
+            );
+            if (!player) return;
+
+            const targetButton = el(
+              'button',
+              'online-primary',
+              player.name
+            );
+            targetButton.type = 'button';
+
+            targetButton.onclick = () => {
+              targetGrid.querySelectorAll('button')
+                .forEach(b => b.disabled = true);
+
+              send({
+                type: 'move',
+                cardId,
+                targetId: move.targetId
+              });
+            };
+
+            targetGrid.append(targetButton);
           });
+
+          movesGrid.append(targetGrid);
+
+          const back = el(
+            'button',
+            '',
+            '← Back to cards'
+          );
+          back.type = 'button';
+          back.onclick = () => render();
+          movesGrid.append(back);
         };
 
-        option.append(button);
-
-        if (target) {
-          option.append(el(
-            'span',
-            'online-card-target',
-            'Target: ' + target.name
-          ));
-        }
-
-        movesGrid.append(option);
+        movesGrid.append(button);
       });
 
       actions.append(movesGrid);
+
+     
     }
 
     // Your private hand
