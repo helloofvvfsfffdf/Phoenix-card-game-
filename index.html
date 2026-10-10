@@ -218,6 +218,9 @@
 <script src="js/ui.js"></script>
 <script src="js/prototype.js"></script>
 <script src="js/allies.js"></script>
-<script src="js/online.js"></script>
+<!-- The browser half of multiplayer. This used to point at js/online.js, which
+     is the NODE SERVER (require/http/ws) and threw "require is not defined" in
+     the browser; npm start runs the root server.js instead. -->
+<script src="js/online-client.js"></script>
 </body>
 </html>

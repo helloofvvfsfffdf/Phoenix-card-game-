@@ -102,11 +102,17 @@
 
     document.addEventListener('phoenix-ally-confirmed', function (event) { if (event.detail.mode === 'test' && window.PhoenixModeAccess.isUnlocked('test')) enter('test'); });
     document.addEventListener('phoenix-mode-unlocked', function(event) { if(event.detail.mode==='single') enter('single'); else if(event.detail.mode==='test') window.PhoenixAllies.open('test'); });
+    // Multiplayer opens the LOBBY, not the ally picker. The ally is drafted
+    // in-match by the server after the dice, so asking for one here would ask for
+    // a choice the server throws away - which is why the picker is only used by
+    // the local tester above.
+    $('menu-multi').addEventListener('click', function () {
+      window.PhoenixOnline.enter();
+    });
+
     ['menu-cards', 'menu-settings'].forEach(function (id) {
       $(id).addEventListener('click', function () {
-        $('menu-feedback').textContent = id === 'menu-multi'
-          ? 'Online multiplayer is locked. Real invite codes will require a server.'
-          : 'This section is coming in a future build.';
+        $('menu-feedback').textContent = 'This section is coming in a future build.';
       });
     });
     ['btn-new', 'btn-play-again'].forEach(function (id) {
