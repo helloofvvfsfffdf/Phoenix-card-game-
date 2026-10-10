@@ -27,6 +27,69 @@
   --phoenix: #ffd666;
   /* Alvin's ginger, shared by the card face and its cat artwork. */
   --ginger: #e2762a;
+  
+/* PHOENIX multiplayer card layout */
+
+.online-card-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.online-card-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Reuse the original card designs from styles.css */
+.online-card-grid .card {
+  flex-shrink: 0;
+}
+
+.online-card-grid button.card:hover {
+  transform: translateY(-8px);
+  border-color: var(--accent);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, .55);
+}
+
+.online-card-grid button.card:active {
+  transform: translateY(-3px);
+}
+
+.online-card-target {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gold);
+  text-align: center;
+  max-width: 132px;
+}
+
+/* Your private cards are for viewing */
+.online-private-cards .card {
+  cursor: default;
+}
+
+/* Mobile-friendly layout */
+@media (max-width: 520px) {
+  .online-card-grid {
+    gap: 10px;
+  }
+
+  .online-card-grid .card {
+    width: 116px;
+    min-height: 168px;
+  }
+
+  .online-card-grid .card-art {
+    height: 64px;
+  }
+}
+
 
   --seat-hue: 24;
   --radius: 14px;
