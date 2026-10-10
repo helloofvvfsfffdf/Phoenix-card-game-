@@ -101,7 +101,7 @@ module.exports = function (test, equal, deepEqual, assert) {
       assert(result.ok, result.error);
       var effects = E.fromRules(result.events);
       assert(effects.some(function (event) { return event.key === card.id; }), card.id + ' triggers');
-      assert(E.DEFINITIONS[card.id][5].length > 0, 'original synthesis exists');
+      assert(E.soundRecipe(card.id).layers.length >= 2, 'layered material synthesis exists');
       equal(E.fromRules([{ type: 'draw', cardId: card.id, text: 'secret' }]).length, 0, 'drawing does not reveal or animate identity');
       var b = browser();
       b.api.unlock();
@@ -248,7 +248,7 @@ module.exports = function (test, equal, deepEqual, assert) {
     equal(b.api.diagnostics().visuals, 0);
     equal(E.motion({ visuals: 'off' }, true), 'off');
   });
-  test('effects are bounded and clean up nodes, timers and oscillators', function () {
+  test('effects are bounded and clean up nodes, timers and buffer sources', function () {
     var b = browser(); b.api.unlock();
     for (var i = 0; i < 20; i++) b.api.show(E.publicEvent('phoenix', 0));
     equal(b.api.diagnostics().visuals, 3); equal(b.api.diagnostics().voices, 3);

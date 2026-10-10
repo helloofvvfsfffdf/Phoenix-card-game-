@@ -6,7 +6,7 @@
   try { store = window.localStorage; } catch (e) { store = null; }
   var prefs = E.load(store);
   var media = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
-  var active = [], voices = [], context = null, master = null, noiseBuffer = null;
+  var active = [], voices = [], context = null, master = null, soundBuffers = Object.create(null);
   var audioBlocked = false, saved = true;
   var Context = window.AudioContext || window.webkitAudioContext;
   var network = E.cursor();
@@ -60,6 +60,7 @@
     try {
       if (!context || context.state === 'closed') {
         context = new Context();
+        soundBuffers = Object.create(null);
         master = context.createGain();
         master.gain.value = prefs.volume * 0.18;
         var compressor = context.createDynamicsCompressor();
@@ -87,68 +88,24 @@
     voices.push(voice);
     try {
       var recipe = E.soundRecipe(key, inert);
-      var notes = recipe.notes;
       var duration = recipe.duration;
-      var step = duration / notes.length;
-      notes.forEach(function (frequency, index) {
-        var oscillator = context.createOscillator();
-        var gain = context.createGain();
-        voice.nodes.push(oscillator);
-        voice.gains.push(gain);
-        oscillator.type = recipe.wave;
-        var start = context.currentTime + index * step;
-        oscillator.frequency.setValueAtTime(frequency, start);
-        oscillator.frequency.exponentialRampToValueAtTime(Math.max(40, frequency * recipe.sweep), start + step);
-        gain.gain.setValueAtTime(0, start);
-        gain.gain.linearRampToValueAtTime(0.2, start + Math.min(0.025, step / 4));
-        gain.gain.exponentialRampToValueAtTime(0.001, start + step);
-        gain.gain.setValueAtTime(0, start + step + 0.015);
-        oscillator.connect(gain);
-        gain.connect(master);
-        oscillator.start(start);
-        oscillator.stop(start + step + 0.02);
-        if (recipe.harmonic) {
-          var overtone = context.createOscillator();
-          var overtoneGain = context.createGain();
-          voice.nodes.push(overtone); voice.gains.push(overtoneGain);
-          overtone.type = 'sine';
-          overtone.frequency.setValueAtTime(frequency * recipe.harmonic, start);
-          overtone.frequency.exponentialRampToValueAtTime(Math.max(40, frequency * recipe.harmonic * recipe.sweep), start + step);
-          overtoneGain.gain.setValueAtTime(0, start);
-          overtoneGain.gain.linearRampToValueAtTime(0.04, start + Math.min(0.025, step / 4));
-          overtoneGain.gain.exponentialRampToValueAtTime(0.001, start + step);
-          overtone.connect(overtoneGain); overtoneGain.connect(master);
-          overtone.start(start); overtone.stop(start + step + 0.02);
-        }
-      });
-      // Original procedural texture adds a metallic scrape, fire rush or soft
-      // impact beneath the tonal signature. Reuse one short noise buffer.
-      if (recipe.texture) {
-        if (!noiseBuffer) {
-          noiseBuffer = context.createBuffer(1, Math.ceil(context.sampleRate * 1.2), context.sampleRate);
-          var samples = noiseBuffer.getChannelData(0);
-          var seed = 173;
-          for (var i = 0; i < samples.length; i++) {
-            seed = (seed * 1664525 + 1013904223) >>> 0;
-            samples[i] = seed / 2147483648 - 1;
-          }
-        }
-        var rush = context.createBufferSource();
-        var filter = context.createBiquadFilter();
-        var envelope = context.createGain();
-        voice.nodes.push(rush);
-        voice.gains.push(filter, envelope);
-        rush.buffer = noiseBuffer;
-        filter.type = recipe.texture;
-        filter.frequency.setValueAtTime(recipe.cutoff, context.currentTime);
-        filter.frequency.exponentialRampToValueAtTime(Math.max(80, recipe.cutoff * recipe.sweep), context.currentTime + duration);
-        var now = context.currentTime;
-        envelope.gain.setValueAtTime(0, now);
-        envelope.gain.linearRampToValueAtTime(recipe.noiseGain, now + 0.02);
-        envelope.gain.exponentialRampToValueAtTime(0.001, now + duration);
-        rush.connect(filter); filter.connect(envelope); envelope.connect(master);
-        rush.start(now); rush.stop(now + duration);
+      var cacheKey = key + (inert ? ':inert' : ':active');
+      if (!soundBuffers[cacheKey]) {
+        var seed = 173;
+        for (var i = 0; i < key.length; i++) seed = (Math.imul(seed,31) + key.charCodeAt(i)) >>> 0;
+        var samples = E.renderSound(recipe, context.sampleRate, seed);
+        var buffer = context.createBuffer(1, samples.length, context.sampleRate);
+        buffer.getChannelData(0).set(samples);
+        soundBuffers[cacheKey] = buffer;
       }
+      // One bounded source per event, even for multilayer Foley. Existing
+      // master gain, compression, mute, deduplication and voice cap stay intact.
+      var source = context.createBufferSource();
+      source.buffer = soundBuffers[cacheKey];
+      voice.nodes.push(source);
+      source.connect(master);
+      source.start(context.currentTime);
+      source.stop(context.currentTime + duration + 0.08);
       voice.timer = setTimeout(function () { disposeVoice(voice); }, (duration + 0.15) * 1000);
     } catch (e) { disposeVoice(voice); }
   }
@@ -226,6 +183,7 @@
   document.addEventListener('visibilitychange', function () { if (document.hidden) cleanup(); });
   window.addEventListener('pagehide', function () {
     cleanup();
-    if (context) { context.close().catch(function () {}); context = null; master = null; noiseBuffer = null; }
+    if (context) { context.close().catch(function () {}); context = null; master = null; }
+    soundBuffers = Object.create(null);
   });
 }());

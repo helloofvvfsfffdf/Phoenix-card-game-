@@ -10,26 +10,26 @@ The original card faces and artwork are not replaced.
 
 | Card / outcome | Visual | Original synthesized sound |
 | --- | --- | --- |
-| +10,000 Points | Rising gold star and motes | Bright ascending three-note chime |
-| Knife | Angled steel slash | High metallic scrape and falling strike |
-| Hunter | Green ward crest | Resonant two-note ward |
-| Zombie | Toxic green mist | Descending low ominous pulse |
-| Steal Points | Violet generic token travels from victim to actor | Rising transfer tones and filtered whoosh |
-| Judge | Gold judgment impact | Low-high resonant verdict and impact texture |
-| Reveal Deck | Cyan eye opens | Clear two-note reveal shimmer |
-| Skip Everyone | Lavender rotating time ring | Short looping time motif |
-| Phoenix | Orange-gold rising flame seal and embers | Four-octave rising fire swell and noise rush |
-| Trick | Purple skewed illusion seal | Detuned mysterious three-note motif |
-| Steal a Turn | Blue hourglass/time ring | Ascending control motif |
-| Curse | Violet cursed rune | Descending dissonant tones |
-| Ghost | Pale spectral mist | Airy ascending tones |
-| Alvin, inspection | Warm reveal seal | Soft two-note anticipation |
-| Alvin, completed destruction | One generic card-back silhouette burns away | Falling burn tones and filtered fire texture |
-| Curse, triggered | Violet impact rune | Low two-note impact |
-| Hunter reflection, if emitted by engine | Green ward response | Three-note reflection response |
+| +10,000 Points | Rising gold star and motes | Coins landing, bouncing and settling |
+| Knife | Angled steel slash | Blade swish, steel scrape and sharp dry strike |
+| Hunter | Green ward crest | Bow tension and resonant string release |
+| Zombie | Toxic green mist | Ragged throat groan and breathy rasp |
+| Steal Points | Violet generic token travels from victim to actor | Coin scrape/scatter and pocket rustle |
+| Judge | Gold judgment impact | Two wooden gavel knocks, heavy verdict |
+| Reveal Deck | Cyan eye opens | Crisp card fan opening |
+| Skip Everyone | Lavender rotating time ring | Accelerating clockwork ticks and brake |
+| Phoenix | Orange-gold rising flame seal and embers | Flame intake, broad fire roar and embers |
+| Trick | Purple skewed illusion seal | Cloth mask, reverse suction and snap |
+| Steal a Turn | Blue hourglass/time ring | Puppet cord, catching ratchet and lock |
+| Curse | Violet cursed rune | Ritual scratch, resonant seal and murmuring breath |
+| Ghost | Pale spectral mist | Unvoiced whisper dissolving into air |
+| Alvin, inspection | Warm reveal seal | Card parting and small crackling ignition |
+| Alvin, completed destruction | One generic card-back silhouette burns away | Close paper combustion, flame and ash |
+| Curse, triggered | Violet impact rune | Seal crack and guttural exhalation |
+| Hunter reflection, if emitted by engine | Green ward response | String recoil, return rush and impact |
 
 Judge's inert/no-victim result, an already-held Hunter, an empty Alvin/Curse
-target and a zero-point Steal use a dim stationary seal and subdued short tone;
+target and a zero-point Steal use a dim stationary seal and quiet knock/cloth fall;
 they do not depict an outcome that did not occur. Alvin's burn runs only after
 the chooser completes destruction, not when the initial card is played.
 
@@ -37,15 +37,15 @@ the chooser completes destruction, not when the initial card is played.
 
 | Actual server outcome | Visual | Original synthesized sound |
 | --- | --- | --- |
-| Phoenix: Sneaky Snatcher succeeds | Gold anonymous card-back transfer | Three-note theft flourish and whoosh |
-| Tilly: Protective Paws blocks theft | Purple shield crest | Two-note paws ward |
-| Ted: Slobbery Surprise activates | Blue expanding slobber blob and droplets | Bubbly pitch drops and a soft filtered wet splat |
-| Ted: Protective Howl blocks theft | Blue howl ward | Rising/falling howl motif |
-| Louie: Quick Reflexes blocks theft | Blue reflex shield | Fast descending response |
-| Simba: Sharp Claws blocks theft | Orange claw shield | Sharp two-note metallic response |
-| Elsie: Untouchable blocks theft | Pink diamond shield | Bright high two-note shimmer |
-| Maple: neutral Sweet Tooth activates | Mint leaf rune, on affected seat | Sweet ascending chime |
-| Maple: server rejects a restricted aggressive move | Private mint leaf rune, actor only | Short descending restriction chime |
+| Phoenix: Sneaky Snatcher succeeds | Gold anonymous card-back transfer | Single-card whisk and tuck |
+| Tilly: Protective Paws blocks theft | Purple shield crest | Padded paw thumps and low warning |
+| Ted: Slobbery Surprise activates | Blue expanding slobber blob and droplets | Thick wet splat and drippy bubbles |
+| Ted: Protective Howl blocks theft | Blue howl ward | Chesty bark into short howl |
+| Louie: Quick Reflexes blocks theft | Blue reflex shield | Fast dodge and card slap |
+| Simba: Sharp Claws blocks theft | Orange claw shield | Three claw rakes and raspy warning |
+| Elsie: Untouchable blocks theft | Pink diamond shield | Repel gust and glass-hard resonance |
+| Maple: neutral Sweet Tooth activates | Mint leaf rune, on affected seat | Wrapper crinkle and two sugary crunches |
+| Maple: server rejects a restricted aggressive move | Private mint leaf rune, actor only | Wrapper squeeze and closed-lid tap |
 
 The actual server only implements Phoenix's theft, these anti-theft defenses,
 Ted's fog and neutral Maple's restriction. It does **not** execute Tilly's
@@ -64,10 +64,14 @@ Hunter, so that reflection branch is not normally reachable.
 
 ## Audio provenance and settings
 
-No third-party sound assets were added. `js/effects-client.js` generates every
-sound using Web Audio oscillators and original deterministic procedural noise.
-The note/waveform recipes and dedicated `SOUND_PROFILES` are in `js/effects.js`; there are no sampled recordings
-or third-party licences to attribute. Existing music assets and their licensing
+No third-party sound assets were added. `js/sound-design.js` renders original
+layered procedural Foley into PCM; `js/effects-client.js` caches and plays it with
+Web Audio buffer sources. Material resonances, textured transients, crackling fire
+and formant-shaped vocal/breath models replace the old note sequences. Legacy
+note metadata in `DEFINITIONS` is retained to avoid changing the visual catalogue,
+but is not played. There are no sampled recordings or third-party SFX licences
+to attribute. Full concepts, provenance and review limits: [SOUND-DESIGN.md](SOUND-DESIGN.md).
+Existing music assets and their licensing
 in `MUSIC-LICENSES.md` are unchanged.
 
 - `phoenix.effects.v1`: enabled flag, sound volume (default 35%), visual mode.
@@ -75,7 +79,7 @@ in `MUSIC-LICENSES.md` are unchanged.
   new browsers. No preference migration or overwrite.
 - Sound and visuals can be disabled independently. Zero sound volume creates no
   voices. Mute stops existing voices. Settings write failures are reported.
-- A separate, conservative master gain, gentle note envelopes, compression and
+- A separate, conservative master gain, short material envelopes, compression and
   a three-voice limit bound audio peaks. Sound never changes the music element.
 - Context creation/resume happens synchronously on genuine clicks/keypresses.
   Blocked sounds reuse the global music/audio recovery button. No autoplay policy
@@ -110,9 +114,8 @@ back-forward-cache restoration respects the retained match gate.
 
 SFX remain independent and enabled according to `phoenix.effects.v1`, including
 when music is Disabled or temporarily paused. Reduced motion does not mute SFX.
-The sound update preserves every visual and trigger, adding soft harmonics and
-effect-specific filtered noise/pitch sweeps: fire rushes, metallic scrapes,
-supernatural whispers, transfer whooshes, shield resonances and Ted's wet splat.
+The sound redesign preserves every visual and trigger, replacing pitched motifs
+with layered paper, metal, wood, cloth, fire, breath and vocal-like textures.
 Each actually implemented event has a distinct recipe. Dormant ally abilities are
 still not activated. A three-voice cap, conservative master gain, compression and
 short envelopes keep peaks controlled. Muted sounds allocate no voices.
