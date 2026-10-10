@@ -99,7 +99,7 @@
     $('menu-single').addEventListener('click', function () { window.PhoenixModeAccess.request('single'); });
     $('menu-test').addEventListener('click', function () { window.PhoenixModeAccess.request('test'); });
     $('back-to-menu').addEventListener('click', leave);
-    $('menu-multi').addEventListener('click', function () { window.PhoenixAllies.open('multi'); });
+
     document.addEventListener('phoenix-ally-confirmed', function (event) { if (event.detail.mode === 'test' && window.PhoenixModeAccess.isUnlocked('test')) enter('test'); });
     document.addEventListener('phoenix-mode-unlocked', function(event) { if(event.detail.mode==='single') enter('single'); else if(event.detail.mode==='test') window.PhoenixAllies.open('test'); });
     ['menu-cards', 'menu-settings'].forEach(function (id) {
