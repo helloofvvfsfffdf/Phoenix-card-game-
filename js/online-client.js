@@ -62,6 +62,90 @@
     return node;
   }
 
+  /**
+   * A real PHOENIX card face.
+   *
+   * Restored from the previous client (commit a66b491), which built the same
+   * markup this file now builds. The important part is the class: `card`, with
+   * `data-tone` carrying the card's tone. That is what css/styles.css styles,
+   * so a card drawn here is the same artwork, colour, corner tag, blurb and
+   * legendary badge a single-player card gets - because it is literally the same
+   * markup and the same stylesheet. Replacing this with a text span is what made
+   * the multiplayer cards look unbranded.
+   *
+   * @param card the card definition from PhoenixCards.byId
+   * @param clickable true for a button the player can act on
+   */
+  function cardFace(card, clickable) {
+    const node = el(clickable ? 'button' : 'div', 'card');
+
+    if (clickable) node.type = 'button';
+
+    node.dataset.tone = card.tone;
+    node.dataset.card = card.id;
+    node.title = (card.rule || '') + ' ' + (card.targetNote || '');
+    node.setAttribute('aria-label', card.name + '. ' + (card.rule || ''));
+
+    const corner = el('span', 'card-corner');
+    corner.append(el('span', 'card-corner-glyph', card.glyph));
+    corner.append(el('span', 'card-corner-tag', card.short));
+    node.append(corner);
+
+    const art = el('span', 'card-art');
+
+    if (card.art) {
+      // Static markup authored in cards.js, not anything typed in.
+      art.innerHTML = card.art;
+
+      const svg = art.querySelector('svg');
+      if (svg) {
+        svg.classList.add('card-art-art');
+        svg.setAttribute('focusable', 'false');
+      }
+    } else {
+      art.append(el('span', 'card-glyph', card.glyph));
+    }
+
+    node.append(art);
+    node.append(el('span', 'card-name', card.name));
+    node.append(el('span', 'card-blurb', card.blurb));
+
+    node.append(el(
+      'span',
+      'card-tag',
+      card.legendary
+        ? 'Legendary - one use'
+        : card.needsTarget
+          ? 'Needs a target'
+          : 'No target'
+    ));
+
+    return node;
+  }
+
+  /**
+   * A card the server has hidden behind Ted's fog.
+   *
+   * The snapshot sets `tedObscured` when this player's hand is concealed. The
+   * card must not be drawn in that case - it is the whole point of Ted, and the
+   * previous client got this right. The position number is kept because the
+   * player still chooses by position.
+   */
+  function hiddenCard(index) {
+    const node = el('div', 'card');
+
+    node.dataset.tone = 'neutral';
+    node.title = 'Ted has hidden this card!';
+    node.setAttribute('aria-label', 'Hidden card ' + (index + 1));
+
+    node.append(el('span', 'card-corner', '?'));
+    node.append(el('span', 'card-art', '\u{1F436}'));
+    node.append(el('span', 'card-name', 'Card ' + (index + 1)));
+    node.append(el('span', 'card-blurb', 'Hidden by Ted\u2019s Slobbery Surprise'));
+
+    return node;
+  }
+
   function feedback(message) {
     $('online-feedback').textContent = message;
   }
@@ -305,9 +389,73 @@
     actions.replaceChildren();
 
     if (state.over) {
-      actions.append(el('h3', '', 'Match complete!'));
+      // The victory screen, restored from the previous client (commit a66b491).
+      //
+      // Its CSS - .phoenix-victory, .phoenix-champion, .phoenix-victory-ally,
+      // .phoenix-victory-trophy, .phoenix-victory-display and
+      // .phoenix-victory-standings - was never removed from css/online.css, so
+      // nothing new had to be styled: this is the original markup, and it lands
+      // on the original theme.
+      //
+      // It is drawn here, inside the actions area, for EVERY connected player. The
+      // snapshot carries `over` and `winner` for all of them, so the screen is
+      // per-connection state rather than something only the winner is told about.
       const winner = state.players.find(p => p.id === state.winner);
-      actions.append(el('p', '', winner ? 'Winner: ' + winner.name : 'Game over'));
+      const victory = el('div', 'phoenix-victory');
+
+      victory.append(el('h1', '', '\u{1F3C6} VICTORY! \u{1F3C6}'));
+
+      if (winner) {
+        const champion = el('div', 'phoenix-champion');
+
+        const photo = el('img', 'phoenix-victory-ally');
+        // Same path as everywhere else: assets/allies/<id>.jpg, from the id the
+        // server sent. No filename invented here.
+        photo.src = 'assets/allies/' + winner.ally + '.jpg';
+        photo.alt = winner.ally + ' the winning ally';
+
+        const trophy = el('div', 'phoenix-victory-trophy', '\u{1F3C6}');
+        const display = el('div', 'phoenix-victory-display');
+        display.append(photo, trophy);
+        champion.append(display);
+
+        champion.append(el(
+          'h2',
+          '',
+          winner.name + ' & ' + (winner.ally || '').toUpperCase() + ' WON!'
+        ));
+
+        champion.append(el(
+          'p',
+          '',
+          winner.points.toLocaleString() + ' POINTS'
+        ));
+
+        victory.append(champion);
+      }
+
+      const standings = el('div', 'phoenix-victory-standings');
+      standings.append(el('h3', '', 'FINAL LEADERBOARD'));
+
+      [...state.players]
+        .sort((a, b) => b.points - a.points)
+        .forEach((player, index) => {
+          const medal = ['\u{1F947}', '\u{1F948}', '\u{1F949}'][index] || '\u{1F3C5}';
+
+          standings.append(el(
+            'p',
+            '',
+            medal + ' ' + player.name +
+            ' & ' +
+            (player.ally || 'No ally').toUpperCase() +
+            ' — ' +
+            player.points.toLocaleString() +
+            ' points'
+          ));
+        });
+
+      victory.append(standings);
+      actions.append(victory);
       return;
     }
 
@@ -324,28 +472,65 @@
 
     if (!state.moves.length) {
       actions.append(el('p', '', 'No legal moves available.'));
+    } else {
+      // One button per PLAYABLE CARD, drawn as the real card face. The server has
+      // already resolved every legal card/target pair into `moves`, so the player
+      // picks the card they want and then the target, instead of being shown the
+      // same face once per legal target.
+      const grid = el('div', 'online-card-grid');
+      const cardIds = [...new Set(state.moves.map(move => move.cardId))];
+
+      cardIds.forEach(cardId => {
+        const card = window.PhoenixCards.byId(cardId);
+        if (!card) return;
+
+        const button = cardFace(card, true);
+
+        button.onclick = () => {
+          const possible = state.moves.filter(move => move.cardId === cardId);
+
+          // Nothing to aim at: play it.
+          if (!card.needsTarget) {
+            send({ type: 'move', cardId, targetId: null });
+            return;
+          }
+
+          // Swap the grid for a target picker, so the same card is not drawn once
+          // per possible victim.
+          grid.replaceChildren();
+          grid.append(el('h3', '', '\u{1F3AF} Pick your target for ' + card.name));
+
+          const targets = el('div', 'online-card-grid');
+
+          possible.forEach(move => {
+            if (!move.targetId) return;
+
+            const player = state.players.find(p => p.id === move.targetId);
+            if (!player) return;
+
+            const targetButton = el('button', 'online-primary', player.name);
+            targetButton.type = 'button';
+            targetButton.onclick = () => {
+              // Lock the choices so a double click cannot play two moves.
+              targets.querySelectorAll('button').forEach(b => { b.disabled = true; });
+              send({ type: 'move', cardId, targetId: move.targetId });
+            };
+            targets.append(targetButton);
+          });
+
+          grid.append(targets);
+
+          const back = el('button', '', '\u{2190} Back to cards');
+          back.type = 'button';
+          back.onclick = render;
+          grid.append(back);
+        };
+
+        grid.append(button);
+      });
+
+      actions.append(grid);
     }
-
-    // Each legal move is its own button. The server already resolved every legal
-    // card/target pair into `moves`, so two buttons with the same card are two
-    // different targets and neither is a guess.
-    state.moves.forEach(move => {
-      const card = window.PhoenixCards.byId(move.cardId);
-      if (!card) return;
-
-      const target = move.targetId
-        ? state.players.find(p => p.id === move.targetId)
-        : null;
-
-      const button = el(
-        'button',
-        'online-move',
-        (card.glyph || '') + ' ' + card.name + (target ? ' → ' + target.name : '')
-      );
-      button.type = 'button';
-      button.onclick = () => send({ type: 'move', cardId: move.cardId, targetId: move.targetId || null });
-      actions.append(button);
-    });
   }
 
   function render() {
@@ -376,6 +561,15 @@
     else if (s.phase === 'turnDice' || s.phase === 'allyDice') renderDice();
     else if (s.phase === 'draft') renderDraft();
     else renderPlaying();
+
+    // Both piles, for EVERY player.
+    //
+    // This is deliberately outside the branch above rather than inside the
+    // acting branch: a player waiting for their turn still needs to see how many
+    // cards are left and what was played last. The previous client drew them from
+    // render() and every seat saw them, which is the behaviour being restored.
+    // renderPiles() no-ops until the match has actually started.
+    renderPiles();
 
     renderHand();
     renderLog();
@@ -433,10 +627,77 @@
 
     hand.append(el('h3', '', 'Your private hand'));
 
-    state.hand.forEach(id => {
+    // A grid of real card faces, not a list of words. Ted's fog wins over
+    // everything: if the server says this hand is concealed, no card in it is
+    // drawn, whatever it actually is.
+    const grid = el('div', 'online-card-grid online-private-cards');
+
+    state.hand.forEach((id, index) => {
       const card = window.PhoenixCards.byId(id);
-      hand.append(el('span', 'online-card', card ? (card.glyph || '') + ' ' + card.name : id));
+
+      if (!card) {
+        grid.append(el('span', 'online-card', id));
+        return;
+      }
+
+      grid.append(state.tedObscured ? hiddenCard(index) : cardFace(card, false));
     });
+
+    hand.append(grid);
+  }
+
+  /**
+   * The pickup (draw) pile and the discard pile.
+   *
+   * Restored from the previous client. The server has always sent `deckCount`,
+   * `discardCount` and `lastDiscard` in every snapshot - this client simply
+   * never read them, which is why the piles were not on screen at all.
+   *
+   * Nothing here draws a card or changes the game. Cards are dealt and discarded
+   * by the server; this only reports what the server says and shows the real
+   * face of the most recently discarded card, which is why it uses cardFace()
+   * rather than naming it.
+   */
+  function renderPiles() {
+    const s = state;
+    if (!s.started) return;
+
+    const piles = el('div', 'phoenix-piles');
+
+    // Pickup pile - cards are dealt from here automatically, so there is nothing
+    // to click. It exists to answer "how many are left".
+    const pickup = el('div', 'phoenix-pile');
+    pickup.append(el('h3', '', '\u{1F0CF} PICKUP PILE'));
+
+    const pickupCard = el('div', 'card phoenix-pile-card');
+    pickupCard.append(el('span', 'card-art', '\u{1F98E}'));
+    pickupCard.append(el('span', 'card-name', 'PHOENIX'));
+    pickup.append(pickupCard);
+
+    pickup.append(el('p', '', s.deckCount + ' cards remaining'));
+    piles.append(pickup);
+
+    // Discard pile - the actual card on top, drawn with its real design.
+    const discard = el('div', 'phoenix-pile');
+    discard.append(el('h3', '', '\u{1F0B4} DISCARD PILE'));
+
+    const lastCard = s.lastDiscard ? window.PhoenixCards.byId(s.lastDiscard) : null;
+
+    if (lastCard) {
+      const discardCard = cardFace(lastCard, false);
+      discardCard.classList.add('phoenix-pile-card');
+      discard.append(discardCard);
+    } else {
+      const empty = el('div', 'card phoenix-pile-card');
+      empty.append(el('span', 'card-art', '\u{1F43E}'));
+      empty.append(el('span', 'card-name', 'NO CARDS YET'));
+      discard.append(empty);
+    }
+
+    discard.append(el('p', '', s.discardCount + ' cards discarded'));
+    piles.append(discard);
+
+    $('online-actions').append(piles);
   }
 
   function renderLog() {
