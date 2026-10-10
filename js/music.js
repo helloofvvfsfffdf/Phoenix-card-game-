@@ -272,7 +272,8 @@ if (typeof document !== 'undefined') {
       var state = { track: prefs.track, volume: prefs.volume, blocked: blocked, playing: isPlaying() };
       onChange.forEach(function (fn) { fn(state); });
       var enable = document.getElementById('music-enable-button');
-      if (enable) enable.hidden = !blocked;
+      var effectsBlocked = window.PhoenixCinematics && window.PhoenixCinematics.isAudioBlocked();
+      if (enable) enable.hidden = !(blocked || effectsBlocked);
     }
 
     function isPlaying() {
@@ -453,19 +454,11 @@ if (typeof document !== 'undefined') {
     function $(id) { return document.getElementById(id); }
 
     function screens() {
-      return ['phoenix-menu', 'phoenix-game', 'gallery-gate', 'gallery', 'win-screen', 'ally-picker'];
+      return ['phoenix-menu', 'phoenix-game', 'online-screen', 'gallery-gate', 'gallery', 'win-screen', 'ally-picker', 'game-toolbar', 'testing-panel'];
     }
 
-    function hideEverything() {
-      screens().forEach(function (id) {
-        var node = $(id);
-        if (node) node.hidden = true;
-      });
-      ['game-toolbar', 'testing-panel'].forEach(function (id) {
-        var node = $(id);
-        if (node) node.hidden = true;
-      });
-    }
+    var settingsBackground = null;
+    var settingsFocus = null;
 
     function renderTracks() {
       var host = $('settings-tracks');
@@ -558,7 +551,20 @@ if (typeof document !== 'undefined') {
 
     var settings = {
       open: function () {
-        hideEverything();
+        if (!$('settings').hidden) return;
+        settingsFocus = document.activeElement;
+        // Keep visibility and live server updates intact. Only background input
+        // and accessibility are suspended while this modal is open.
+        settingsBackground = screens().map(function (id) {
+          var node = $(id);
+          if (!node) return null;
+          var old = { node: node, inert: node.inert, aria: node.getAttribute('aria-hidden') };
+          node.inert = true;
+          node.setAttribute('aria-hidden', 'true');
+          return old;
+        }).filter(Boolean);
+        var inMatch = (!$('phoenix-game').hidden || !$('online-screen').hidden);
+        $('settings-back').textContent = inMatch ? '← RETURN TO MATCH' : '← MAIN MENU';
         $('settings').hidden = false;
         sync();
         $('settings-back').focus();
@@ -566,7 +572,14 @@ if (typeof document !== 'undefined') {
 
       leave: function () {
         $('settings').hidden = true;
-        $('phoenix-menu').hidden = false;
+        (settingsBackground || []).forEach(function (old) {
+          old.node.inert = old.inert;
+          if (old.aria === null) old.node.removeAttribute('aria-hidden');
+          else old.node.setAttribute('aria-hidden', old.aria);
+        });
+        settingsBackground = null;
+        if (settingsFocus && settingsFocus.isConnected && typeof settingsFocus.focus === 'function') settingsFocus.focus();
+        settingsFocus = null;
       }
     };
 
@@ -576,6 +589,18 @@ if (typeof document !== 'undefined') {
       renderTracks();
 
       $('settings-back').addEventListener('click', settings.leave);
+      $('match-settings').addEventListener('click', settings.open);
+      document.addEventListener('keydown', function (event) {
+        if ($('settings').hidden) return;
+        if (event.key === 'Escape') { event.preventDefault(); settings.leave(); return; }
+        if (event.key !== 'Tab') return;
+        var controls = Array.prototype.filter.call($('settings').querySelectorAll('button, input, select, [tabindex]'), function (node) {
+          return !node.disabled && node.tabIndex >= 0 && node.getClientRects().length;
+        });
+        var first = controls[0], last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      });
 
       $('settings-volume-slider').addEventListener('input', function (event) {
         api.setVolume(Number(event.target.value) / 100);

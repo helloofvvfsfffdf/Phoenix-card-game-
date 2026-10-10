@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="css/online.css" />
 <link rel="stylesheet" href="css/gallery.css" />
 <link rel="stylesheet" href="css/settings.css" />
+<link rel="stylesheet" href="css/effects.css" />
 <link rel="stylesheet" href="css/allies.css" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128293;</text></svg>" />
 <title>Phoenix</title>
@@ -27,7 +28,7 @@
         <button type="button" id="menu-multi"><span class="menu-symbol">♟</span> MULTIPLAYER <small>PRIVATE ROOMS · INVITE CODE</small></button>
         <button type="button" id="menu-gallery"><span class="menu-symbol">▦</span> GALLERY <small>PRIVATE · INVITE CODE</small></button>
         <button type="button" id="menu-cards"><span class="menu-symbol">▣</span> CARD COLLECTION <small>COMING SOON</small></button>
-        <button type="button" id="menu-settings"><span class="menu-symbol">⚙</span> SETTINGS <small>BACKGROUND MUSIC</small></button>
+        <button type="button" id="menu-settings"><span class="menu-symbol">⚙</span> SETTINGS <small>MUSIC, SOUND &amp; EFFECTS</small></button>
       </nav>
       <p id="menu-feedback" aria-live="polite"></p>
       <p class="menu-footer">PHOENIX · PROTOTYPE BUILD · RESTRICTED ACCESS</p>
@@ -70,6 +71,7 @@
         </select>
       </label>
       <button class="btn btn-primary" id="btn-new" type="button">New Game</button>
+      <button class="btn" id="match-settings" type="button">Settings</button>
     </div>
   </header>
 
@@ -277,7 +279,7 @@
      Nothing here talks to the server. Music is stored in each player's own
      browser, which is why it needs no owner password and why every guest in a
      multiplayer room gets their own choice and their own volume. -->
-  <section id="settings" class="settings-screen" hidden aria-label="Settings">
+  <section id="settings" class="settings-screen" hidden role="dialog" aria-modal="true" aria-label="Settings">
     <div class="settings-card">
       <header class="settings-head">
         <p class="settings-eyebrow">PHOENIX</p>
@@ -298,6 +300,23 @@
         <p id="settings-music-status" class="settings-status" aria-live="polite"></p>
       </div>
 
+      <div class="settings-section effects-controls">
+        <h3>Cinematic Effects</h3>
+        <label><input id="settings-sound-enabled" type="checkbox" checked> Enable sound effects</label>
+        <div class="settings-volume">
+          <label for="settings-sound-volume">SOUND VOLUME <span id="settings-sound-value">35%</span></label>
+          <input id="settings-sound-volume" type="range" min="0" max="100" value="35" aria-label="Sound effects volume">
+        </div>
+        <label for="settings-visual-effects">Visual effects</label>
+        <select id="settings-visual-effects">
+          <option value="full">Full cinematics</option>
+          <option value="reduced">Reduced motion</option>
+          <option value="off">Disabled</option>
+        </select>
+        <p class="settings-note">System reduced-motion preferences always take priority. Sounds and visuals are yours alone, separate from music.</p>
+        <button id="settings-effects-preview" type="button">Preview effects</button>
+        <p id="settings-effects-status" class="settings-status" aria-live="polite"></p>
+      </div>
       <button class="settings-back" id="settings-back" type="button">&#8592; MAIN MENU</button>
     </div>
   </section>
@@ -311,6 +330,8 @@
      restating it in prose that could drift away from the rule. -->
 <script src="js/maple.js"></script>
 <script src="js/music.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/effects-client.js"></script>
 <script src="js/rules.js"></script>
 <script src="js/parser.js"></script>
 <script src="js/prompt.js"></script>

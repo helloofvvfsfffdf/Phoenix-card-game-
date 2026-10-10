@@ -538,6 +538,9 @@ test('only a changed source requires a track reload', function () {
 
 require('./music-player-tests')(test, equal, deepEqual);
 
+suite('Cinematic effects');
+require('./effects-tests')(test, equal, deepEqual, assert);
+
 /* ===================================================================== */
 /* The deck                                                               */
 /* ===================================================================== */
