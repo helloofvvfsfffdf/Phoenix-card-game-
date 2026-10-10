@@ -544,6 +544,9 @@ require('./effects-tests')(test, equal, deepEqual, assert);
 suite('Automatic match music and sound recipes');
 require('./match-audio-tests')(test, equal, deepEqual, assert);
 
+suite('Material sound design');
+require('./sound-design-tests')(test, equal, deepEqual, assert);
+
 /* ===================================================================== */
 /* The deck                                                               */
 /* ===================================================================== */

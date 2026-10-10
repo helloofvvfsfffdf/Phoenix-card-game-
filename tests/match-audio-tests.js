@@ -72,13 +72,13 @@ module.exports = function (test, equal, deepEqual, assert) {
     'ally-phoenix', 'ally-ted', 'ally-maple', 'block-tilly', 'block-ted', 'block-louie', 'block-simba', 'block-elsie', 'maple-restriction'];
   implemented.forEach(function (key) {
     test(key + ' uses a dedicated original sound recipe without changing its visual', function () {
-      assert(E.SOUND_PROFILES[key], 'implemented effects have an explicit profile');
+      var visual = JSON.stringify(E.DEFINITIONS[key]);
       var recipe = E.soundRecipe(key);
-      deepEqual(recipe.notes, E.DEFINITIONS[key][5]);
+      equal(JSON.stringify(E.DEFINITIONS[key]), visual, 'sound recipe leaves visual catalogue unchanged');
+      assert(recipe.layers.length >= 2, 'implemented effects have layered material sounds');
       assert(recipe.duration > 0 && recipe.duration <= 1.2);
-      assert(recipe.noiseGain <= 0.09);
       var inert = E.soundRecipe(key, true);
-      equal(inert.texture, null); equal(inert.harmonic, 0); equal(inert.duration, 0.25);
+      equal(inert.duration, 0.25);
       var unique = implemented.filter(function (other) { return JSON.stringify(E.soundRecipe(other)) === JSON.stringify(recipe); });
       equal(unique.length, 1, 'sound identities are distinct');
     });
