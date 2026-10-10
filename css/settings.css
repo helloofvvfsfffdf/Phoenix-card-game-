@@ -150,15 +150,28 @@
   font-size: 12.5px;
 }
 
-.settings-enable {
-  margin-top: 10px;
-  padding: 11px 16px;
+.music-enable-button {
+  position: fixed;
+  z-index: 100;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  max-width: calc(100vw - 32px);
+  padding: 13px 18px;
   border: 1px solid #f8d67e;
   border-radius: 10px;
   background: #d49b36;
   color: #16110b;
   font-weight: 800;
+  line-height: 1.3;
   cursor: pointer;
+  box-shadow: 0 8px 26px #0008;
+}
+
+.music-enable-button:hover,
+.music-enable-button:focus-visible {
+  background: #f0bd54;
+  outline: 2px solid #fff1c2;
+  outline-offset: 2px;
 }
 
 .settings-back {

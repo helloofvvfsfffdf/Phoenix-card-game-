@@ -483,7 +483,7 @@ test('the four licensed choices, Disabled, and the Epic default are defined', fu
     ['epic', 'mysterious', 'retro', 'calm', 'off']);
   equal(Music.TRACKS[4].name, 'Disabled');
   equal(Music.defaultPrefs().track, 'epic');
-  equal(Music.defaultPrefs().volume, 0.4);
+  equal(Music.defaultPrefs().volume, 0.25);
   Music.TRACKS.slice(0, 4).forEach(function (track) {
     assert(track.file.indexOf('assets/music/') === 0, track.id + ' uses a local soundtrack');
   });
@@ -518,6 +518,8 @@ test('separate browser stores retain independent music preferences across reload
   assert(Music.savePrefs(playerTwo, second), 'player two preferences save');
   deepEqual(Music.loadPrefs(playerOne), first, 'player one preferences reload');
   deepEqual(Music.loadPrefs(playerTwo), second, 'player two preferences reload');
+  deepEqual(Music.loadPrefs(null), { track: 'epic', volume: 0.25 },
+    'a new player gets Epic at 25%');
 });
 
 test('invalid saved values fall back safely and failed storage writes are reported', function () {
@@ -533,6 +535,8 @@ test('only a changed source requires a track reload', function () {
   equal(Music.needsReload({ src: 'assets/music/epic.mp3' }, { src: 'assets/music/epic.mp3' }), false);
   equal(Music.needsReload({ src: 'assets/music/epic.mp3' }, { src: 'assets/music/retro.mp3' }), true);
 });
+
+require('./music-player-tests')(test, equal, deepEqual);
 
 /* ===================================================================== */
 /* The deck                                                               */
