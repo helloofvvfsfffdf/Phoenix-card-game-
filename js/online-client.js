@@ -150,12 +150,13 @@
   }
 
   /**
-   * A card the server has hidden behind Ted's fog.
+   * A card behind Ted's fog.
    *
-   * The snapshot sets `tedObscured` when this player's hand is concealed. The
-   * card must not be drawn in that case - it is the whole point of Ted, and the
-   * previous client got this right. The position number is kept because the
-   * player still chooses by position.
+   * Slobbery Surprise is a handicap laid ON the victim: they keep holding the
+   * cards, they just cannot see what they are and have to choose by position.
+   * The server sends the real hand and flags `tedObscured` on the victim's own
+   * connection, and this is that flag being honoured - the whole cost of the
+   * ability, and the reason the victim is in trouble until it wears off.
    */
   function hiddenCard(index) {
     const node = el('div', 'card');
@@ -416,7 +417,31 @@
     }
   }
 
-  function renderPlaying() {
+  /**
+ * Maple's Sweet Tooth, shown to whoever it was laid on.
+ *
+ * Called before the acting check, so a restricted player reads it while they are
+ * WAITING too - the restriction lasts three rounds and most of that is spent not
+ * being their turn. It says which cards are off the menu, because a hand that
+ * quietly stops offering Zombie reads as a bug rather than as an Ally.
+ *
+ * The server refuses those moves whatever a client sends; this is the honest
+ * version of that, not the thing enforcing it.
+ */
+function renderMapleNotice(actions) {
+  const names = state.mapleBlocked
+    .map(id => {
+      const card = window.PhoenixCards.byId(id);
+      return card ? card.name : id;
+    })
+    .join(', ');
+
+  actions.append(el('p', 'online-restricted',
+    '🍁 Maple’s Sweet Tooth: nice cards only for 3 rounds. Not for now: ' + names + '.'
+  ));
+}
+
+function renderPlaying() {
     const actions = $('online-actions');
     actions.replaceChildren();
 
@@ -491,6 +516,12 @@
       return;
     }
 
+    // A restricted player reads this whatever else is on screen - including while
+    // they are only waiting, which is most of the three rounds it lasts.
+    if (state.mapleBlocked && state.mapleBlocked.length) {
+      renderMapleNotice(actions);
+    }
+
     if (!state.acting) {
       actions.append(el('p', '', 'Waiting for your turn.'));
       return;
@@ -516,13 +547,37 @@
         const card = window.PhoenixCards.byId(cardId);
         if (!card) return;
 
+        // Maple took this one off the menu. Drawn greyed and unclickable rather
+        // than hidden, so the restriction is visible rather than mysterious - the
+        // same treatment a blocked card gets anywhere else.
+        if (state.mapleBlocked && state.mapleBlocked.indexOf(cardId) !== -1) {
+          const blockedFace = cardFace(card, false);
+          blockedFace.classList.add('online-blocked');
+          blockedFace.title = 'Maple will not let you play this - nice cards only.';
+          grid.append(blockedFace);
+          return;
+        }
+
         const button = cardFace(card, true);
 
         button.onclick = () => {
           const possible = state.moves.filter(move => move.cardId === cardId);
 
-          // Nothing to aim at: play it.
-          if (!card.needsTarget) {
+          // Whether to ask for a target comes from the MOVES, not from the card.
+          //
+          // Reading it off the card is what deadlocked an Alvin burn. When Alvin
+          // resolves, the server owes ITS CASTER a choice of which card to destroy,
+          // and it sends those options as plain moves with no target - but the card
+          // being burned might itself be an aimed one (Alvin, Zombie, Knife, Trick,
+          // Curse, Steal Points). Asking for a target then offered a picker with
+          // nothing in it, and the chooser could neither answer nor back out, so the
+          // match stopped dead with the server waiting on them.
+          //
+          // A move with no targetId means there is nothing to aim at, whatever the
+          // card says on its own.
+          const aimsSomewhere = possible.some(move => move.targetId);
+
+          if (!aimsSomewhere) {
             send({ type: 'move', cardId, targetId: null });
             return;
           }
@@ -675,6 +730,10 @@
         return;
       }
 
+      // Ted's fog wins over everything. While it is up the victim sees numbered
+      // positions instead of their own cards - that blindness IS the ability, not
+      // a bug, and it lasts until the fog's round is up. The position number is
+      // kept because they still choose by position while it lasts.
       grid.append(state.tedObscured ? hiddenCard(index) : cardFace(card, false));
     });
 

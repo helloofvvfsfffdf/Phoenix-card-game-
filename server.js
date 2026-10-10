@@ -7,6 +7,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer, WebSocket } = require('ws');
 const Rules = require('./js/rules.js');
+const Maple = require('./js/maple.js');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
@@ -305,6 +306,20 @@ function applyTed(room) {
   );
 }
 
+/**
+ * Maple's Sweet Tooth.
+ *
+ * The only Ally with no owner: she is deliberately not in ALLIES, so nobody can
+ * draft her, and - unlike applyPhoenix and applyTed, which both begin by looking
+ * for whoever holds the Ally - she has nobody to look for. She simply rolls once
+ * a round. That is what "Independent" means, and it is why her rules live in
+ * js/maple.js rather than inline here: while they sat in this file they had no
+ * way to be tested at all, because requiring this file starts a server.
+ */
+function applyMaple(room) {
+  Maple.apply(room, Rules, null, addLog);
+}
+
 function startGame(room) {
   const oldMembers = room.members.slice();
 
@@ -343,6 +358,7 @@ function startGame(room) {
 
   applyPhoenix(room);
   applyTed(room);
+  applyMaple(room);
 }
 
 const INSTANCE_ID = crypto.randomBytes(4).toString('hex');
@@ -553,6 +569,11 @@ function snapshot(room, member) {
       room.tedHiddenUntil[member.seat] >= s.round
     ),
 
+    // Which cards Maple has taken off THIS player's menu. The server still
+    // refuses them whatever a client sends; this is so the board can say why
+    // instead of a card silently going missing.
+    mapleBlocked: Maple.blocked(room, member.seat),
+
     log: room.log.slice(-35)
   };
 }
@@ -610,10 +631,11 @@ function skipUnplayableTurns(room) {
     if (s.round !== room.lastPhoenixRound && !s.over) {
       room.lastPhoenixRound = s.round;
       applyPhoenix(room);
-      applyTed(room);
+        applyTed(room);
+        applyMaple(room);
+      }
     }
   }
-}
 
 function broadcast(room) {
   skipUnplayableTurns(room);
@@ -896,6 +918,21 @@ function handle(ws, data) {
       return error(ws, 'That move is not legal.');
     }
 
+    // Maple's Sweet Tooth is enforced HERE, on the server, not merely by leaving
+    // the card out of the snapshot's moves. Hiding it client-side would be a
+    // suggestion: anyone with a devtools console could send the move anyway, and a
+    // restriction the player can walk around is not a restriction. This is the
+    // same reason the move is checked against `options` above.
+    const mapleBlocked = Maple.blocked(room, m.seat);
+    if (mapleBlocked.length && mapleBlocked.indexOf(cardId) !== -1) {
+      return error(
+        ws,
+        'Maple will not let you play that - nice cards only for ' +
+          Maple.ROUNDS +
+          ' rounds.'
+      );
+    }
+
     const result = pending
       ? Rules.resolvePendingChoice(
           s,
@@ -926,8 +963,9 @@ function handle(ws, data) {
     ) {
       room.lastPhoenixRound = s.round;
       applyPhoenix(room);
-      applyTed(room);
-    }
+        applyTed(room);
+        applyMaple(room);
+      }
 
     broadcast(room);
     return;

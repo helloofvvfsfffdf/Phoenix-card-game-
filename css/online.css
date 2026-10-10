@@ -284,3 +284,32 @@
     font-size: 12.5px;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Maple's Sweet Tooth.
+
+   A restricted player has cards taken off their menu, so the reason has to be on
+   screen: cards silently going missing reads as a bug, and "Maple will not let
+   you play that" is the actual rule being enforced.
+   -------------------------------------------------------------------------- */
+.online-restricted {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(66, 214, 160, .45);
+  border-radius: 10px;
+  background: rgba(66, 214, 160, .10);
+  color: #bff0dc;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* A card Maple has blocked: drawn, but plainly not playable. */
+.card.online-blocked {
+  opacity: .38;
+  filter: grayscale(.75);
+  cursor: not-allowed;
+}
+
+.card.online-blocked:hover {
+  transform: none;
+}
