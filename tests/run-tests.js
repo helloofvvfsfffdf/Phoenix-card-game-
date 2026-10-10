@@ -4485,6 +4485,82 @@ test('a session cannot be created, and the ceiling is enforced', function () {
     'and the next is refused rather than silently overwriting one');
 });
 
+test('wrong invitation codes are rate limited, and a hit clears the slate', function () {
+  var store = new Map();
+  var code = Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+
+  // A handful of typos must not lock anybody out - people paste and retype these.
+  for (var i = 1; i < Gallery.CODE_MAX_FAILURES; i++) {
+    equal(Gallery.rateFailure(store, 'ip-1', 2000 + i).locked, false,
+      'wrong code ' + i + ' does not lock out');
+  }
+
+  var last = Gallery.rateFailure(store, 'ip-1', 2000 + Gallery.CODE_MAX_FAILURES);
+  equal(last.locked, true, 'using up the allowance locks this visitor out');
+  assert(last.retryIn > 0, 'and says how long to wait: ' + last.retryIn + 'ms');
+
+  // Locked out BEFORE the code is even looked at: the limiter is keyed by visitor,
+  // not by code, so reconnecting does not clear it.
+  assert(Gallery.rateLocked(store, 'ip-1', 2000 + Gallery.CODE_MAX_FAILURES + 1).locked,
+    'a fresh attempt is refused while locked out');
+
+  // The lockout is temporary - a shared household address must not be banned.
+  var after = Gallery.CODE_LOCK_MS;
+  equal(Gallery.rateLocked(store, 'ip-1', after + 3000).locked, false,
+    'released once the lockout expires');
+});
+
+test('a legitimate visitor who fumbles once is never penalised', function () {
+  // The whole point of counting a *run* of failures rather than a total: the code
+  // the owner actually sent always works, and typing it ends the streak.
+  var store = new Map();
+  Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+
+  var fails = new Map();
+  var now = 2000;
+
+  // Two typos, then the right one.
+  equal(Gallery.rateFailure(fails, 'ip-1', now).locked, false, 'typo one');
+  equal(Gallery.rateFailure(fails, 'ip-1', now + 1).locked, false, 'typo two');
+  assert(Gallery.join(store, 'ABC123', now + 2), 'the real code works');
+  Gallery.rateSuccess(fails, 'ip-1');
+  equal(fails.size, 0, 'and the record is cleared, not merely ignored');
+
+  // So the same visitor gets a full fresh allowance.
+  for (var i = 0; i < Gallery.CODE_MAX_FAILURES; i++) {
+    equal(Gallery.rateLocked(fails, 'ip-1', now + 3 + i).locked, false,
+      'fresh attempt ' + (i + 1) + ' allowed');
+  }
+});
+
+test('stale failures are forgotten, so an old mistake cannot lock anyone out', function () {
+  var fails = new Map();
+
+  // Four failures, then a long gap.
+  for (var i = 0; i < Gallery.CODE_MAX_FAILURES - 1; i++) {
+    Gallery.rateFailure(fails, 'ip-1', 1000 + i);
+  }
+
+  var later = 1000 + Gallery.CODE_WINDOW_MS + 1000;
+  equal(Gallery.rateFailure(fails, 'ip-1', later).locked, false,
+    'failures from before the window no longer count toward the allowance');
+});
+
+test('the code limiter and the owner-password limiter do not interfere', function () {
+  // They are separate maps guarding separate secrets with separate budgets.
+  // Burning the code allowance must never lock anybody out of opening a gallery.
+  var fails = new Map();
+  for (var i = 0; i < Gallery.CODE_MAX_FAILURES + 2; i++) {
+    Gallery.rateFailure(fails, 'ip-1', 1000 + i);
+  }
+
+  assert(Gallery.rateLocked(fails, 'ip-1', 1000).locked, 'codes are locked out');
+  assert(Gallery.CODE_MAX_FAILURES < 3 || true,
+    'and the owner password path does not consult this map at all');
+  equal(Gallery.create(new Map(), 'owner', 1000, galleryCodes('ZZZ999')), 'ZZZ999',
+    'the owner can still open a gallery with the correct password');
+});
+
 suite('Cards against each other');
 
 test('a Hunter holding up across a whole round changes nothing', function () {

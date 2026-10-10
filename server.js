@@ -101,6 +101,16 @@ const rooms = new Map();
 const galleries = new Map();
 
 /**
+ * Failed gallery-code attempts, keyed by IP.
+ *
+ * Separate from `authFailures` on purpose - see the gallery_join branch for why
+ * a code guess and a password guess want different budgets and different
+ * lockouts. Records are tiny (a few timestamps) and only exist for IPs that have
+ * actually mistyped something.
+ */
+const galleryFails = new Map();
+
+/**
  * A gallery invitation code: six characters from the CSPRNG.
  *
  * crypto.randomBytes(3) is 24 bits drawn from the operating system's entropy
@@ -181,15 +191,54 @@ function handleGallery(ws, data) {
   }
 
   if (data.type === 'gallery_join') {
+    const now = Date.now();
+    const ip = clientIp(ws);
+
+    // Rate limiting, BEFORE the code is even looked at.
+    //
+    // This is deliberately separate from the owner-password limiter in
+    // authRecord, which is left exactly as it was: that one guards a secret that
+    // must never be guessed, this one guards a 24-bit code that people mistype.
+    // They have different budgets (three long failures versus five short ones),
+    // different lockouts, and neither touches the other.
+    //
+    // Keyed by IP so a guest cannot simply reconnect and start again.
+    const held = Gallery.rateLocked(galleryFails, ip, now);
+
+    if (held.locked) {
+      const seconds = Math.ceil(held.retryIn / 1000);
+      return error(
+        ws,
+        `Too many wrong codes. Try again in ${seconds} second${seconds === 1 ? '' : 's'}.`
+      ), true;
+    }
+
     // Validated here, on the server. Anything the page decides for itself is a
     // suggestion, and this is the only check that matters.
-    const session = Gallery.join(galleries, data.code, Date.now());
+    const session = Gallery.join(galleries, data.code, now);
 
     // One message for "no such code", "closed" and "expired": a guest must not be
     // able to learn which codes exist by watching the replies differ.
     if (!session) {
+      const state = Gallery.rateFailure(galleryFails, ip, now);
+
+      // Once the allowance runs out, say so plainly. Telling a held-off visitor
+      // only "invalid" would be both untrue and confusing; it leaks nothing about
+      // codes, because the lockout is about THEM and not about any code.
+      if (state.locked) {
+        const seconds = Math.ceil(state.retryIn / 1000);
+        return error(
+          ws,
+          `Too many wrong codes. Try again in ${seconds} second${seconds === 1 ? '' : 's'}.`
+        ), true;
+      }
+
       return error(ws, 'That gallery code is not valid, or has expired.'), true;
     }
+
+    // A hit ends the run of failures, so one fumbled paste costs a visitor
+    // nothing: the limiter counts a streak, not a lifetime total.
+    Gallery.rateSuccess(galleryFails, ip);
 
     // Deliberately NOT ws.member. A guest is not in a room, so every gameplay
     // branch below refuses them on its own - read-only by construction.

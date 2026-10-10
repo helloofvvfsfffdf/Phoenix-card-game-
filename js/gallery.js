@@ -165,14 +165,100 @@
     return Math.max(0, session.expiresAt - now);
   }
 
+  /* --------------------------------------------------------------------- */
+  /* Rate limiting on invitation codes                                       */
+  /* --------------------------------------------------------------------- */
+
+  /**
+   * How many wrong codes one visitor may try.
+   *
+   * Five is deliberate. Nobody types a six-character code correctly first time
+   * more than a couple of times, so five absorbs a fumbled paste or two typos
+   * without anybody noticing; a guesser working through the keyspace would need
+   * hundreds. It is deliberately not the owner-password allowance - guessing a
+   * code is far cheaper than guessing a password, so it gets far less rope.
+   */
+  var CODE_MAX_FAILURES = 5;
+
+  /** Wrong codes older than this are forgotten, so nobody is punished forever. */
+  var CODE_WINDOW_MS = 5 * 60 * 1000;
+
+  /**
+   * How long a visitor is held off after using up their allowance.
+   *
+   * Short on purpose. A locked-out IP is often an innocent one - a house sharing
+   * one address behind NAT, or a phone dropping off wifi and coming back - so
+   * this is long enough to break a guessing run and short enough that somebody
+   * who was genuinely invited is never locked out of it.
+   */
+  var CODE_LOCK_MS = 60 * 1000;
+
+  /**
+   * Is this visitor currently held off from trying codes?
+   *
+   * @returns {{locked: boolean, retryIn: number}} retryIn in ms, 0 when not locked
+   */
+  function rateLocked(fails, key, now) {
+    var record = fails.get(key);
+    if (!record) return { locked: false, retryIn: 0 };
+
+    if (record.lockedUntil && record.lockedUntil > now) {
+      return { locked: true, retryIn: record.lockedUntil - now };
+    }
+
+    return { locked: false, retryIn: 0 };
+  }
+
+  /**
+   * Records one wrong code, and locks the visitor off once they run out.
+   *
+   * @returns {{locked: boolean, retryIn: number}} the state AFTER this failure
+   */
+  function rateFailure(fails, key, now) {
+    var record = fails.get(key) || { failures: [], lockedUntil: 0 };
+
+    // Forget anything old first, or a visitor would be locked out by mistakes
+    // they made an hour ago and have long since recovered from.
+    record.failures = record.failures.filter(function (at) {
+      return now - at < CODE_WINDOW_MS;
+    });
+
+    record.failures.push(now);
+
+    if (record.failures.length >= CODE_MAX_FAILURES) {
+      record.lockedUntil = now + CODE_LOCK_MS;
+    }
+
+    fails.set(key, record);
+
+    return rateLocked(fails, key, now);
+  }
+
+  /**
+   * Clears a visitor's record after a success, so one fumble costs nothing.
+   *
+   * This is what keeps the limiter away from legitimate visitors: it measures a
+   * run of failures, not a lifetime total, and the run ends the moment somebody
+   * types the code they were actually given.
+   */
+  function rateSuccess(fails, key) {
+    fails.delete(key);
+  }
+
   return {
     TTL_MS: TTL_MS,
     MAX_SESSIONS: MAX_SESSIONS,
+    CODE_MAX_FAILURES: CODE_MAX_FAILURES,
+    CODE_WINDOW_MS: CODE_WINDOW_MS,
+    CODE_LOCK_MS: CODE_LOCK_MS,
     normalise: normalise,
     create: create,
     join: join,
     close: close,
     closeOwnedBy: closeOwnedBy,
+    rateLocked: rateLocked,
+    rateFailure: rateFailure,
+    rateSuccess: rateSuccess,
     sweep: sweep,
     remainingMs: remainingMs
   };
