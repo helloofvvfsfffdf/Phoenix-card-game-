@@ -194,6 +194,11 @@
     return current.src !== next.src;
   }
 
+  /** Lobby/dice/draft are not gameplay. A disconnected client keeps its last gate. */
+  function isActiveMatch(snapshot) {
+    return !!(snapshot && snapshot.started && snapshot.phase === 'playing' && !snapshot.over);
+  }
+
   return {
     STORAGE_KEY: STORAGE_KEY,
     DEFAULT_VOLUME: DEFAULT_VOLUME,
@@ -205,7 +210,8 @@
     loadPrefs: loadPrefs,
     savePrefs: savePrefs,
     resolve: resolve,
-    needsReload: needsReload
+    needsReload: needsReload,
+    isActiveMatch: isActiveMatch
   };
 }));
 
@@ -217,9 +223,8 @@
  * in a browser: one <audio> element, created once and never destroyed.
  *
  * It lives on document.body for the lifetime of the page rather than inside any
- * screen. That is the whole answer to "keep the music playing across the menu,
- * the gallery and the game": changing screens never touches the element at all,
- * so nothing can interrupt it.
+ * screen. Menu/gallery/lobby navigation reuses it. Active matches temporarily
+ * fade and pause it, without changing preferences or recreating the element.
  *
  * AUTOPLAY
  * --------
@@ -241,6 +246,43 @@ if (typeof document !== 'undefined') {
     var onChange = [];         // listeners for the settings UI
     var preferencesSaved = true;
     var playAttempt = 0;
+    var matchSources = { local: false, online: false };
+    var fadeTimer = null;
+    var FADE_MS = 450;
+
+    function isMatchActive() { return matchSources.local || matchSources.online; }
+    function cancelFade() {
+      if (fadeTimer !== null) clearTimeout(fadeTimer);
+      fadeTimer = null;
+    }
+    function silence() {
+      cancelFade();
+      if (audio) { audio.pause(); audio.volume = 0; }
+    }
+    function setMatchActive(source, active) {
+      if (!Object.prototype.hasOwnProperty.call(matchSources, source)) return;
+      var before = isMatchActive();
+      matchSources[source] = !!active;
+      if (before === isMatchActive()) return; // Rerenders never restart a fade/play.
+      cancelFade();
+      if (!isMatchActive()) { apply(true); return; }
+      playAttempt++; // Invalidate pending menu autoplay results.
+      blocked = false; // Intentional match silence is not an autoplay failure.
+      var el = ensureElement();
+      if (el.paused || el.volume === 0 || document.hidden) { silence(); notify(); return; }
+      var clock = window.performance && window.performance.now
+        ? function () { return window.performance.now(); } : Date.now;
+      var start = clock(), volume = el.volume;
+      function tick() {
+        if (!isMatchActive()) return;
+        var progress = Math.max(0, Math.min(1, (clock() - start) / FADE_MS));
+        el.volume = volume * (1 - progress);
+        if (progress >= 1) { silence(); notify(); }
+        else fadeTimer = setTimeout(tick, 30);
+      }
+      fadeTimer = setTimeout(tick, 30);
+      notify();
+    }
 
     function storage() {
       try {
@@ -259,6 +301,9 @@ if (typeof document !== 'undefined') {
       audio.loop = true;        // background music, so it repeats forever
       audio.preload = 'none';   // nothing is fetched until music is asked for
       audio.setAttribute('aria-hidden', 'true');
+      audio.addEventListener('play', function () {
+        if (isMatchActive() && fadeTimer === null) silence();
+      });
 
       var want = Music.resolve(prefs);
       if (want.src) audio.src = want.src;
@@ -269,7 +314,7 @@ if (typeof document !== 'undefined') {
     }
 
     function notify() {
-      var state = { track: prefs.track, volume: prefs.volume, blocked: blocked, playing: isPlaying() };
+      var state = { track: prefs.track, volume: prefs.volume, blocked: blocked, playing: isPlaying(), matchActive: isMatchActive() };
       onChange.forEach(function (fn) { fn(state); });
       var enable = document.getElementById('music-enable-button');
       var effectsBlocked = window.PhoenixCinematics && window.PhoenixCinematics.isAudioBlocked();
@@ -291,7 +336,7 @@ if (typeof document !== 'undefined') {
       var el = ensureElement();
       var want = Music.resolve(prefs);
 
-      if (!want.playing) return;
+      if (!want.playing || isMatchActive()) return;
 
       var attempt;
       var attemptId = ++playAttempt;
@@ -307,6 +352,8 @@ if (typeof document !== 'undefined') {
 
       if (attempt && typeof attempt.then === 'function') {
         attempt.then(function () {
+          // A delayed menu play() can resolve after authoritative match-start.
+          if (isMatchActive()) { if (fadeTimer === null) silence(); return; }
           if (attemptId === playAttempt) {
             blocked = false;
             notify();
@@ -334,6 +381,14 @@ if (typeof document !== 'undefined') {
       var el = ensureElement();
       var want = Music.resolve(prefs);
       var had = isPlaying();
+
+      if (isMatchActive()) {
+        playAttempt++;
+        blocked = false;
+        silence();
+        notify();
+        return;
+      }
 
       if (el.volume !== want.volume) el.volume = want.volume;
 
@@ -423,6 +478,10 @@ if (typeof document !== 'undefined') {
 
       /** True when music is actually coming out. */
       isPlaying: function () { return isPlaying(); },
+
+      /** Temporary presentation policy, never persisted as a player preference. */
+      setMatchActive: setMatchActive,
+      isMatchActive: isMatchActive,
 
       /** True when the latest preference change was saved to this browser. */
       preferencesSaved: function () { return preferencesSaved; },
@@ -535,12 +594,14 @@ if (typeof document !== 'undefined') {
 
       var status = $('settings-music-status');
 
-      if (api.isBlocked()) {
+      if (current.track === 'off') {
+        status.textContent = 'Music is off.';
+      } else if (api.isMatchActive()) {
+        status.textContent = 'Music is paused during this match. Your selection and volume will return afterward.';
+      } else if (api.isBlocked()) {
         status.textContent = 'Your browser paused the music. Use the enable-music button to let it play.';
       } else {
-        status.textContent = current.track === 'off'
-          ? 'Music is off.'
-          : (api.isPlaying() ? 'Playing.' : 'Ready.');
+        status.textContent = api.isPlaying() ? 'Playing.' : 'Ready.';
       }
       if (!api.preferencesSaved()) {
         status.textContent += ' Your browser could not save this preference; it may reset when you reload.';
@@ -610,6 +671,14 @@ if (typeof document !== 'undefined') {
         api.retry();
         sync();
       });
+    });
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden && isMatchActive()) { silence(); notify(); }
+    });
+    window.addEventListener('pagehide', function () { silence(); });
+    window.addEventListener('pageshow', function (event) {
+      if (event.persisted) { if (isMatchActive()) silence(); else apply(true); }
     });
 
     if (document.readyState === 'loading') {

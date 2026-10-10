@@ -39,7 +39,7 @@ the chooser completes destruction, not when the initial card is played.
 | --- | --- | --- |
 | Phoenix: Sneaky Snatcher succeeds | Gold anonymous card-back transfer | Three-note theft flourish and whoosh |
 | Tilly: Protective Paws blocks theft | Purple shield crest | Two-note paws ward |
-| Ted: Slobbery Surprise activates | Blue expanding slobber blob and droplets | Low bubbly three-note glissando |
+| Ted: Slobbery Surprise activates | Blue expanding slobber blob and droplets | Bubbly pitch drops and a soft filtered wet splat |
 | Ted: Protective Howl blocks theft | Blue howl ward | Rising/falling howl motif |
 | Louie: Quick Reflexes blocks theft | Blue reflex shield | Fast descending response |
 | Simba: Sharp Claws blocks theft | Orange claw shield | Sharp two-note metallic response |
@@ -66,7 +66,7 @@ Hunter, so that reflection branch is not normally reachable.
 
 No third-party sound assets were added. `js/effects-client.js` generates every
 sound using Web Audio oscillators and original deterministic procedural noise.
-The note/waveform recipes are in `js/effects.js`; there are no sampled recordings
+The note/waveform recipes and dedicated `SOUND_PROFILES` are in `js/effects.js`; there are no sampled recordings
 or third-party licences to attribute. Existing music assets and their licensing
 in `MUSIC-LICENSES.md` are unchanged.
 
@@ -88,6 +88,38 @@ input disabled, a focus loop and Escape/Return to Match. Closing it restores the
 same screen and focus; it never recreates a game, reconnects a socket or restarts
 music. Multiplayer continues to receive authoritative updates while it is open;
 game overlays are suppressed over Settings, without replaying them on return.
+
+## Automatic match music
+
+Background music is reserved for the menu, gallery, multiplayer lobby, dice and
+ally draft. An authoritative snapshot with `started: true`, `phase: playing`
+and `over: false` activates the multiplayer silence gate. The local match uses
+the real engine's `over` state and active game view. Entering gameplay fades the
+single existing music element to zero over 450 ms, then pauses it. This temporary
+policy never writes Disabled or zero volume into the player's saved preferences.
+
+All playback paths share this gate: track/volume changes, global audio recovery,
+first gestures, repeated snapshots and in-match Settings cannot start music.
+Disconnect does not clear a known active match. A returning active snapshot stays
+silent; an authoritative match-end snapshot or explicit match exit restores the
+saved track/volume and reuses the same audio element (and position if the track is
+unchanged). Disabled stays disabled. If resumed playback is rejected, the existing
+enable-audio button remains available. Leaving during the fade cancels it so a
+stale timer cannot pause menu music later. Hiding a tab pauses a match immediately;
+back-forward-cache restoration respects the retained match gate.
+
+SFX remain independent and enabled according to `phoenix.effects.v1`, including
+when music is Disabled or temporarily paused. Reduced motion does not mute SFX.
+The sound update preserves every visual and trigger, adding soft harmonics and
+effect-specific filtered noise/pitch sweeps: fire rushes, metallic scrapes,
+supernatural whispers, transfer whooshes, shield resonances and Ted's wet splat.
+Each actually implemented event has a distinct recipe. Dormant ally abilities are
+still not activated. A three-voice cap, conservative master gain, compression and
+short envelopes keep peaks controlled. Muted sounds allocate no voices.
+
+Some mobile browsers enforce hardware/system volume rather than HTML media
+volume; on those devices the 450 ms pause still applies but the native music fade
+may not be audible. No browser policy is bypassed to force playback or fading.
 
 ## Multiplayer, privacy and lifecycle
 
@@ -132,8 +164,20 @@ reduced-mode particles, mute and cleanup. This is layout testing, not physical
 mobile/device testing. Native Edge/Chrome/Firefox and mobile Safari still require
 manual device validation; actual autoplay policies vary by browser and profile.
 
-Validation on 2026-10-10: **327 headless tests and 7 live multiplayer tests passed,
+Original cinematic validation on 2026-10-10: **327 headless tests and 7 live multiplayer tests passed,
 zero failed**. Desktop checks also verified both Settings entry points, same-game
 return/focus restoration, Escape, concurrent music, generated fire audio, settings
 persistence after reload and no console errors. The 375px layout check verified
 online Settings return, no horizontal overflow and zero remaining resources.
+
+Match-audio validation on 2026-10-10: **367 headless tests plus 7 live multiplayer
+tests passed, zero failed**. A Chromium browser also ran a real three-player room
+through lobby, dice, draft, gameplay, in-match settings and match end. Music played
+before gameplay, faded/paused at its authoritative start, stayed paused through
+track/volume changes, and restored Mysterious at the saved 41% on match end. SFX
+voices ran while music was paused and cleaned up afterward. A simulated autoplay
+rejection exposed recovery; subsequent interaction restored playback. A 375px
+same-origin frame verified no settings overflow, match pause, return resume and
+Disabled remaining silent. Browser output was silenced deliberately to avoid
+leaving test music audible; these are functional checks, not subjective listening
+or physical-device validation. Test tabs and temporary servers are closed afterward.

@@ -541,6 +541,9 @@ require('./music-player-tests')(test, equal, deepEqual);
 suite('Cinematic effects');
 require('./effects-tests')(test, equal, deepEqual, assert);
 
+suite('Automatic match music and sound recipes');
+require('./match-audio-tests')(test, equal, deepEqual, assert);
+
 /* ===================================================================== */
 /* The deck                                                               */
 /* ===================================================================== */
