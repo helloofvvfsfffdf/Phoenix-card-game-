@@ -171,7 +171,36 @@ function snapshot(room,member){
  const moves=acting?(pending?pending.options:Rules.legalMoves(s,s.turnInRound).map(m=>({cardId:m.cardId,targetId:m.targetId}))):[];
  return {type:'state',phase:room.phase||'lobby',dice:room.dice?{next:room.dice.group[room.dice.next],rolls:room.dice.rolls,order:room.dice.order}:null,draftTurn:room.phase==='draft'?room.allyOrder[room.draftIndex]:null,availableAllies:ALLIES.filter(a=>(a!=='ted'||room.members.length>=3)&&!room.members.some(m=>m.ally===a)),code:room.code,host:member.seat===0,seat:member.seat,started:!!s,players,round:s?s.round:0,rounds:s?s.rounds:0,over:s?!!s.over:false,winner:s&&s.over&&s.winnerSeat>=0?s.players[s.winnerSeat].id:null,current:current?current.id:null,hand:s?(s.hands[mine]||[]):[],deckCount:s?s.deck.length:0,discardCount:s?s.discard.length:0,acting:!!acting,pending:pending?{kind:pending.kind,chooserId:pending.chooserId,targetId:pending.targetId}:null,moves,tedObscured:!!(s&&room.tedHiddenUntil&&room.tedHiddenUntil[member.seat]>=s.round),log:room.log.slice(-35)};
 }
-function broadcast(room){room.members.forEach(m=>send(m.ws,snapshot(room,m)));}
+// A turn can become unplayable at match start or after an ally effect.
+// The rules engine already skips unplayable seats during advanceTurn; invoke
+// that same path when a turn is stranded before a player can make a move.
+function skipUnplayableTurns(room) {
+  const s = room.state;
+  if (!s || s.over || room.phase !== 'playing') return;
+  let guard = 0;
+  while (!s.over && guard++ < 150) {
+    const pending = dueChoice(s);
+    if (pending && pending.kind === 'burn') break;
+    const current = s.players[s.turnInRound];
+    if (Rules.legalMoves(s, s.turnInRound).length) break;
+    // If a stolen turn has no legal moves, its choice cannot be made.
+    // Drop the pending choice before skipping the target's turn.
+    if (pending && pending.kind === 'move') {
+      s.pendingChoice = null;
+      addLog(room, 'Steal a Turn expired because ' + current.name + ' has no legal moves.');
+    }
+    current.turnsSkipped++;
+    addLog(room, current.name + ' has no legal moves and automatically skips their turn.');
+    const events = Rules.advanceTurn(s);
+    for (const event of events) if (event.text) addLog(room, event.text);
+    if (s.round !== room.lastPhoenixRound && !s.over) {
+      room.lastPhoenixRound = s.round;
+      applyPhoenix(room);
+      applyTed(room);
+    }
+  }
+}
+function broadcast(room){skipUnplayableTurns(room);room.members.forEach(m=>send(m.ws,snapshot(room,m)));}
 function error(ws,msg){send(ws,{type:'error',message:msg});}
 function handle(ws,data){
  if(!data||typeof data!=='object')return;
