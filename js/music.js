@@ -39,7 +39,7 @@
   var STORAGE_KEY = 'phoenix.music.v1';
 
   /** Default volume. Loud enough to hear, quiet enough to talk over. */
-  var DEFAULT_VOLUME = 0.4;
+  var DEFAULT_VOLUME = 0.3;
 
   /**
    * The soundtrack.
@@ -273,6 +273,8 @@ if (typeof document !== 'undefined') {
     function notify() {
       var state = { track: prefs.track, volume: prefs.volume, blocked: blocked, playing: isPlaying() };
       onChange.forEach(function (fn) { fn(state); });
+      var enable = document.getElementById('music-enable-button');
+      if (enable) enable.hidden = !blocked;
     }
 
     function isPlaying() {
@@ -325,7 +327,7 @@ if (typeof document !== 'undefined') {
      * Volume is applied in place and never triggers a reload, because reloading
      * would restart the track from the top on every slider nudge.
      */
-    function apply() {
+    function apply(tryAutoplay) {
       var el = ensureElement();
       var want = Music.resolve(prefs);
       var had = isPlaying();
@@ -350,7 +352,7 @@ if (typeof document !== 'undefined') {
         // Resume where it was rather than starting again.
       }
 
-      if (had || unlocked) play();
+      if (had || unlocked || tryAutoplay) play();
       notify();
     }
 
@@ -377,7 +379,10 @@ if (typeof document !== 'undefined') {
       preferencesSaved = !!store;
       prefs = Music.loadPrefs(store);
       ensureElement();
-      apply();
+      // Attempt autoplay on startup. Browsers that require a gesture reject
+      // play(); play() reports that and the settings UI offers an enable button.
+      // Do not mark this attempt as a user gesture or bypass that browser policy.
+      apply(true);
 
       if (!unlocked) {
         document.addEventListener('pointerdown', onFirstGesture, true);
@@ -529,13 +534,10 @@ if (typeof document !== 'undefined') {
       $('settings-volume-value').textContent = percent + '%';
 
       var status = $('settings-music-status');
-      var enable = $('settings-enable-music');
 
       if (api.isBlocked()) {
-        status.textContent = 'Your browser paused the music. Tap enable to let it play.';
-        enable.hidden = false;
+        status.textContent = 'Your browser paused the music. Use the enable-music button to let it play.';
       } else {
-        enable.hidden = true;
         status.textContent = current.track === 'off'
           ? 'Music is off.'
           : (api.isPlaying() ? 'Playing.' : 'Ready.');
@@ -572,7 +574,7 @@ if (typeof document !== 'undefined') {
         api.setVolume(Number(event.target.value) / 100);
       });
 
-      $('settings-enable-music').addEventListener('click', function () {
+      $('music-enable-button').addEventListener('click', function () {
         api.retry();
         sync();
       });
