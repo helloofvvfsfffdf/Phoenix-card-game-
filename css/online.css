@@ -133,3 +133,73 @@
 #online-screen[hidden] {
   display: none !important;
 }
+/* PHOENIX pickup and discard piles */
+
+.phoenix-piles {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 28px;
+  margin: 28px auto;
+  padding: 20px;
+  border-radius: 20px;
+  background: rgba(10, 20, 40, 0.45);
+}
+
+.phoenix-pile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.phoenix-pile h3 {
+  margin: 0;
+  color: #ffd76b;
+  font-size: 16px;
+}
+
+.phoenix-pile p {
+  margin: 0;
+  font-weight: bold;
+}
+
+.phoenix-pile-card {
+  width: 130px;
+  min-height: 175px;
+  box-sizing: border-box;
+  border: 3px solid #d4af37;
+  border-radius: 15px;
+  background: linear-gradient(145deg, #17355b, #315b91);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.phoenix-pile-card .card-art {
+  font-size: 48px;
+}
+
+.phoenix-pile-card .card-name {
+  font-size: 14px;
+  font-weight: bold;
+}
+
+@media (max-width: 480px) {
+  .phoenix-piles {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .phoenix-pile-card {
+    width: 110px;
+    min-height: 150px;
+  }
+}
