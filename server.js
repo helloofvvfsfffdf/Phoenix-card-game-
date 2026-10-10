@@ -498,10 +498,14 @@ function snapshot(room, member) {
     ? (
         pending
           ? pending.options
-          : Rules.legalMoves(s, s.turnInRound).map(m => ({
-              cardId: m.cardId,
-              targetId: m.targetId
-            }))
+          : Maple.playableMoves(
+            room,
+            member.seat,
+            Rules.legalMoves(s, s.turnInRound)
+          ).map(m => ({
+            cardId: m.cardId,
+            targetId: m.targetId
+          }))
       )
     : [];
 
@@ -597,7 +601,16 @@ function skipUnplayableTurns(room) {
 
     const current = s.players[s.turnInRound];
 
-    if (Rules.legalMoves(s, s.turnInRound).length) {
+    // Maple's Sweet Tooth counts here. The engine's legalMoves knows nothing about
+  // it, so without this a restricted player holding only aggressive cards looks
+  // to the engine like they can play - so they are never skipped, so the server
+  // tells them it is their turn, so the client offers nothing they may play, and
+  // the match stops. Filtered through Maple here AND in the snapshot below, so the
+  // skip logic and the board cannot disagree.
+  if (
+  Maple.playableMoves(room, s.turnInRound, Rules.legalMoves(s, s.turnInRound))
+  .length
+  ) {
       break;
     }
 

@@ -85,6 +85,36 @@
   }
 
   /**
+   * `moves` minus anything Maple has taken off this player's menu.
+   *
+   * THE TWO PLACES THIS HAS TO BE CALLED
+   * ------------------------------------
+   * Both the server's "does this player have a move at all?" test and the list of
+   * moves it sends to the client. They have to agree, and they used not to.
+   *
+   * The engine's legalMoves knows nothing about Maple - it is the card rules, and
+   * Sweet Tooth is not a card rule - so a restricted player holding only aggressive
+   * cards still looked to the engine like they had legal moves. The server therefore
+   * did not skip them, and told the client they could act. The client then refused to
+   * offer the blocked cards, because it honours the restriction. The result was a
+   * hard deadlock: "it says it is my turn, and there is nothing I may play."
+   *
+   * Filtering in one place and using it in both is what keeps the engine, the
+   * server's turn-skipping and the board the player is looking at telling one story.
+   *
+   * @param room the room
+   * @param seat the seat's index, matching the keys of room.mapleUntil
+   * @param moves legal moves from the engine
+   */
+  function playableMoves(room, seat, moves) {
+    var blockedList = blocked(room, seat);
+    if (!blockedList.length) return moves;
+    return moves.filter(function (move) {
+      return blockedList.indexOf(move.cardId) === -1;
+    });
+  }
+
+  /**
    * Rolls Sweet Tooth for this round.
    *
    * One victim at a time, matching applyTed: if somebody is still restricted the
@@ -148,6 +178,7 @@
     untilRound: untilRound,
     isRestricted: isRestricted,
     blocked: blocked,
+    playableMoves: playableMoves,
     apply: apply
   };
 }));
