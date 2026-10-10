@@ -258,6 +258,9 @@
   /* --------------------------------------------------------------------- */
 
   function render() {
+    if (window.PhoenixMusicPlayer) {
+      window.PhoenixMusicPlayer.setMatchActive('local', !$('phoenix-game').hidden && !!game.state && !game.state.over);
+    }
     renderStatus();
     renderBoard();
     renderSeatSwitches();

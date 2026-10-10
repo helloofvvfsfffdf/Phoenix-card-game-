@@ -245,6 +245,7 @@
     state = null;
     $('online-screen').hidden = true;
     $('phoenix-menu').hidden = false;
+    if (window.PhoenixMusicPlayer) window.PhoenixMusicPlayer.setMatchActive('online', false);
   }
 
   /**
@@ -628,6 +629,9 @@ function renderPlaying() {
   function render() {
     const s = state;
     if (!s) return;
+    if (window.PhoenixMusicPlayer) {
+      window.PhoenixMusicPlayer.setMatchActive('online', !$('online-screen').hidden && window.PhoenixMusic.isActiveMatch(s));
+    }
 
     $('online-setup').hidden = true;
     $('online-room').hidden = false;

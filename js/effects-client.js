@@ -79,25 +79,26 @@
       else { audioBlocked = context.state !== 'running'; sync(); }
     } catch (e) { audioBlocked = true; sync(); }
   }
-  function sound(definition, inert) {
+  function sound(key, inert) {
     if (!prefs.sound || prefs.volume === 0 || !Context) return;
     if (!context || context.state !== 'running') { audioBlocked = true; sync(); return; }
     if (voices.length >= 3) disposeVoice(voices[0]);
     var voice = { nodes: [], gains: [], timer: null };
     voices.push(voice);
     try {
-      var notes = inert ? [definition[5][0] * 0.5] : definition[5];
-      var duration = inert ? 0.25 : definition[6];
+      var recipe = E.soundRecipe(key, inert);
+      var notes = recipe.notes;
+      var duration = recipe.duration;
       var step = duration / notes.length;
       notes.forEach(function (frequency, index) {
         var oscillator = context.createOscillator();
         var gain = context.createGain();
         voice.nodes.push(oscillator);
         voice.gains.push(gain);
-        oscillator.type = definition[4];
+        oscillator.type = recipe.wave;
         var start = context.currentTime + index * step;
         oscillator.frequency.setValueAtTime(frequency, start);
-        oscillator.frequency.exponentialRampToValueAtTime(Math.max(40, frequency * 0.92), start + step);
+        oscillator.frequency.exponentialRampToValueAtTime(Math.max(40, frequency * recipe.sweep), start + step);
         gain.gain.setValueAtTime(0, start);
         gain.gain.linearRampToValueAtTime(0.2, start + Math.min(0.025, step / 4));
         gain.gain.exponentialRampToValueAtTime(0.001, start + step);
@@ -106,10 +107,23 @@
         gain.connect(master);
         oscillator.start(start);
         oscillator.stop(start + step + 0.02);
+        if (recipe.harmonic) {
+          var overtone = context.createOscillator();
+          var overtoneGain = context.createGain();
+          voice.nodes.push(overtone); voice.gains.push(overtoneGain);
+          overtone.type = 'sine';
+          overtone.frequency.setValueAtTime(frequency * recipe.harmonic, start);
+          overtone.frequency.exponentialRampToValueAtTime(Math.max(40, frequency * recipe.harmonic * recipe.sweep), start + step);
+          overtoneGain.gain.setValueAtTime(0, start);
+          overtoneGain.gain.linearRampToValueAtTime(0.04, start + Math.min(0.025, step / 4));
+          overtoneGain.gain.exponentialRampToValueAtTime(0.001, start + step);
+          overtone.connect(overtoneGain); overtoneGain.connect(master);
+          overtone.start(start); overtone.stop(start + step + 0.02);
+        }
       });
       // Original procedural texture adds a metallic scrape, fire rush or soft
       // impact beneath the tonal signature. Reuse one short noise buffer.
-      if (!inert && ['slash', 'flame', 'burn', 'impact', 'transfer'].indexOf(definition[3]) >= 0) {
+      if (recipe.texture) {
         if (!noiseBuffer) {
           noiseBuffer = context.createBuffer(1, Math.ceil(context.sampleRate * 1.2), context.sampleRate);
           var samples = noiseBuffer.getChannelData(0);
@@ -125,11 +139,12 @@
         voice.nodes.push(rush);
         voice.gains.push(filter, envelope);
         rush.buffer = noiseBuffer;
-        filter.type = definition[3] === 'slash' ? 'highpass' : 'lowpass';
-        filter.frequency.value = definition[3] === 'slash' ? 1800 : 900;
+        filter.type = recipe.texture;
+        filter.frequency.setValueAtTime(recipe.cutoff, context.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(Math.max(80, recipe.cutoff * recipe.sweep), context.currentTime + duration);
         var now = context.currentTime;
         envelope.gain.setValueAtTime(0, now);
-        envelope.gain.linearRampToValueAtTime(0.08, now + 0.02);
+        envelope.gain.linearRampToValueAtTime(recipe.noiseGain, now + 0.02);
         envelope.gain.exponentialRampToValueAtTime(0.001, now + duration);
         rush.connect(filter); filter.connect(envelope); envelope.connect(master);
         rush.start(now); rush.stop(now + duration);
@@ -149,7 +164,7 @@
     var safe = E.publicEvent(event && event.key, event && event.actor, event && event.target, event && event.outcome);
     if (!safe || document.hidden) return;
     var definition = E.DEFINITIONS[safe.key];
-    sound(definition, safe.outcome === 'inert');
+    sound(safe.key, safe.outcome === 'inert');
     var settings = document.getElementById('settings');
     if (scope !== 'settings' && settings && !settings.hidden) return;
     var mode = E.motion(prefs, media.matches);

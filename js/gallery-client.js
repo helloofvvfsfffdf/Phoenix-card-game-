@@ -52,6 +52,7 @@
     $('game-toolbar').hidden = true;
     $('gallery-gate').hidden = true;
     $('gallery').hidden = true;
+    if (window.PhoenixMusicPlayer) window.PhoenixMusicPlayer.setMatchActive('local', false);
   }
 
   /* --------------------------------------------------------------------- */

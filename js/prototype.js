@@ -24,6 +24,7 @@
       $('testing-feedback').textContent = 'Local test match started. Only you control the players.';
       renderTest();
     }
+    if (window.PhoenixMusicPlayer) window.PhoenixMusicPlayer.setMatchActive('local', !!game() && !!game().state && !game().state.over);
   }
   function leave() {
     mode = 'menu';
@@ -34,6 +35,7 @@
     $('game-toolbar').hidden = true;
     $('testing-panel').hidden = true;
     $('win-screen').hidden = true;
+    if (window.PhoenixMusicPlayer) window.PhoenixMusicPlayer.setMatchActive('local', false);
   }
   function renderTest() {
     if (mode !== 'test' || !game()) return;

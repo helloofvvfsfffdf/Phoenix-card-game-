@@ -42,6 +42,7 @@ function serverFixture(targetAlly, block) {
 function browser(reduced) {
   var nodes = {}, timers = new Map(), serial = 0, contexts = [], documentListeners = {}, windowListeners = {};
   var data = {};
+  var soundCalls = [];
   function node() {
     return {
       children: [], style: { setProperty: function () {} }, dataset: {}, listeners: {},
@@ -71,7 +72,9 @@ function browser(reduced) {
     addEventListener: function (key, fn) { (documentListeners[key] || (documentListeners[key] = [])).push(fn); }
   };
   var context = {
-    PhoenixEffects: E, PhoenixMusicPlayer: { isBlocked: function () { return false; } }, document: document,
+    PhoenixEffects: Object.assign({}, E, { soundRecipe: function (key, inert) {
+      soundCalls.push({ key: key, inert: inert }); return E.soundRecipe(key, inert);
+    } }), PhoenixMusicPlayer: { isBlocked: function () { return false; } }, document: document,
     AudioContext: Context, innerWidth: 375, innerHeight: 700, matchMedia: function () { return media; },
     localStorage: { getItem: function (key) { return data[key] || null; }, setItem: function (key, value) { data[key] = value; } },
     setTimeout: function (fn) { timers.set(++serial, fn); return serial; }, clearTimeout: function (id) { timers.delete(id); },
@@ -80,7 +83,7 @@ function browser(reduced) {
   context.window = context;
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../js/effects-client.js'), 'utf8'), context);
   documentListeners.DOMContentLoaded.forEach(function (fn) { fn(); });
-  return { api: context.PhoenixCinematics, context: context, media: media, contexts: contexts, nodes: nodes, timers: timers,
+  return { api: context.PhoenixCinematics, context: context, media: media, contexts: contexts, nodes: nodes, timers: timers, soundCalls: soundCalls,
     flush: function () { Array.from(timers.values()).forEach(function (fn) { fn(); }); },
     hide: function () { document.hidden = true; documentListeners.visibilitychange[0](); },
     close: function () { windowListeners.pagehide(); } };
@@ -105,6 +108,7 @@ module.exports = function (test, equal, deepEqual, assert) {
       b.api.rules(result.events);
       assert(b.api.diagnostics().visuals > 0, 'browser renders the outcome');
       assert(b.api.diagnostics().voices > 0, 'browser generates the sound');
+      assert(b.soundCalls.some(function (call) { return call.key === card.id; }), 'sound matches the actual card');
       b.flush();
       equal(b.api.diagnostics().visuals, 0, 'visuals have bounded cleanup');
     });
@@ -117,6 +121,7 @@ module.exports = function (test, equal, deepEqual, assert) {
       var b = browser(); b.api.unlock(); b.api.show(event);
       equal(b.api.diagnostics().visuals, 1);
       equal(b.api.diagnostics().voices, 1);
+      equal(b.soundCalls[0].key, 'ally-' + id);
       b.flush();
       equal(b.api.diagnostics().voices, 0);
     });
@@ -125,6 +130,7 @@ module.exports = function (test, equal, deepEqual, assert) {
     test(id + ' authoritative theft defense renders and sounds', function () {
       var b = browser(); b.api.unlock(); b.api.show(E.publicEvent('block-' + id, 1, 1));
       equal(b.api.diagnostics().visuals, 1); equal(b.api.diagnostics().voices, 1);
+      equal(b.soundCalls[0].key, 'block-' + id);
       b.api.cleanup(); equal(b.timers.size, 0);
     });
     test(id + ' defense event comes from the actual server and leaves hands unchanged', function () {
@@ -253,3 +259,4 @@ module.exports = function (test, equal, deepEqual, assert) {
     assert(b.contexts[0].nodes.filter(function (n) { return n.started; }).every(function (n) { return n.disconnected && n.stopped; }));
   });
 };
+module.exports.browser = browser;

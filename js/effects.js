@@ -39,6 +39,45 @@
     'block-elsie': ['Elsie · Untouchable', '♢', '#ffb4d4', 'shield', 'sine', [1047, 1319], 0.5],
     'maple-restriction': ['Maple · Nice cards only', '🍁', '#7ae4b4', 'rune', 'sine', [988, 659], 0.4]
   };
+  // Pitch glide, texture/filter, cutoff, soft harmonic, noise gain. These are
+  // sound-only recipes: no visual definitions or game triggers are changed.
+  var SOUND_PROFILES = {
+    bonus: [1.08, null, 0, 2, 0],
+    knife: [0.25, 'highpass', 2100, 0, 0.07],
+    hunter: [1.02, null, 0, 2, 0],
+    zombie: [0.6, 'bandpass', 240, 0.99, 0.045],
+    steal: [1.8, 'bandpass', 1100, 0, 0.045],
+    judge: [0.5, 'lowpass', 420, 0.5, 0.065],
+    reveal: [1.12, 'highpass', 1700, 2, 0.018],
+    skipall: [1, null, 0, 2, 0],
+    phoenix: [1.6, 'lowpass', 900, 0.5, 0.08],
+    trick: [0.85, 'bandpass', 660, 1.01, 0.025],
+    stealturn: [1.3, 'bandpass', 1500, 0, 0.03],
+    curse: [0.65, 'bandpass', 180, 0.99, 0.035],
+    ghost: [1.08, 'bandpass', 700, 2, 0.025],
+    alvin: [1.04, null, 0, 2, 0],
+    'alvin-burn': [0.5, 'lowpass', 600, 0, 0.08],
+    'curse-trigger': [0.45, 'lowpass', 250, 0.5, 0.05],
+    'hunter-block': [1.15, null, 0, 2, 0],
+    'ally-phoenix': [1.9, 'bandpass', 1400, 0, 0.04],
+    'ally-ted': [0.55, 'lowpass', 650, 0, 0.09],
+    'ally-maple': [1.06, null, 0, 2, 0],
+    'block-tilly': [1.08, null, 0, 2, 0],
+    'block-ted': [1.3, 'bandpass', 390, 0.5, 0.02],
+    'block-louie': [0.75, 'highpass', 1800, 2, 0.02],
+    'block-simba': [0.6, 'highpass', 2400, 0, 0.04],
+    'block-elsie': [1.02, null, 0, 2, 0],
+    'maple-restriction': [0.92, null, 0, 2, 0]
+  };
+  function soundRecipe(key, inert) {
+    if (!Object.prototype.hasOwnProperty.call(DEFINITIONS, key)) return null;
+    var definition = DEFINITIONS[key];
+    var profile = SOUND_PROFILES[key] || [0.92, null, 0, 0, 0];
+    return { wave: definition[4], notes: inert ? [definition[5][0] * 0.5] : definition[5].slice(),
+      duration: inert ? 0.25 : definition[6], sweep: inert ? 0.92 : profile[0],
+      texture: inert ? null : profile[1], cutoff: profile[2],
+      harmonic: inert ? 0 : profile[3], noiseGain: inert ? 0 : profile[4] };
+  }
   function defaults() { return { sound: true, volume: 0.35, visuals: 'full' }; }
   function normalise(value) {
     var p = defaults();
@@ -122,7 +161,7 @@
     if (event.type === 'alvin') return 'Alvin destroys one card permanently. All other cards remain untouched.';
     return event.text;
   }
-  return { KEY: KEY, DEFINITIONS: DEFINITIONS, defaults: defaults, normalise: normalise,
+  return { KEY: KEY, DEFINITIONS: DEFINITIONS, SOUND_PROFILES: SOUND_PROFILES, soundRecipe: soundRecipe, defaults: defaults, normalise: normalise,
     load: load, save: save, motion: motion, publicEvent: publicEvent, fromRules: fromRules,
     append: append, cursor: cursor, publicLog: publicLog };
 }));
