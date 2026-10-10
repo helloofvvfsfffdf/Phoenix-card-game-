@@ -389,9 +389,73 @@
     actions.replaceChildren();
 
     if (state.over) {
-      actions.append(el('h3', '', 'Match complete!'));
+      // The victory screen, restored from the previous client (commit a66b491).
+      //
+      // Its CSS - .phoenix-victory, .phoenix-champion, .phoenix-victory-ally,
+      // .phoenix-victory-trophy, .phoenix-victory-display and
+      // .phoenix-victory-standings - was never removed from css/online.css, so
+      // nothing new had to be styled: this is the original markup, and it lands
+      // on the original theme.
+      //
+      // It is drawn here, inside the actions area, for EVERY connected player. The
+      // snapshot carries `over` and `winner` for all of them, so the screen is
+      // per-connection state rather than something only the winner is told about.
       const winner = state.players.find(p => p.id === state.winner);
-      actions.append(el('p', '', winner ? 'Winner: ' + winner.name : 'Game over'));
+      const victory = el('div', 'phoenix-victory');
+
+      victory.append(el('h1', '', '\u{1F3C6} VICTORY! \u{1F3C6}'));
+
+      if (winner) {
+        const champion = el('div', 'phoenix-champion');
+
+        const photo = el('img', 'phoenix-victory-ally');
+        // Same path as everywhere else: assets/allies/<id>.jpg, from the id the
+        // server sent. No filename invented here.
+        photo.src = 'assets/allies/' + winner.ally + '.jpg';
+        photo.alt = winner.ally + ' the winning ally';
+
+        const trophy = el('div', 'phoenix-victory-trophy', '\u{1F3C6}');
+        const display = el('div', 'phoenix-victory-display');
+        display.append(photo, trophy);
+        champion.append(display);
+
+        champion.append(el(
+          'h2',
+          '',
+          winner.name + ' & ' + (winner.ally || '').toUpperCase() + ' WON!'
+        ));
+
+        champion.append(el(
+          'p',
+          '',
+          winner.points.toLocaleString() + ' POINTS'
+        ));
+
+        victory.append(champion);
+      }
+
+      const standings = el('div', 'phoenix-victory-standings');
+      standings.append(el('h3', '', 'FINAL LEADERBOARD'));
+
+      [...state.players]
+        .sort((a, b) => b.points - a.points)
+        .forEach((player, index) => {
+          const medal = ['\u{1F947}', '\u{1F948}', '\u{1F949}'][index] || '\u{1F3C5}';
+
+          standings.append(el(
+            'p',
+            '',
+            medal + ' ' + player.name +
+            ' & ' +
+            (player.ally || 'No ally').toUpperCase() +
+            ' — ' +
+            player.points.toLocaleString() +
+            ' points'
+          ));
+        });
+
+      victory.append(standings);
+      actions.append(victory);
       return;
     }
 
