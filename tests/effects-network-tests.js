@@ -39,12 +39,13 @@ async function main() {
   async function connect() {
     const ws = new WebSocket('ws://127.0.0.1:' + port);
     await new Promise((resolve, reject) => { ws.once('open', resolve); ws.once('error', reject); });
-    const client = { ws, state: null, cursor: Effects.cursor(), animations: [] };
+    const client = { ws, state: null, cursor: Effects.cursor(), endings: Effects.endCursor(), results: [], animations: [] };
     ws.on('message', raw => {
       const message = JSON.parse(raw.toString());
       if (message.type === 'state') {
         client.state = message;
         client.animations.push(...client.cursor.consume(message.effects));
+        const result = client.endings.consume(message); if (result) client.results.push(result);
       }
     });
     clients.push(client);
@@ -115,6 +116,17 @@ async function main() {
     check('repeated snapshots and reconnect baselines do not replay effects', () => {
       assert.strictEqual(host.cursor.consume(host.state.effects).length, 0);
       assert.strictEqual(Effects.cursor().consume(host.state.effects).length, 0);
+    });
+    check('only the authoritative winner celebrates; other seats get defeat or a confirmed draw', () => {
+      clients.forEach(c => assert.deepStrictEqual(c.results, [Effects.matchResult(c.state)]));
+      assert.strictEqual(clients.filter(c => c.results[0] === 'victory').length, host.state.winner === null ? 0 : 1);
+    });
+    check('finished repeats and reconnect baselines never replay a victory fanfare', () => {
+      clients.forEach(c => {
+        assert.strictEqual(c.endings.consume(c.state), null);
+        assert.strictEqual(Effects.endCursor().consume(c.state), null);
+        c.endings.reset(); assert.strictEqual(c.endings.consume(c.state), null);
+      });
     });
     console.log('ALL ' + passed + ' LIVE MULTIPLAYER TESTS PASSED (' + moves + ' actions)');
   } finally {

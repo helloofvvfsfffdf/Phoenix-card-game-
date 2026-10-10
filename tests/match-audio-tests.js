@@ -21,12 +21,12 @@ function online() {
   b.nodes['online-name'].value = 'Player';
   b.document.getElementById('online-owner-password').value = 'test-only-password';
   b.nodes['online-create'].onclick(); sockets[0].onopen();
-  b.receive = function (phase, over) {
-    sockets[0].onmessage({ data: JSON.stringify({ type: 'state', phase: phase, started: phase === 'playing', over: !!over,
+  b.receive = function (phase, over, extra) {
+    sockets[0].onmessage({ data: JSON.stringify(Object.assign({ type: 'state', phase: phase, started: phase === 'playing', over: !!over,
       players: [{ id: 'human', name: 'Player', points: 0, handCount: 0, connected: true }],
       seat: 0, code: 'TEST', current: 'human', round: 1, rounds: 5, host: false,
       hand: [], acting: false, moves: [], log: [], availableAllies: [], dice: { rolls: {}, order: [], next: 0 },
-      deckCount: 0, discardCount: 0 }) });
+      deckCount: 0, discardCount: 0 }, extra)) });
   };
   b.disconnect = function () { sockets[0].onclose(); };
   return b;
@@ -76,7 +76,7 @@ module.exports = function (test, equal, deepEqual, assert) {
       var recipe = E.soundRecipe(key);
       equal(JSON.stringify(E.DEFINITIONS[key]), visual, 'sound recipe leaves visual catalogue unchanged');
       assert(recipe.layers.length >= 2, 'implemented effects have layered material sounds');
-      assert(recipe.duration > 0 && recipe.duration <= 1.2);
+      assert(recipe.duration > 0 && recipe.duration <= 1.6);
       var inert = E.soundRecipe(key, true);
       equal(inert.duration, 0.25);
       var unique = implemented.filter(function (other) { return JSON.stringify(E.soundRecipe(other)) === JSON.stringify(recipe); });
@@ -108,3 +108,4 @@ module.exports = function (test, equal, deepEqual, assert) {
     effects.cleanup(); b.api.setMatchActive('online', false); equal(b.attempts[1].volume, 0.25);
   });
 };
+module.exports.online = online;

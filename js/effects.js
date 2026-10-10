@@ -40,8 +40,53 @@
     'maple-restriction': ['Maple · Nice cards only', '🍁', '#7ae4b4', 'rune', 'sine', [988, 659], 0.4]
   };
   function soundRecipe(key, inert) {
+    if (key === 'victory' || key === 'defeat' || key === 'draw') return Sound.recipe(key, false);
     if (!Object.prototype.hasOwnProperty.call(DEFINITIONS, key)) return null;
     return Sound.recipe(key, inert);
+  }
+  var DORMANT = ['ally-tilly', 'ally-louie', 'ally-simba', 'ally-elsie'];
+  function previews() {
+    return Object.keys(DEFINITIONS).filter(function (key) { return DORMANT.indexOf(key) < 0; }).map(function (key) {
+      return { key: key, label: DEFINITIONS[key][0] + (key === 'hunter-block' ? ' (reflection support)' : '') };
+    }).concat([{ key: 'victory', label: 'Victory fanfare' }, { key: 'defeat', label: 'Defeat coda' }, { key: 'draw', label: 'Draw coda' }]);
+  }
+  function matchResult(s) {
+    if (!s || s.type !== 'state' || s.started !== true || s.phase !== 'playing' || s.over !== true ||
+        !Array.isArray(s.players) || !Number.isInteger(s.seat) || !s.players[s.seat]) return null;
+    if (s.winner === null) return 'draw';
+    if (typeof s.winner !== 'string' || !s.players.some(function (p) { return p.id === s.winner; })) return null;
+    return s.players[s.seat].id === s.winner ? 'victory' : 'defeat';
+  }
+  // The first snapshot (including a reload/reconnect into a finished room) is
+  // a baseline. Only an observed active -> finished authoritative transition
+  // celebrates. Terminal streams remain latched across resets and stale states.
+  function endCursor() {
+    var stream = null, sequence = -1, armed = false, finished = new Set();
+    return {
+      reset: function () { stream = null; sequence = -1; armed = false; },
+      consume: function (s) {
+        var p = s && s.effects;
+        if (!s || s.type !== 'state' || !p || typeof p.stream !== 'string' || !p.stream ||
+            !Number.isInteger(p.sequence) || p.sequence < 0) return null;
+        if (stream !== p.stream) {
+          stream = p.stream; sequence = p.sequence;
+          armed = s.started === true && s.phase === 'playing' && s.over === false;
+          if (s.over === true) finished.add(stream);
+          if (finished.size > 32) finished.delete(finished.values().next().value);
+          return null;
+        }
+        if (p.sequence < sequence || finished.has(stream)) return null;
+        sequence = p.sequence;
+        var result = matchResult(s);
+        if (result) {
+          finished.add(stream);
+          var wasArmed = armed; armed = false;
+          return wasArmed ? result : null;
+        }
+        if (s.started === true && s.phase === 'playing' && s.over === false) armed = true;
+        return null;
+      }
+    };
   }
   function defaults() { return { sound: true, volume: 0.35, visuals: 'full' }; }
   function normalise(value) {
@@ -126,7 +171,8 @@
     if (event.type === 'alvin') return 'Alvin destroys one card permanently. All other cards remain untouched.';
     return event.text;
   }
-  return { KEY: KEY, DEFINITIONS: DEFINITIONS, soundRecipe: soundRecipe, renderSound: Sound.render, defaults: defaults, normalise: normalise,
+  return { KEY: KEY, DEFINITIONS: DEFINITIONS, soundRecipe: soundRecipe, renderSound: Sound.render,
+    previews: previews, matchResult: matchResult, endCursor: endCursor, defaults: defaults, normalise: normalise,
     load: load, save: save, motion: motion, publicEvent: publicEvent, fromRules: fromRules,
     append: append, cursor: cursor, publicLog: publicLog };
 }));

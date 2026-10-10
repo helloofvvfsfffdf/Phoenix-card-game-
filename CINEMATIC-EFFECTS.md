@@ -1,6 +1,6 @@
 # PHOENIX cinematic effects
 
-Presentation only. Card rules, chances, durations, ally availability, turn order,
+Presentation only. Card rules, chances, ability durations, ally availability, turn order,
 victory conditions, authentication and invitation handling are not changed.
 
 ## Card coverage
@@ -92,6 +92,11 @@ input disabled, a focus loop and Escape/Return to Match. Closing it restores the
 same screen and focus; it never recreates a game, reconnects a socket or restarts
 music. Multiplayer continues to receive authoritative updates while it is open;
 game overlays are suppressed over Settings, without replaying them on return.
+The result celebration is below Settings in the stacking order and never locks
+game input. The Settings preview selector auditions 26 non-dormant card/ally
+recipes (including clearly labelled Hunter reflection support), plus victory,
+defeat and draw codas. Play/Stop, selection changes, Escape and Settings exit stop
+or replace previews. Previewing never sends a move or enables an unfinished ally.
 
 ## Automatic match music
 
@@ -114,8 +119,10 @@ back-forward-cache restoration respects the retained match gate.
 
 SFX remain independent and enabled according to `phoenix.effects.v1`, including
 when music is Disabled or temporarily paused. Reduced motion does not mute SFX.
-The sound redesign preserves every visual and trigger, replacing pitched motifs
-with layered paper, metal, wood, cloth, fire, breath and vocal-like textures.
+The cinematic overhaul preserves every trigger and game rule, enhancing the
+visuals with bounded auras, ribbons, coins, sparks and flame/spectral layers.
+Paper, metal, wood, cloth, fire and vocal-like sounds now have fantasy resonances,
+controlled impact bodies and short spatial reflections, not just literal Foley.
 Each actually implemented event has a distinct recipe. Dormant ally abilities are
 still not activated. A three-voice cap, conservative master gain, compression and
 short envelopes keep peaks controlled. Muted sounds allocate no voices.
@@ -125,6 +132,40 @@ volume; on those devices the 450 ms pause still applies but the native music fad
 may not be audible. No browser policy is bypassed to force playback or fading.
 
 ## Multiplayer, privacy and lifecycle
+
+### Five-second confirmed victory
+
+Only an observed active-to-finished **server state snapshot** arms the new result
+celebration. The client's seat ID is compared with the server's existing winner
+ID; scores are never used to guess a winner. Existing ties (`winner: null`) get a
+balanced draw coda. Winner: five seconds of golden beam sweeps, three staggered
+firework blooms, Phoenix-inspired feather sparks, confetti, embers, a rising
+VICTORY title and a layered brass/choir/fire fanfare. Defeat: a 2.4-second quiet
+spectral banner and low coda, no fireworks or victory sound. The normal server
+winner/standings screen renders underneath and remains after the overlay clears;
+its heading now correctly distinguishes the viewer's victory, defeat or draw.
+
+Skip button and Escape dismiss the celebration and stop its audio. It is a
+non-modal, pointer-transparent region (only Skip handles input), does not steal
+focus, and sits below Settings. Reduced mode/system preference uses a static
+title/crest, no moving beams or particles. Disabled visuals create no stage;
+SFX remain independent. The full stage is bounded to 101 decorative nodes on
+desktop and 63 on narrow screens, plus a fixed message/skip structure. Smooth,
+single-run opacity envelopes and small staggered bursts avoid strobing and
+full-screen flashes. Hiding, page exit, disconnect, skip and changing motion mode
+clean up the stage and sources.
+
+Initial/reconnect snapshots are baselines, including completed matches: no old
+celebration or fanfare is replayed. Terminal stream IDs stay latched across cursor
+reset; repeats, stale snapshots and resumed finished baselines cannot celebrate
+again. No server, rules, winner selection, turn logic or auth changes. Automatic
+celebrations are multiplayer-only, as required by the server-confirmation gate;
+the local engine's existing winner screen remains unchanged.
+
+The fanfare stops ordinary SFX when it starts; later journal IDs still advance
+without overlapping it. The music gate continues to release immediately at the
+server's match end—there is no five-second music delay, saved preference write,
+ducking or soundtrack replacement. Muted fanfares are not replayed after unmute.
 
 Server-confirmed card events and completed ally mutations append to a bounded
 64-event room journal. Snapshots expose only stream ID, sequence and events with

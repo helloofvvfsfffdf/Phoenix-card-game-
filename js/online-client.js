@@ -222,6 +222,7 @@
         state = message;
         render();
         if (window.PhoenixCinematics) window.PhoenixCinematics.consume(message.effects);
+        if (window.PhoenixCinematics) window.PhoenixCinematics.match(message);
       }
     };
   }
@@ -466,7 +467,9 @@ function renderPlaying() {
       const winner = state.players.find(p => p.id === state.winner);
       const victory = el('div', 'phoenix-victory');
 
-      victory.append(el('h1', '', '\u{1F3C6} VICTORY! \u{1F3C6}'));
+      const result = window.PhoenixEffects ? window.PhoenixEffects.matchResult(state) : null;
+      victory.classList.toggle('phoenix-defeat', result === 'defeat');
+      victory.append(el('h1', '', result === 'victory' ? '\u{1F3C6} VICTORY! \u{1F3C6}' : result === 'draw' ? 'MATCH DRAWN' : 'DEFEAT'));
 
       if (winner) {
         const champion = el('div', 'phoenix-champion');

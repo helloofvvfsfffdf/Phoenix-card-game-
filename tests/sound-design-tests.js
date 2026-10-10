@@ -2,16 +2,17 @@
 var E = require('../js/effects');
 var browser = require('./effects-tests').browser;
 module.exports = function (test, equal, deepEqual, assert) {
-  Object.keys(E.DEFINITIONS).forEach(function (key) {
+  Object.keys(E.DEFINITIONS).concat(['victory','defeat','draw']).forEach(function (key) {
     test(key + ' renders finite, bounded, non-silent material audio at desktop and mobile rates', function () {
       [8000, 44100, 48000].forEach(function (rate) {
         var recipe = E.soundRecipe(key), pcm = E.renderSound(recipe, rate, 173);
         var peak = 0, energy = 0, dc = 0;
         pcm.forEach(function (x) { assert(Number.isFinite(x)); peak = Math.max(peak,Math.abs(x)); energy += x*x; dc += x; });
         assert(peak <= .781 && peak > .03, 'audible peaks without clipping');
-        assert(Math.sqrt(energy/pcm.length) > .008, 'material is not effectively silent');
+        var rms = Math.sqrt(energy/pcm.length);
+        assert(rms > .008 && rms <= .141, 'audible but comfortable sustained energy');
         assert(Math.abs(dc/pcm.length) < .03, 'no sustained DC');
-        assert(pcm.length <= Math.ceil(rate*1.3), 'short bounded tails');
+        assert(pcm.length <= Math.ceil(rate*(key === 'victory' ? 5 : 1.9)), 'bounded cinematic tails');
         equal(pcm[0], 0, 'soft onset');
         equal(pcm[pcm.length-1], 0, 'tail has ended');
       });

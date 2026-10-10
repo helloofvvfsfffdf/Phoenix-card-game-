@@ -1,4 +1,98 @@
-# PHOENIX — action sound redesign
+# PHOENIX — cinematic sound design
+
+## Current cinematic overhaul
+
+The material gestures below are now the foundation of a **fantasy-game mix**, not
+the whole effect. `MAGIC` layers add distinct impact bodies, magical resonances,
+creature undertones and spatial shimmer. Four short room reflections replace the
+prior two-tap dry room; card audio including tails remains below 1.8 seconds.
+No increase in master gain or peak/RMS ceilings was used to create drama.
+
+| Intensity | Design |
+| --- | --- |
+| 1: regular reward | +10,000 Points gets a longer irregular coin cascade with a light sparkling tail; twelve local golden coins and a restrained aura. |
+| 2: special cards and allies | Existing action gestures gain fantasy depth and individually styled auras/ribbons, sparks, flame or mist. No full-screen flash or control lock. |
+| 3: match victory | A 4.9-second original brass/choir fanfare with ceremonial pressure impacts, roaring fire and a starlight finale; five-second winner-only theatrical stage. Defeat/draw use quieter 1.7-second codas. |
+
+### Fantasy layer inventory (on top of the material inventory below)
+
+| Effect | Cinematic additions |
+| --- | --- |
+| Knife | Low strike body and high steel shimmer; sweeping blade streak. |
+| Hunter / reflection support | Bow ward resonance/reverse intake; reflection has recoil shimmer and a short impact. No rule changed. |
+| Zombie | Deeper growl and low pressure under ragged throat/breath; green fumes. |
+| Steal Points / ally Phoenix | Magical suction and pocket shimmer / quicker higher card-snatch sparkle. |
+| Judge | Low verdict body and solemn resonance; broad impact rings. |
+| Reveal Deck | Airy reveal sparkle and breath; eye-shaped outer ribbon. |
+| Skip Everyone | Reverse time intake and braking impact; rotating temporal rings. |
+| Phoenix | Rising creature/fire undertone, broad magical resonance and pressure release; enlarged flame aura and embers. |
+| Trick | Unstable mask resonance and airy misdirection; skewed illusion ribbon. |
+| Steal a Turn | Low control resonance and cord intake; tightened control ribbon. |
+| Curse / trigger | Dark murmuring growl and rune resonance / heavier breaking-seal body. |
+| Ghost | Soft spectral resonance and diffuse sparkle under the whisper; translucent concentric mist. |
+| Alvin / burn | Small ignition resonance / supernatural low flame voice and burning impact, purple rune around the disappearing card silhouette. |
+| Ted's Slobbery Surprise / Protective Howl | Soft wet body and extra liquid drops / creature chest and magical ward resonance; droplet aura / concentric howl waves. |
+| Tilly's Protective Paws | Warm padded ward resonance and soft interception body. |
+| Louie's Quick Reflexes | Fast reverse dodge and sharp sparkle; rapid reflex shield. |
+| Simba's Sharp Claws | Close scratch body and abrasive magic tail; triple-rake ribbon. |
+| Elsie's Untouchable | Glass-like ward resonance and high sparkle; diamond ribbon. |
+| Maple's Sweet Tooth / private rejection | Sugar sparkle and gentle warm resonance / restrained short sparkle reminder. Leaf/sugar motes, never a fictional shield. |
+| Victory | Three broad harmonic brass gestures, sustained warm choir model, ceremonial impact/fire and falling starlight. It is a layered musical fanfare, not card notification beeps. |
+| Defeat / draw | Fallen-banner cloth, low breath and soft fading resonance / balanced unresolved resonance and settling air. |
+
+All are original synthesis. Brass/choir/animal descriptions identify **models and
+creative intent**, not recordings or authentic performances. No third-party SFX
+licences or new attribution requirements; music files/licences are untouched.
+
+### Preview and lifecycle
+
+Settings → **Sound Effects Preview** has 29 choices: every non-dormant card/ally
+recipe (Hunter reflection support explicitly labelled), plus victory/defeat/draw.
+Play replaces the previous preview, Stop cancels it, and changing the selection,
+Escape or leaving Settings stops it. Preview does not start a match, invoke game
+mechanics, send packets or alter saved preferences. Muted/zero-volume previews
+stay silent and explain why. An explicitly requested preview may wait for its
+gesture-initiated AudioContext resume; cancelled requests cannot play later.
+
+SFX stay on the existing independent saved volume, 0.18 master scaling, compressor,
+0.78 PCM peak ceiling and 0.14 RMS ceiling. The winner fanfare takes priority over
+ordinary SFX, with one source rather than a separate live graph for each layer.
+The longer fanfare is pre-rendered during available idle time after genuine audio
+unlock and cached without playing; unsupported browsers render on demand. Cold
+synthesis can cost a few hundred milliseconds on this desktop and potentially
+more on low-end devices; physical-device profiling remains outstanding.
+
+Automatic victory is server-confirmed multiplayer only. First/reconnect snapshots
+are baselines; stream/terminal latching prevents replay. The normal final screen
+remains after the skippable stage. Music still resumes immediately at match end,
+without ducking, a delay, or saved-preference changes. Reduced motion uses a
+static crest/title; disabled visuals allocate no stage. See CINEMATIC-EFFECTS.md.
+
+### Current validation (2026-10-10)
+
+**446 headless tests and 9 live multiplayer tests pass.** Added coverage includes
+all preview choices, pending preview cancellation, audio peaks/RMS, idle warmup,
+server winner vs own seat, defeat/draw, finished baselines, repeats/stale states,
+five-second lifetime, skip, focus preservation, reduced motion, disabled visuals,
+page/connection cleanup and unchanged immediate match-end music restoration.
+
+An opt-in native headless Edge check (`node tests/cinematic-browser-check.js`)
+passed all 29 real Web Audio previews, UI Play/Stop/mute/zero-volume controls, and
+a real three-player match with a confirmed browser-player victory. It also checked
+normal cleanup/repeated final snapshot suppression, desktop winner decorations,
+375px device-metrics layout, skip, and native system reduced-motion emulation.
+No browser errors; all audio output was silenced deliberately at the destination.
+The screenshot was visually reviewed. The check uses a separate temporary profile
+and no autoplay bypass. Set `PHOENIX_BROWSER_URL` for a running local server and
+`PHOENIX_BROWSER_OWNER_PASSWORD` for the optional live match; `BROWSER_EXE` can
+select Chrome/Edge. Do not supply production credentials.
+
+These are functional playback, signal, concept and visual checks—not a human
+listening verdict or physical mobile-device test. Professional-sounding realism,
+speaker/headphone balance and low-end-device performance still need listening
+and hardware review. No claim of authentic animal/instrument recordings is made.
+
+## Previous material-design foundation
 
 ## Intent and provenance
 
@@ -74,7 +168,7 @@ not included in browser gameplay checks as if they were implemented.
 
 ## Verification and honest limits
 
-2026-10-10: **400 headless tests + 7 live multiplayer tests pass**. Coverage includes
+Prior material-only validation, 2026-10-10: **400 headless tests + 7 live multiplayer tests passed**. Coverage includes
 every actual card/ally event, server mutation-to-event mapping, secrecy, repeated
 snapshots/reconnect baselines, independent music/SFX preferences, mute/zero volume,
 three-voice cap, buffer reuse and cleanup. New PCM tests check every catalogue

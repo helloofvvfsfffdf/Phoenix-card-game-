@@ -44,10 +44,51 @@
   DESIGNS['ally-louie'] = DESIGNS.stealturn;
   DESIGNS['ally-simba'] = DESIGNS['block-simba'];
   DESIGNS['ally-elsie'] = DESIGNS['block-elsie'];
+  // Fantasy accents sit underneath recognisable material gestures. Different
+  // combinations/timings, not a shared loud stinger pasted onto every action.
+  var MAGIC = {
+    bonus: [L('metal',.29,.38,.25,2780),L('metal',.4,.37,.2,3450),L('shimmer',.18,.63,.12,1700)],
+    knife: [L('impact',.14,.48,.2,85),L('shimmer',.12,.4,.14,3600)],
+    hunter: [L('halo',.18,.9,.17,246),L('reverse',0,.25,.15,450,1300)],
+    zombie: [L('growl',.08,1.12,.28,49,38),L('rumble',.28,.85,.2,70)],
+    steal: [L('reverse',0,.43,.19,650,1700),L('shimmer',.28,.55,.14,2100)],
+    judge: [L('impact',.26,.65,.23,65),L('halo',.29,.8,.16,130)],
+    reveal: [L('shimmer',.12,.83,.22,2400),L('breath',.2,.53,.15,1800,900)],
+    skipall: [L('reverse',.02,.32,.2,650,2200),L('impact',.39,.43,.15,100)],
+    phoenix: [L('growl',.14,1.2,.25,54,77),L('halo',.34,1.12,.23,196),L('impact',.23,.75,.23,58)],
+    trick: [L('halo',.19,.77,.17,277),L('breath',.07,.63,.16,1900,800)],
+    stealturn: [L('halo',.28,.83,.17,185),L('reverse',.06,.31,.2,450,1900)],
+    curse: [L('growl',.19,.83,.2,61,43),L('halo',.25,.9,.17,116)],
+    ghost: [L('halo',.22,.97,.16,311),L('shimmer',.49,.65,.14,1950)],
+    alvin: [L('halo',.18,.7,.13,220),L('reverse',.08,.27,.14,500,2100)],
+    'alvin-burn': [L('growl',.13,.94,.2,79,45),L('halo',.23,.95,.2,147),L('impact',.09,.43,.16,80)],
+    'curse-trigger': [L('impact',0,.53,.22,54),L('halo',.06,.77,.19,97)],
+    'hunter-block': [L('shimmer',.19,.61,.2,2900),L('impact',.29,.4,.17,110)],
+    'ally-phoenix': [L('shimmer',.16,.56,.18,3300),L('reverse',0,.21,.15,900,2200)],
+    'ally-ted': [L('impact',.02,.4,.16,97),L('bubble',.35,.37,.18,540,130)],
+    'ally-maple': [L('shimmer',.33,.68,.17,3100),L('halo',.27,.63,.12,349)],
+    'block-tilly': [L('halo',.14,.73,.2,233),L('impact',.04,.38,.12,130)],
+    'block-ted': [L('growl',0,.31,.18,68,56),L('halo',.22,.81,.18,174)],
+    'block-louie': [L('shimmer',.13,.59,.22,3900),L('reverse',0,.18,.17,750,2200)],
+    'block-simba': [L('impact',.18,.48,.18,95),L('shimmer',.19,.57,.16,3100)],
+    'block-elsie': [L('halo',.13,.97,.21,392),L('shimmer',.25,.73,.18,4100)],
+    'maple-restriction': [L('shimmer',.16,.36,.07,2750)]
+  };
+  DESIGNS.victory = ['Phoenix ascension: ceremonial impacts, warm brass/choir, fire and starlight finale', [
+    L('impact',0,1.1,.32,55),L('fire',.08,1.15,.4,900,450),
+    L('brass',.3,.95,.19,196),L('brass',.3,.95,.17,293.66),L('brass',.3,.95,.14,392),
+    L('brass',1.18,.95,.17,220),L('brass',1.18,.95,.16,330),L('brass',1.18,.95,.14,440),
+    L('impact',2.02,.8,.23,70),L('brass',2.03,2.35,.18,261.63),L('brass',2.03,2.35,.16,392),L('brass',2.03,2.35,.14,523.25),
+    L('choir',1.65,2.9,.14,130.81),L('choir',1.65,2.9,.12,196),
+    L('shimmer',2.42,2.16,.17,2900),L('crackle',3.15,.95,.17,2800),L('air',3.32,1.3,.15,1700,450)
+  ]];
+  DESIGNS.defeat = ['Quiet fallen-banner coda: low breath, soft body and fading resonance', [L('cloth',0,.45,.3,500),L('halo',.12,1.28,.17,146.83),L('breath',.17,1.15,.2,650,280)]];
+  DESIGNS.draw = ['Balanced unresolved coda: two gentle resonances and settling air', [L('halo',0,1.17,.16,196),L('halo',.09,1.19,.14,293.66),L('air',.22,.83,.15,900,400)]];
   function recipe(key, inert) {
     if (!Object.prototype.hasOwnProperty.call(DESIGNS, key)) return null;
-    var layers = inert ? [L('wood',0,.13,.22,330),L('cloth',.06,.19,.18,800)] : DESIGNS[key][1];
+    var layers = inert ? [L('wood',0,.13,.22,330),L('cloth',.06,.19,.18,800)] : DESIGNS[key][1].concat(MAGIC[key] || []);
     return { concept: inert ? 'Quiet unresolved knock and cloth fall; no verdict' : DESIGNS[key][0],
+      tail: inert ? .08 : .28,
       duration: inert ? .25 : Math.max.apply(null, layers.map(function (l) { return l.at + l.length; })),
       layers: layers.map(function (l) { return Object.assign({}, l); }) };
   }
@@ -55,7 +96,7 @@
   // bodies and breath/formant filtering replace the old pitched note sequences.
   function render(design, sampleRate, seed) {
     if (!design || !isFinite(sampleRate) || sampleRate < 8000 || sampleRate > 192000) throw new Error('Invalid sound render');
-    var out = new Float32Array(Math.ceil((design.duration + .08) * sampleRate));
+    var out = new Float32Array(Math.ceil((design.duration + (design.tail || .08)) * sampleRate));
     var state = seed >>> 0 || 173;
     function random() { state = (Math.imul(state,1664525) + 1013904223) >>> 0; return state / 2147483648 - 1; }
     design.layers.forEach(function (l) {
@@ -91,6 +132,20 @@
           var formant=k==='howl'?750:k==='bark'?510:k==='groan'?420:colour;
           value=resonator(pulse,formant,f1)*1.4+resonator(pulse,formant*2.7,f2)*.7+(n-low)*(voiced?.09:.2);
           env *= Math.pow(Math.sin(Math.PI*p),.65)*(k==='bark'?Math.exp(-p*3):1);
+        } else if (k==='impact') {
+          phase += (colour*(1-.65*p))/sampleRate;
+          value=Math.sin(phase*2*Math.PI)*Math.exp(-p*7)+low*.6*Math.exp(-p*16);
+        } else if (k==='halo' || k==='choir' || k==='brass' || k==='growl') {
+          phase += colour*(1+.006*Math.sin(t*29))/sampleRate;
+          var harmonics=k==='brass'?7:k==='growl'?9:4;
+          for(var h=1;h<=harmonics;h++) {
+            if(colour*h<sampleRate*.43) value+=Math.sin(phase*2*Math.PI*h+(k==='halo'?Math.sin(t*5)*h*.17:0))/(h*h*.7+.3);
+          }
+          value=value*.35+(k==='growl'?low*.3:0);
+          env *= Math.pow(Math.sin(Math.PI*p),k==='brass'?.65:1.2);
+        } else if (k==='shimmer') {
+          value=resonator(n,colour,f1)*.8+resonator(n,colour*1.414,f2)*.5;
+          env *= Math.pow(Math.sin(Math.PI*p),.8);
         } else if (k==='bubble') {
           phase += colour/sampleRate;
           value=Math.sin(phase*2*Math.PI)*Math.exp(-p*5)+low*.15;
@@ -120,8 +175,9 @@
     // Very short room reflections give material depth without a long wash or
     // unbounded Web Audio graph. Bounded peaks preserve differences in dynamics.
     var dry=out.slice(), peak=0, energy=0;
+    var reflections=design.tail>.08?[[.037,.13],[.083,.09],[.139,.06],[.211,.035]]:[[.023,.13],[.047,.07]];
     for(var i=0;i<out.length;i++) {
-      out[i] += (dry[i-Math.round(sampleRate*.023)]||0)*.13 + (dry[i-Math.round(sampleRate*.047)]||0)*.07;
+      reflections.forEach(function (r) { out[i] += (dry[i-Math.round(sampleRate*r[0])]||0)*r[1]; });
       peak=Math.max(peak,Math.abs(out[i]));
       energy += out[i]*out[i];
     }

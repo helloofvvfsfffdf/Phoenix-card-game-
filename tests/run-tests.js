@@ -547,6 +547,9 @@ require('./match-audio-tests')(test, equal, deepEqual, assert);
 suite('Material sound design');
 require('./sound-design-tests')(test, equal, deepEqual, assert);
 
+suite('Cinematic previews and victory');
+require('./celebration-tests')(test, equal, deepEqual, assert);
+
 /* ===================================================================== */
 /* The deck                                                               */
 /* ===================================================================== */
