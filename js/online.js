@@ -35,6 +35,7 @@ function render(){const s=state;if(!s)return;
   seat.append(meta);seats.append(seat);
  });
  const actions=$('online-actions');actions.replaceChildren();
+ // PHOENIX multiplayer: allow 2 to 5 players.                 
  if(!s.started){if(s.host){const b=el('button','online-primary','START MATCH');b.disabled=s.players.length!==5;b.onclick=()=>send({type:'start',rounds:Number($('online-rounds').value)});actions.append(b);}else actions.append(el('p','','Waiting for host to start when all five players have joined.'));}
  else if(s.over){actions.append(el('h3','','Match complete!'));const winner=s.players.find(p=>p.id===s.winner);actions.append(el('p','',winner?'Winner: '+winner.name:'Game over'));}
  else if(!s.acting){actions.append(el('p','','Waiting for your turn. Other players’ hands are private.'));}
