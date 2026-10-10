@@ -150,12 +150,13 @@
   }
 
   /**
-   * A card the server has hidden behind Ted's fog.
+   * A card behind Ted's fog.
    *
-   * The snapshot sets `tedObscured` when this player's hand is concealed. The
-   * card must not be drawn in that case - it is the whole point of Ted, and the
-   * previous client got this right. The position number is kept because the
-   * player still chooses by position.
+   * Slobbery Surprise is a handicap laid ON the victim: they keep holding the
+   * cards, they just cannot see what they are and have to choose by position.
+   * The server sends the real hand and flags `tedObscured` on the victim's own
+   * connection, and this is that flag being honoured - the whole cost of the
+   * ability, and the reason the victim is in trouble until it wears off.
    */
   function hiddenCard(index) {
     const node = el('div', 'card');
@@ -675,6 +676,10 @@
         return;
       }
 
+      // Ted's fog wins over everything. While it is up the victim sees numbered
+      // positions instead of their own cards - that blindness IS the ability, not
+      // a bug, and it lasts until the fog's round is up. The position number is
+      // kept because they still choose by position while it lasts.
       grid.append(state.tedObscured ? hiddenCard(index) : cardFace(card, false));
     });
 
