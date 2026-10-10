@@ -4,7 +4,7 @@
   const $ = id => document.getElementById(id);
   let socket = null;
   let state = null;
-
+ 
   const names = {
     phoenix: 'Sneaky Snatcher — Steals one random opponent card each round.',
     tilly: 'Trouble Maker — 50% chance to eliminate an opponent for one round. Protective Paws: 40% Phoenix block.',
@@ -582,7 +582,43 @@
     // Your private hand
     const hand = $('online-hand');
     hand.replaceChildren();
+    // Pickup and discard piles
+    if (s.started) {
+      const piles = el('div', 'phoenix-piles');
 
+      // Pickup pile — cards are drawn automatically.
+      const pickup = el('div', 'phoenix-pile');
+      pickup.append(el('h3', '', '🃏 PICKUP PILE'));
+
+      const pickupCard = el('div', 'card phoenix-pile-card');
+      pickupCard.append(el('span', 'card-art', '🦎'));
+      pickupCard.append(el('span', 'card-name', 'PHOENIX'));
+      pickup.append(pickupCard);
+
+      pickup.append(el(
+        'p',
+        '',
+        s.deckCount + ' cards remaining'
+      ));
+
+      // Discard pile — cards that have been played.
+      const discard = el('div', 'phoenix-pile');
+      discard.append(el('h3', '', '🎴 DISCARD PILE'));
+
+      const discardCard = el('div', 'card phoenix-pile-card');
+      discardCard.append(el('span', 'card-art', '🐾'));
+      discardCard.append(el('span', 'card-name', 'PLAYED CARDS'));
+      discard.append(discardCard);
+
+      discard.append(el(
+        'p',
+        '',
+        s.discardCount + ' cards discarded'
+      ));
+
+      piles.append(pickup, discard);
+      actions.append(piles);
+    }
     if (s.started) {
       hand.append(el('h3', '', 'Your private hand'));
 
