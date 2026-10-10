@@ -1,4 +1,3 @@
-
 (function () {
   'use strict';
 
@@ -22,10 +21,10 @@
     node.dataset.tone = 'neutral';
     node.title = 'Ted has hidden this card!';
     node.setAttribute('aria-label', 'Hidden card ' + (index + 1));
-    node.append(el('span','card-corner','?'));
-    node.append(el('span','card-art','🐶'));
-    node.append(el('span','card-name','Card ' + (index + 1)));
-    node.append(el('span','card-blurb','Hidden by Ted’s Slobbery Surprise'));
+    node.append(el('span', 'card-corner', '?'));
+    node.append(el('span', 'card-art', '🐶'));
+    node.append(el('span', 'card-name', 'Card ' + (index + 1)));
+    node.append(el('span', 'card-blurb', 'Hidden by Ted’s Slobbery Surprise'));
     return node;
   }
 
@@ -36,7 +35,6 @@
     return node;
   }
 
-  // Draw a card using the original PHOENIX design.
   function cardFace(card, clickable) {
     const node = el(clickable ? 'button' : 'div', 'card');
 
@@ -166,7 +164,6 @@
 
     sessionStorage.setItem('phoenix-player-name', name);
 
-
     const ownerPassword =
       type === 'create'
         ? $('online-owner-password').value
@@ -203,7 +200,15 @@
       s.players.find(p => p.id === s.current);
 
     $('online-phase').textContent = !s.started
-      ? (s.phase === 'lobby' ? `${s.players.length} / 5 players · Minimum 2 to start` : s.phase === 'turnDice' ? 'Stage 1: Roll for turn order' : s.phase === 'allyDice' ? 'Stage 2: Roll for ally draft order' : 'Stage 3: Choose your ally')
+      ? (
+          s.phase === 'lobby'
+            ? `${s.players.length} / 5 players · Minimum 2 to start`
+            : s.phase === 'turnDice'
+              ? 'Stage 1: Roll for turn order'
+              : s.phase === 'allyDice'
+                ? 'Stage 2: Roll for ally draft order'
+                : 'Stage 3: Choose your ally'
+        )
       : s.over
         ? 'Match finished'
         : `Round ${s.round} / ${s.rounds} · ${
@@ -222,8 +227,11 @@
       );
 
       const picture = el('img', 'online-portrait');
-      if (player.ally) picture.src = 'assets/allies/' + player.ally + '.jpg';
-      else picture.hidden = true;
+      if (player.ally) {
+        picture.src = 'assets/allies/' + player.ally + '.jpg';
+      } else {
+        picture.hidden = true;
+      }
       picture.alt = player.ally || 'Not chosen';
       seat.append(picture);
 
@@ -238,7 +246,10 @@
       meta.append(el(
         'small',
         '',
-        player.ally ? player.ally.toUpperCase() + ' · ' + (names[player.ally] || player.ally) : 'Ally not chosen yet'
+        player.ally
+          ? player.ally.toUpperCase() + ' · ' +
+            (names[player.ally] || player.ally)
+          : 'Ally not chosen yet'
       ));
 
       meta.append(el(
@@ -246,7 +257,7 @@
         '',
         s.started
           ? player.points.toLocaleString() +
-              ' points · ' + player.handCount + ' cards'
+            ' points · ' + player.handCount + ' cards'
           : player.connected
             ? 'Connected'
             : 'Disconnected'
@@ -263,30 +274,86 @@
     if (s.phase === 'turnDice' || s.phase === 'allyDice') {
       const d = s.dice;
       const roller = s.players[d.next];
-      actions.append(el('h3', '', s.phase === 'turnDice' ? '🎲 Roll for turn order' : '🎲 Roll for ally draft order'));
-      actions.append(el('p', '', roller ? roller.name + ' rolls next.' : 'Calculating order...'));
+
+      actions.append(el(
+        'h3',
+        '',
+        s.phase === 'turnDice'
+          ? '🎲 Roll for turn order'
+          : '🎲 Roll for ally draft order'
+      ));
+
+      actions.append(el(
+        'p',
+        '',
+        roller
+          ? roller.name + ' rolls next.'
+          : 'Calculating order...'
+      ));
+
       if (d.next === s.seat) {
-        const roll = el('button','online-primary','ROLL DICE 🎲');
-        roll.onclick = () => {roll.disabled=true;send({type:'roll'});};
+        const roll = el('button', 'online-primary', 'ROLL DICE 🎲');
+
+        roll.onclick = () => {
+          roll.disabled = true;
+          send({ type: 'roll' });
+        };
+
         actions.append(roll);
       }
-      Object.entries(d.rolls).forEach(([i,n])=>actions.append(el('p','',s.players[Number(i)].name+' rolled '+n)));
+
+      Object.entries(d.rolls).forEach(([i, n]) => {
+        actions.append(el(
+          'p',
+          '',
+          s.players[Number(i)].name + ' rolled ' + n
+        ));
+      });
+
     } else if (s.phase === 'draft') {
       const picker = s.players[s.draftTurn];
-      actions.append(el('h3','','🐾 Ally selection'));
-      actions.append(el('p','',picker ? picker.name+' chooses next.' : 'Waiting...'));
+
+      actions.append(el('h3', '', '🐾 Ally selection'));
+
+      actions.append(el(
+        'p',
+        '',
+        picker
+          ? picker.name + ' chooses next.'
+          : 'Waiting...'
+      ));
+
       if (s.draftTurn === s.seat) {
         if (s.players.length < 3) {
-          const notice = el('p', '', '🔒 Ted requires at least 3 players to select. For a more enjoyable match, 4 or more players are recommended.');
+          const notice = el(
+            'p',
+            '',
+            '🔒 Ted requires at least 3 players to select. For a more enjoyable match, 4 or more players are recommended.'
+          );
           actions.append(notice);
         }
-        s.availableAllies.forEach(id=>{
-          const button=el('button','online-primary',id.toUpperCase()+' — '+names[id]);
-          const portrait=el('img','online-portrait'); portrait.src='assets/allies/'+id+'.jpg'; portrait.alt=id; button.prepend(portrait);
-          button.onclick=()=>{button.disabled=true;send({type:'chooseAlly',ally:id});};
+
+        s.availableAllies.forEach(id => {
+          const button = el(
+            'button',
+            'online-primary',
+            id.toUpperCase() + ' — ' + names[id]
+          );
+
+          const portrait = el('img', 'online-portrait');
+          portrait.src = 'assets/allies/' + id + '.jpg';
+          portrait.alt = id;
+          button.prepend(portrait);
+
+          button.onclick = () => {
+            button.disabled = true;
+            send({ type: 'chooseAlly', ally: id });
+          };
+
           actions.append(button);
         });
       }
+
     } else if (!s.started) {
       if (s.host) {
         const start = el(
@@ -295,7 +362,6 @@
           'START MATCH'
         );
 
-        // Keep two-player matches working.
         start.disabled = s.players.length < 2;
 
         start.onclick = () => {
@@ -321,75 +387,86 @@
           'Waiting for the host to start the match.'
         ));
       }
-    
-} else if (s.over) {
-  const winner = s.players.find(p => p.id === s.winner);
 
-  const victory = el('div', 'phoenix-victory');
+    } else if (s.over) {
+      // Victory screen
+      const winner = s.players.find(p => p.id === s.winner);
+      const victory = el('div', 'phoenix-victory');
 
-  victory.append(el('h1', '', '🏆 VICTORY! 🏆'));
+      victory.append(el('h1', '', '🏆 VICTORY! 🏆'));
 
-  if (winner) {
-    const champion = el('div', 'phoenix-champion');
+      if (winner) {
+        const champion = el('div', 'phoenix-champion');
 
-    // The real ally photo, alongside the trophy.
-    const photo = el('img', 'phoenix-victory-ally');
-    photo.src = 'assets/allies/' + winner.ally + '.jpg';
-    photo.alt = winner.ally + ' the winning ally';
+        const photo = el('img', 'phoenix-victory-ally');
+        photo.src = 'assets/allies/' + winner.ally + '.jpg';
+        photo.alt = winner.ally + ' the winning ally';
 
-    const trophy = el('div', 'phoenix-victory-trophy', '🏆');
+        const trophy = el(
+          'div',
+          'phoenix-victory-trophy',
+          '🏆'
+        );
 
-    const display = el('div', 'phoenix-victory-display');
-    display.append(photo, trophy);
-    champion.append(display);
+        const display = el(
+          'div',
+          'phoenix-victory-display'
+        );
 
-    champion.append(el(
-      'h2',
-      '',
-      winner.name + ' & ' + winner.ally.toUpperCase() + ' WON!'
-    ));
+        display.append(photo, trophy);
+        champion.append(display);
 
-    champion.append(el(
-      'p',
-      '',
-      winner.points.toLocaleString() + ' POINTS'
-    ));
+        champion.append(el(
+          'h2',
+          '',
+          winner.name + ' & ' +
+          winner.ally.toUpperCase() + ' WON!'
+        ));
 
-    victory.append(champion);
-  }
+        champion.append(el(
+          'p',
+          '',
+          winner.points.toLocaleString() + ' POINTS'
+        ));
 
-  const standings = el('div', 'phoenix-victory-standings');
-  standings.append(el('h3', '', 'FINAL LEADERBOARD'));
+        victory.append(champion);
+      }
 
-  [...s.players]
-    .sort((a, b) => b.points - a.points)
-    .forEach((player, index) => {
-      const medal = ['🥇', '🥈', '🥉'][index] || '🏅';
+      const standings = el(
+        'div',
+        'phoenix-victory-standings'
+      );
 
       standings.append(el(
-        'p',
+        'h3',
         '',
-        medal + ' ' + player.name +
-        ' & ' + (player.ally || 'No ally').toUpperCase() +
-        ' — ' + player.points.toLocaleString() + ' points'
+        'FINAL LEADERBOARD'
       ));
-    });
 
-  victory.append(standings);
-  actions.append(victory);
+      [...s.players]
+        .sort((a, b) => b.points - a.points)
+        .forEach((player, index) => {
+          const medal =
+            ['🥇', '🥈', '🥉'][index] || '🏅';
 
-      actions.append(el('h3', '', 'Match complete!'));
+          standings.append(el(
+            'p',
+            '',
+            medal + ' ' + player.name +
+            ' & ' +
+            (player.ally || 'No ally').toUpperCase() +
+            ' — ' +
+            player.points.toLocaleString() +
+            ' points'
+          ));
+        });
 
-      const winner =
-        s.players.find(p => p.id === s.winner);
+      victory.append(standings);
+      actions.append(victory);
 
-      actions.append(el(
-        'p',
-        '',
-        winner ? 'Winner: ' + winner.name : 'Game over'
-      ));
     } else if (!s.acting) {
       actions.append(el('p', '', 'Waiting for your turn.'));
+
     } else {
       actions.append(el(
         'h3',
@@ -407,8 +484,7 @@
         ));
       }
 
-      
-      // Playable cards — show each card once, then choose a target.
+      // Show each playable card only once.
       const movesGrid = el('div', 'online-card-grid');
       const cardIds = [...new Set(s.moves.map(move => move.cardId))];
 
@@ -444,7 +520,7 @@
             return;
           }
 
-          // Show the target picker.
+          // Target picker
           movesGrid.replaceChildren();
 
           movesGrid.append(el(
@@ -459,6 +535,7 @@
             const player = s.players.find(
               p => p.id === move.targetId
             );
+
             if (!player) return;
 
             const targetButton = el(
@@ -466,6 +543,7 @@
               'online-primary',
               player.name
             );
+
             targetButton.type = 'button';
 
             targetButton.onclick = () => {
@@ -489,6 +567,7 @@
             '',
             '← Back to cards'
           );
+
           back.type = 'button';
           back.onclick = () => render();
           movesGrid.append(back);
@@ -498,8 +577,6 @@
       });
 
       actions.append(movesGrid);
-
-     
     }
 
     // Your private hand
@@ -518,7 +595,11 @@
         const card = window.PhoenixCards.byId(id);
 
         if (card) {
-          handGrid.append(s.tedObscured ? hiddenCard(index, false) : cardFace(card, false));
+          handGrid.append(
+            s.tedObscured
+              ? hiddenCard(index, false)
+              : cardFace(card, false)
+          );
         } else {
           handGrid.append(el('span', 'online-card', id));
         }
@@ -537,11 +618,12 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    // Multiplayer allies are drafted after the dice ceremony, not at the main menu.
+    // Go directly to multiplayer instead of the main-menu ally picker.
     $('menu-multi').addEventListener('click', event => {
       event.stopImmediatePropagation();
       enter();
     }, true);
+
     $('online-back').onclick = leave;
     $('online-create').onclick = () => join('create');
     $('online-join').onclick = () => join('join');
