@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="css/menu-v2.css" />
 <link rel="stylesheet" href="css/online.css" />
 <link rel="stylesheet" href="css/gallery.css" />
+<link rel="stylesheet" href="css/settings.css" />
 <link rel="stylesheet" href="css/allies.css" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128293;</text></svg>" />
 <title>Phoenix</title>
@@ -26,7 +27,7 @@
         <button type="button" id="menu-multi"><span class="menu-symbol">♟</span> MULTIPLAYER <small>PRIVATE ROOMS · INVITE CODE</small></button>
         <button type="button" id="menu-gallery"><span class="menu-symbol">▦</span> GALLERY <small>PRIVATE · INVITE CODE</small></button>
         <button type="button" id="menu-cards"><span class="menu-symbol">▣</span> CARD COLLECTION <small>COMING SOON</small></button>
-        <button type="button" id="menu-settings"><span class="menu-symbol">⚙</span> SETTINGS <small>COMING SOON</small></button>
+        <button type="button" id="menu-settings"><span class="menu-symbol">⚙</span> SETTINGS <small>BACKGROUND MUSIC</small></button>
       </nav>
       <p id="menu-feedback" aria-live="polite"></p>
       <p class="menu-footer">PHOENIX · PROTOTYPE BUILD · RESTRICTED ACCESS</p>
@@ -269,6 +270,39 @@
     <div id="gallery-view"></div>
   </section>
 
+<!-- ========================= PHOENIX SETTINGS =========================
+     Background music only. The track list is built at runtime from
+     js/music.js so there is exactly one place that knows what exists.
+
+     Nothing here talks to the server. Music is stored in each player's own
+     browser, which is why it needs no owner password and why every guest in a
+     multiplayer room gets their own choice and their own volume. -->
+  <section id="settings" class="settings-screen" hidden aria-label="Settings">
+    <div class="settings-card">
+      <header class="settings-head">
+        <p class="settings-eyebrow">PHOENIX</p>
+        <h2>SETTINGS</h2>
+      </header>
+
+      <div class="settings-section">
+        <h3>Background Music</h3>
+        <p class="settings-note">Yours alone. Your choice and volume are remembered in this browser, and nobody else in a match can see or hear them.</p>
+
+        <div id="settings-tracks" class="settings-tracks" role="radiogroup" aria-label="Background music"></div>
+
+        <div class="settings-volume">
+          <label for="settings-volume-slider">VOLUME <span id="settings-volume-value">40%</span></label>
+          <input type="range" id="settings-volume-slider" min="0" max="100" step="1" value="40" aria-label="Music volume">
+        </div>
+
+        <p id="settings-music-status" class="settings-status" aria-live="polite"></p>
+        <button class="settings-enable" id="settings-enable-music" type="button" hidden>ENABLE MUSIC</button>
+      </div>
+
+      <button class="settings-back" id="settings-back" type="button">&#8592; MAIN MENU</button>
+    </div>
+  </section>
+
 <div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
 
 <script src="js/cards.js"></script>
@@ -276,6 +310,7 @@
      The gallery reads it to describe the restriction accurately instead of
      restating it in prose that could drift away from the rule. -->
 <script src="js/maple.js"></script>
+<script src="js/music.js"></script>
 <script src="js/rules.js"></script>
 <script src="js/parser.js"></script>
 <script src="js/prompt.js"></script>

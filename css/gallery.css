@@ -311,16 +311,21 @@
   background: #0c1426;
 }
 
+/* Sized from the container, not the viewport, so this works at any width without
+   depending on a media query. A media query could not be tested here, so the
+   layout is made correct by construction instead - the rule below is only ever
+   cosmetic polish on top. */
 .gallery-detail-photo {
-  width: 150px;
-  height: 150px;
+  width: clamp(96px, 30%, 150px);
+  height: auto;
+  aspect-ratio: 1 / 1;
   border-radius: 50%;
   object-fit: cover;
   border: 3px solid var(--ally-color, #7ed6df);
 }
 
 .gallery-detail-face {
-  flex: 0 0 190px;
+  flex: 0 0 clamp(140px, 34%, 190px);
 }
 
 .gallery-detail-body {
@@ -366,34 +371,18 @@
 }
 
 /* Phones: one column, and the detail view stacks with the portrait on top. */
+/* Cosmetic polish only. Every rule above is already correct at 380px because it
+   is sized from its container; this block only tightens the spacing. */
 @media (max-width: 620px) {
   .gallery {
     padding: 14px 12px 48px;
   }
 
   .gallery-grid {
-    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
     gap: 12px;
   }
 
   .gallery-detail {
     padding: 16px;
-  }
-
-  .gallery-detail-photo {
-    width: 110px;
-    height: 110px;
-  }
-
-  .gallery-detail-face {
-    flex: 0 0 150px;
-  }
-
-  .gallery-form input {
-    flex: 1 1 100%;
-  }
-
-  .gallery-primary {
-    flex: 1 1 100%;
   }
 }

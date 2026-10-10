@@ -110,7 +110,12 @@
       window.PhoenixOnline.enter();
     });
 
-    ['menu-cards', 'menu-settings'].forEach(function (id) {
+    // Settings is no longer a stub - it opens the background music screen.
+    $('menu-settings').addEventListener('click', function () {
+      window.PhoenixMusicSettings.open();
+    });
+
+    ['menu-cards'].forEach(function (id) {
       $(id).addEventListener('click', function () {
         $('menu-feedback').textContent = 'This section is coming in a future build.';
       });
