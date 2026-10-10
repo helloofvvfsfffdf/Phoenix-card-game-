@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { WebSocketServer, WebSocket } = require('ws');
 const Rules = require('./js/rules.js');
 const Maple = require('./js/maple.js');
+const Gallery = require('./js/gallery.js');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
@@ -85,6 +86,138 @@ function validOwnerPassword(input) {
 }
 
 const rooms = new Map();
+
+/**
+ * Open PHOENIX Gallery sessions, keyed by invitation code.
+ *
+ * Kept separate from `rooms` on purpose. A room holds a live match - hands,
+ * scores, the deck - and a gallery session must never be able to reach one, so
+ * they are two maps that do not know about each other. A code typed into the
+ * wrong box simply misses, and neither side can tell the other it exists.
+ *
+ * A session is a code and two timestamps. Nothing else: no catalogue (that is
+ * already public page script), no player, no room.
+ */
+const galleries = new Map();
+
+/**
+ * A gallery invitation code: six characters from the CSPRNG.
+ *
+ * crypto.randomBytes(3) is 24 bits drawn from the operating system's entropy
+ * pool - the same generator the room codes use - and never Math.random. Guests
+ * type these by hand, so the alphabet is uppercase hex and nothing else.
+ */
+function galleryCode() {
+  let c;
+
+  do {
+    c = crypto.randomBytes(3).toString('hex').toUpperCase();
+  } while (galleries.has(c));
+
+  return c;
+}
+
+/**
+ * PHOENIX Gallery over the WebSocket.
+ *
+ * Three messages, and nothing here ever sends game state:
+ *   gallery_create  owner password required, same secret and same IP lockout as
+ *                   creating a room. Returns the invitation code.
+ *   gallery_join    invitation code only. Never the password.
+ *   gallery_close   the creating connection only. Revokes the code at once.
+ *
+ * @returns {boolean} true if the message was a gallery message and is handled
+ */
+function handleGallery(ws, data) {
+  if (!String(data.type || '').startsWith('gallery_')) {
+    return false;
+  }
+
+  if (data.type === 'gallery_create') {
+    // The SAME owner secret, compared the SAME way, with the SAME per-IP failure
+    // tracking. Reusing it is the point: one password, one lockout, no second
+    // thing to get wrong.
+    const now = Date.now();
+    const ip = clientIp(ws);
+    const auth = authRecord(ip, now);
+
+    if (auth.lockedUntil > now) {
+      return error(ws, 'Too many incorrect attempts. Try again later.'), true;
+    }
+
+    if (!validOwnerPassword(data.ownerPassword)) {
+      auth.failures.push(now);
+
+      if (auth.failures.length >= AUTH_MAX_FAILURES) {
+        auth.lockedUntil = now + AUTH_LOCK_MS;
+      }
+
+      return error(
+        ws,
+        'Incorrect owner password or too many attempts.'
+      ), true;
+    }
+
+    auth.failures = [];
+
+    // One session per connection. Creating again replaces the old code rather than
+    // leaving a second one lying around that only the owner knows is dead.
+    Gallery.closeOwnedBy(galleries, ws);
+
+    const code = Gallery.create(galleries, ws, now, galleryCode);
+
+    if (!code) {
+      return error(ws, 'The server has reached its gallery limit. Try later.'), true;
+    }
+
+    ws.gallery = { code: code, owner: true };
+
+    return send(ws, {
+      type: 'gallery_open',
+      code: code,
+      expiresIn: Gallery.remainingMs(galleries.get(code), now),
+      ttl: Gallery.TTL_MS
+    }), true;
+  }
+
+  if (data.type === 'gallery_join') {
+    // Validated here, on the server. Anything the page decides for itself is a
+    // suggestion, and this is the only check that matters.
+    const session = Gallery.join(galleries, data.code, Date.now());
+
+    // One message for "no such code", "closed" and "expired": a guest must not be
+    // able to learn which codes exist by watching the replies differ.
+    if (!session) {
+      return error(ws, 'That gallery code is not valid, or has expired.'), true;
+    }
+
+    // Deliberately NOT ws.member. A guest is not in a room, so every gameplay
+    // branch below refuses them on its own - read-only by construction.
+    ws.gallery = { code: session.code, owner: false };
+
+    return send(ws, {
+      type: 'gallery_open',
+      code: session.code,
+      expiresIn: Gallery.remainingMs(session, Date.now()),
+      ttl: Gallery.TTL_MS
+    }), true;
+  }
+
+  if (data.type === 'gallery_close') {
+    const code = ws.gallery && ws.gallery.code;
+
+    if (!code || !ws.gallery.owner) {
+      return error(ws, 'Only the owner can close a gallery.'), true;
+    }
+
+    Gallery.close(galleries, code, ws, Date.now());
+    ws.gallery = null;
+
+    return send(ws, { type: 'gallery_closed', code: code }), true;
+  }
+
+  return true;
+}
 
 const ALLIES = [
   'phoenix',
@@ -670,6 +803,15 @@ function handle(ws, data) {
     return;
   }
 
+  // Gallery sessions, BEFORE anything else and before `ws.member` is consulted.
+  //
+  // They deliberately do not touch ws.member: a gallery visitor is not in a room,
+  // so every gameplay branch below keeps refusing them on its own. Read-only is
+  // therefore structural, not a list of things a guest is not allowed to do.
+  if (handleGallery(ws, data)) {
+    return;
+  }
+
   if (data.type === 'create') {
     if (ws.member) {
       return error(ws, 'Already in a room.');
@@ -1012,6 +1154,18 @@ wss.on('connection', ws => {
   });
 
   ws.on('close', () => {
+    // A gallery dies with the connection that opened it, BEFORE the room check
+    // below - a gallery visitor is never in a room, so `!m` would have returned
+    // first and left the code live for the rest of its TTL.
+    //
+    // A gallery is a hole in the front door. One whose owner has walked away
+    // should not stay open because somebody wrote the code down.
+    if (ws.gallery && ws.gallery.owner) {
+      Gallery.close(galleries, ws.gallery.code, ws, Date.now());
+    }
+
+    ws.gallery = null;
+
     const m = ws.member;
 
     if (!m) return;
