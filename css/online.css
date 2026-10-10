@@ -42,6 +42,94 @@
 
 #phoenix-menu[hidden],
 #ally-picker[hidden],
+
+/* PHOENIX victory screen */
+.phoenix-victory {
+  padding: 30px 20px;
+  text-align: center;
+  border: 2px solid #eabf55;
+  border-radius: 22px;
+  background: linear-gradient(145deg, #101b36, #293454, #101b36);
+  color: white;
+  box-shadow: 0 0 35px #eabf5540;
+  animation: victoryEntrance 0.7s ease-out;
+}
+
+.phoenix-victory h1 {
+  color: #ffd76b;
+  font-size: clamp(28px, 6vw, 48px);
+  text-shadow: 0 0 20px #ffbf4780;
+}
+
+.phoenix-victory-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  margin: 25px auto;
+}
+
+.phoenix-victory-ally {
+  width: 160px;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 20px;
+  border: 3px solid gold;
+  box-shadow: 0 0 25px #ffd70060;
+}
+
+.phoenix-victory-trophy {
+  font-size: 110px;
+  animation: trophyFloat 3s ease-in-out infinite;
+}
+
+.phoenix-champion h2 {
+  color: #ffd76b;
+  font-size: clamp(22px, 5vw, 34px);
+}
+
+.phoenix-champion p {
+  font-size: 22px;
+  font-weight: bold;
+}
+
+.phoenix-victory-standings {
+  margin-top: 28px;
+  padding: 18px;
+  border-radius: 14px;
+  background: #ffffff12;
+}
+
+.phoenix-victory-standings p {
+  padding: 9px;
+  border-bottom: 1px solid #ffffff20;
+}
+
+@keyframes victoryEntrance {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes trophyFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+@media (max-width: 480px) {
+  .phoenix-victory-ally {
+    width: 110px;
+    height: 110px;
+  }
+
+  .phoenix-victory-trophy {
+    font-size: 75px;
+  }
+
+  .phoenix-victory-display {
+    gap: 12px;
+  }
+}
+
 #online-screen[hidden] {
   display: none !important;
 }
