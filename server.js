@@ -154,10 +154,18 @@ const wss=new WebSocketServer({server:httpServer,maxPayload:8192});
 const send=(ws,obj)=>{if(ws && ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(obj));};
 const cleanName=(name)=>String(name||'Player').replace(/[<>\r\n]/g,'').trim().slice(0,22)||'Player';
 function code(){let c;do{c=crypto.randomBytes(3).toString('hex').toUpperCase();}while(rooms.has(c));return c;}
+// Steal a Turn is chosen only when its target actually takes their next turn.
+// Alvin's destruction choice, however, happens immediately.
+function dueChoice(s) {
+ const pending=Rules.pendingChoiceOptions(s);
+ if(!pending)return null;
+ if(pending.kind==='move' && s.players[s.turnInRound].id!==pending.targetId)return null;
+ return pending;
+}
 function snapshot(room,member){
  const s=room.state,players=room.members.map((m,i)=>({id:Rules.SEATS[i].id,name:m.name,ally:m.ally,connected:!!m.ws,points:s?s.players[i].points:0,handCount:s?s.hands[Rules.SEATS[i].id].length:0,hunter:s?!!s.players[i].hunter:false,eliminated:s?Rules.isOut(s.players[i],s):false}));
  const current=s?s.players[s.turnInRound]:null;
- const pending=s?Rules.pendingChoiceOptions(s):null;
+ const pending=s?dueChoice(s):null;
  const mine=Rules.SEATS[member.seat].id;
  const acting=s&&!s.over&&((pending&&pending.chooserId===mine)||(!pending&&current.id===mine));
  const moves=acting?(pending?pending.options:Rules.legalMoves(s,s.turnInRound).map(m=>({cardId:m.cardId,targetId:m.targetId}))):[];
@@ -217,7 +225,7 @@ function handle(ws,data){
  if(data.type==='move'){
   const s=room.state;if(!s||s.over)return error(ws,'No active match.');
   if(room.members.some(p=>!p.ws))return error(ws,'A player disconnected. The match is paused.');
-  const id=Rules.SEATS[m.seat].id,pending=Rules.pendingChoiceOptions(s);
+  const id=Rules.SEATS[m.seat].id,pending=dueChoice(s);
   if(pending ? pending.chooserId!==id : s.players[s.turnInRound].id!==id)return error(ws,'It is not your turn.');
   const cardId=String(data.cardId||'').slice(0,40),targetId=data.targetId===null?null:String(data.targetId||'').slice(0,40);
   const options=pending?pending.options:Rules.legalMoves(s,s.turnInRound);
