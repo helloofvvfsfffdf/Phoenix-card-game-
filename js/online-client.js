@@ -522,8 +522,21 @@
         button.onclick = () => {
           const possible = state.moves.filter(move => move.cardId === cardId);
 
-          // Nothing to aim at: play it.
-          if (!card.needsTarget) {
+          // Whether to ask for a target comes from the MOVES, not from the card.
+          //
+          // Reading it off the card is what deadlocked an Alvin burn. When Alvin
+          // resolves, the server owes ITS CASTER a choice of which card to destroy,
+          // and it sends those options as plain moves with no target - but the card
+          // being burned might itself be an aimed one (Alvin, Zombie, Knife, Trick,
+          // Curse, Steal Points). Asking for a target then offered a picker with
+          // nothing in it, and the chooser could neither answer nor back out, so the
+          // match stopped dead with the server waiting on them.
+          //
+          // A move with no targetId means there is nothing to aim at, whatever the
+          // card says on its own.
+          const aimsSomewhere = possible.some(move => move.targetId);
+
+          if (!aimsSomewhere) {
             send({ type: 'move', cardId, targetId: null });
             return;
           }
