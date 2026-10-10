@@ -183,6 +183,13 @@
     const actions = $('online-actions');
     const waiting = diceTurn();
 
+    // CLEARED FIRST, every time. The server broadcasts a fresh snapshot on every
+    // single roll, so a phase that only appends draws a new copy of its heading
+    // and its player list on top of the last one - which is how two "Rolling for
+    // turn order" headings and a stack of dice rows end up on screen at once.
+    // Every phase renderer clears here, so only the current one is ever visible.
+    actions.replaceChildren();
+
     actions.append(el(
       'h3',
       '',
@@ -221,13 +228,36 @@
     const actions = $('online-actions');
     const mine = state.draftTurn === state.seat;
 
+    // Cleared first for the same reason as the dice phases: every draft broadcast
+    // would otherwise stack another "Ally draft" heading and another set of
+    // buttons underneath the last one.
+    actions.replaceChildren();
+
     actions.append(el('h3', '', 'Ally draft'));
 
     if (mine) {
       actions.append(el('p', '', 'Choose your ally. Each ally can only be taken once.'));
 
+      // The portrait, not just the name. The draft is the one moment the player
+      // actually picks, and a wall of uppercase words is not a choice between
+      // seven animals.
+      //
+      // The path is built from the ally id the SERVER sent in availableAllies,
+      // exactly as the seat tiles do: assets/allies/<id>.jpg. That is the layout
+      // on disk (phoenix, tilly, louie, simba, elsie, ted - plus maple, which
+      // the server never offers because she is not drafted), so no filename is
+      // invented here and a name the server did not send cannot reach an <img>.
       state.availableAllies.forEach(id => {
-        const button = el('button', 'online-move', id.toUpperCase() + (titles[id] ? ' — ' + titles[id] : ''));
+        const button = el('button', 'online-draft-choice');
+
+        const picture = el('img', 'online-portrait');
+        picture.src = 'assets/allies/' + id + '.jpg';
+        picture.alt = id;
+        button.append(picture);
+
+        button.append(el('strong', '', id.toUpperCase()));
+        if (titles[id]) button.append(el('small', '', titles[id]));
+
         button.type = 'button';
         button.onclick = () => send({ type: 'chooseAlly', ally: id });
         actions.append(button);
