@@ -152,7 +152,6 @@
 
     sessionStorage.setItem('phoenix-player-name', name);
 
-    const selected = window.PhoenixAllies.selected();
 
     const ownerPassword =
       type === 'create'
@@ -168,7 +167,6 @@
       send({
         type,
         name,
-        ally: selected.id,
         code: $('online-code-input').value.trim(),
         ...(type === 'create' ? { ownerPassword } : {})
       });
@@ -191,7 +189,7 @@
       s.players.find(p => p.id === s.current);
 
     $('online-phase').textContent = !s.started
-      ? `${s.players.length} / 5 players · Minimum 2 to start`
+      ? (s.phase === 'lobby' ? `${s.players.length} / 5 players · Minimum 2 to start` : s.phase === 'turnDice' ? 'Stage 1: Roll for turn order' : s.phase === 'allyDice' ? 'Stage 2: Roll for ally draft order' : 'Stage 3: Choose your ally')
       : s.over
         ? 'Match finished'
         : `Round ${s.round} / ${s.rounds} · ${
@@ -210,8 +208,9 @@
       );
 
       const picture = el('img', 'online-portrait');
-      picture.src = 'assets/allies/' + player.ally + '.jpg';
-      picture.alt = player.ally;
+      if (player.ally) picture.src = 'assets/allies/' + player.ally + '.jpg';
+      else picture.hidden = true;
+      picture.alt = player.ally || 'Not chosen';
       seat.append(picture);
 
       const meta = el('div', 'online-seat-meta');
@@ -225,8 +224,7 @@
       meta.append(el(
         'small',
         '',
-        player.ally.toUpperCase() + ' · ' +
-          (names[player.ally] || player.ally)
+        player.ally ? player.ally.toUpperCase() + ' · ' + (names[player.ally] || player.ally) : 'Ally not chosen yet'
       ));
 
       meta.append(el(
@@ -248,7 +246,29 @@
     const actions = $('online-actions');
     actions.replaceChildren();
 
-    if (!s.started) {
+    if (s.phase === 'turnDice' || s.phase === 'allyDice') {
+      const d = s.dice;
+      const roller = s.players[d.next];
+      actions.append(el('h3', '', s.phase === 'turnDice' ? '🎲 Roll for turn order' : '🎲 Roll for ally draft order'));
+      actions.append(el('p', '', roller ? roller.name + ' rolls next.' : 'Calculating order...'));
+      if (d.next === s.seat) {
+        const roll = el('button','online-primary','ROLL DICE 🎲');
+        roll.onclick = () => {roll.disabled=true;send({type:'roll'});};
+        actions.append(roll);
+      }
+      Object.entries(d.rolls).forEach(([i,n])=>actions.append(el('p','',s.players[Number(i)].name+' rolled '+n)));
+    } else if (s.phase === 'draft') {
+      const picker = s.players[s.draftTurn];
+      actions.append(el('h3','','🐾 Ally selection'));
+      actions.append(el('p','',picker ? picker.name+' chooses next.' : 'Waiting...'));
+      if (s.draftTurn === s.seat) {
+        s.availableAllies.forEach(id=>{
+          const button=el('button','online-primary',id.toUpperCase()+' — '+names[id]);
+          button.onclick=()=>{button.disabled=true;send({type:'chooseAlly',ally:id});};
+          actions.append(button);
+        });
+      }
+    } else if (!s.started) {
       if (s.host) {
         const start = el(
           'button',
@@ -384,6 +404,11 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    // Multiplayer allies are drafted after the dice ceremony, not at the main menu.
+    $('menu-multi').addEventListener('click', event => {
+      event.stopImmediatePropagation();
+      enter();
+    }, true);
     $('online-back').onclick = leave;
     $('online-create').onclick = () => join('create');
     $('online-join').onclick = () => join('join');
