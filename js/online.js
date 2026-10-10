@@ -9,7 +9,7 @@
   const names = {
     phoenix: 'Sneaky Snatcher — Steals one random opponent card each round.',
     tilly: 'Trouble Maker — 50% chance to eliminate an opponent for one round. Protective Paws: 40% Phoenix block.',
-    ted: 'Slobbery Surprise — 50% chance to hide a random opponent’s cards for 3 rounds. Protective Howl: 60% Phoenix block.',
+    ted: 'Slobbery Surprise — 50% chance to hide a random opponent’s cards for 3 rounds. Protective Howl: 60% Phoenix block. Requires 3 or more players; at least 4 recommended for an enjoyable match.',
     louie: 'Puppet Master — 40% chance to control an opponent’s next turn. Quick Reflexes: 80% Phoenix block.',
     simba: 'Card Sabotage — Blocks one opponent card for a round. Sharp Claws: 60% Phoenix block.',
     elsie: 'Untouchable — Blocks Phoenix 100%, Louie 70%, Maple 20%.',
@@ -276,6 +276,10 @@
       actions.append(el('h3','','🐾 Ally selection'));
       actions.append(el('p','',picker ? picker.name+' chooses next.' : 'Waiting...'));
       if (s.draftTurn === s.seat) {
+        if (s.players.length < 3) {
+          const notice = el('p', '', '🔒 Ted requires at least 3 players to select. For a more enjoyable match, 4 or more players are recommended.');
+          actions.append(notice);
+        }
         s.availableAllies.forEach(id=>{
           const button=el('button','online-primary',id.toUpperCase()+' — '+names[id]);
           const portrait=el('img','online-portrait'); portrait.src='assets/allies/'+id+'.jpg'; portrait.alt=id; button.prepend(portrait);
