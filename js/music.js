@@ -39,7 +39,7 @@
   var STORAGE_KEY = 'phoenix.music.v1';
 
   /** Default volume. Loud enough to hear, quiet enough to talk over. */
-  var DEFAULT_VOLUME = 0.3;
+  var DEFAULT_VOLUME = 0.25;
 
   /**
    * The soundtrack.
@@ -223,13 +223,11 @@
  *
  * AUTOPLAY
  * --------
- * Every modern browser refuses to start audio without a user gesture, and the
- * rules differ (Chrome wants a gesture it can attribute, Safari is stricter and
- * unlocks on the first tap). So we never try to sneak a play() in on load. The
- * element is created paused and silent, and the first genuine interaction -
- * a click, a keypress, a touch - starts it. If even that is refused, play()
- * returns a rejected promise and we surface a small "enable music" control
- * rather than silently doing nothing.
+ * Browsers may refuse audible autoplay until a user gesture. We attempt normal
+ * playback on load and respect the result, showing "Click to enable music" if
+ * refused. A completed click (including a mobile tap) or keypress can retry;
+ * play() runs synchronously inside that gesture, not after an asynchronous task.
+ * No browser policy is bypassed and the player's saved preferences stay intact.
  */
 if (typeof document !== 'undefined') {
   (function () {
@@ -318,6 +316,10 @@ if (typeof document !== 'undefined') {
             notify();
           }
         });
+      } else {
+        // Older media implementations do not return a promise from play().
+        blocked = el.paused;
+        notify();
       }
     }
 
@@ -345,6 +347,8 @@ if (typeof document !== 'undefined') {
       var current = { src: el.getAttribute('src') };
 
       if (Music.needsReload(current, want)) {
+        // A pending result for the previous soundtrack must not change the UI.
+        playAttempt++;
         el.src = want.src;
         el.currentTime = 0;
       } else if (!had) {
@@ -363,11 +367,14 @@ if (typeof document !== 'undefined') {
      * what satisfies autoplay policy honestly - the music begins because the
      * player did something, not because the page tried to sneak it in.
      */
-    function onFirstGesture() {
+    function onFirstGesture(event) {
       if (unlocked) return;
+      // Let the recovery button's own click retry. Starting on pointerdown or
+      // its activation key can hide it before mobile/keyboard activation ends.
+      if (event.target === document.getElementById('music-enable-button')) return;
       unlocked = true;
 
-      document.removeEventListener('pointerdown', onFirstGesture, true);
+      document.removeEventListener('click', onFirstGesture, true);
       document.removeEventListener('keydown', onFirstGesture, true);
 
       // Only start if the player actually wants music.
@@ -385,7 +392,7 @@ if (typeof document !== 'undefined') {
       apply(true);
 
       if (!unlocked) {
-        document.addEventListener('pointerdown', onFirstGesture, true);
+        document.addEventListener('click', onFirstGesture, true);
         document.addEventListener('keydown', onFirstGesture, true);
       }
     }
@@ -425,7 +432,7 @@ if (typeof document !== 'undefined') {
        * A click on a button is exactly the kind of gesture browsers want, so this
        * is the documented way out of a blocked state.
        */
-      retry: function () { unlocked = true; play(); notify(); },
+      retry: function () { unlocked = true; apply(true); },
 
       onChange: function (fn) { onChange.push(fn); },
 
