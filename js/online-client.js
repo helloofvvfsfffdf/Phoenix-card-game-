@@ -417,7 +417,31 @@
     }
   }
 
-  function renderPlaying() {
+  /**
+ * Maple's Sweet Tooth, shown to whoever it was laid on.
+ *
+ * Called before the acting check, so a restricted player reads it while they are
+ * WAITING too - the restriction lasts three rounds and most of that is spent not
+ * being their turn. It says which cards are off the menu, because a hand that
+ * quietly stops offering Zombie reads as a bug rather than as an Ally.
+ *
+ * The server refuses those moves whatever a client sends; this is the honest
+ * version of that, not the thing enforcing it.
+ */
+function renderMapleNotice(actions) {
+  const names = state.mapleBlocked
+    .map(id => {
+      const card = window.PhoenixCards.byId(id);
+      return card ? card.name : id;
+    })
+    .join(', ');
+
+  actions.append(el('p', 'online-restricted',
+    '🍁 Maple’s Sweet Tooth: nice cards only for 3 rounds. Not for now: ' + names + '.'
+  ));
+}
+
+function renderPlaying() {
     const actions = $('online-actions');
     actions.replaceChildren();
 
@@ -492,6 +516,12 @@
       return;
     }
 
+    // A restricted player reads this whatever else is on screen - including while
+    // they are only waiting, which is most of the three rounds it lasts.
+    if (state.mapleBlocked && state.mapleBlocked.length) {
+      renderMapleNotice(actions);
+    }
+
     if (!state.acting) {
       actions.append(el('p', '', 'Waiting for your turn.'));
       return;
@@ -516,6 +546,17 @@
       cardIds.forEach(cardId => {
         const card = window.PhoenixCards.byId(cardId);
         if (!card) return;
+
+        // Maple took this one off the menu. Drawn greyed and unclickable rather
+        // than hidden, so the restriction is visible rather than mysterious - the
+        // same treatment a blocked card gets anywhere else.
+        if (state.mapleBlocked && state.mapleBlocked.indexOf(cardId) !== -1) {
+          const blockedFace = cardFace(card, false);
+          blockedFace.classList.add('online-blocked');
+          blockedFace.title = 'Maple will not let you play this - nice cards only.';
+          grid.append(blockedFace);
+          return;
+        }
 
         const button = cardFace(card, true);
 

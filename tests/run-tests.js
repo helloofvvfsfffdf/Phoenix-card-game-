@@ -14,6 +14,7 @@ var Rules = require(path.join(__dirname, '..', 'js', 'rules.js'));
 var Parser = require(path.join(__dirname, '..', 'js', 'parser.js'));
 var Prompt = require(path.join(__dirname, '..', 'js', 'prompt.js'));
 var GameApi = require(path.join(__dirname, '..', 'js', 'game.js'));
+var Maple = require(path.join(__dirname, '..', 'js', 'maple.js'));
 
 var BONUS = Rules.BONUS_POINTS;
 
@@ -4115,6 +4116,186 @@ test('no module in the project references the deleted AI decision engine', funct
   equal(fs.existsSync(path.join(dir, 'ai.js')), false, 'js/ai.js is gone');
   deepEqual(offenders, [], 'nothing references the old AI engine');
 });
+suite('Maple - Sweet Tooth');
+
+var fs = require('fs');
+
+/**
+ * A stand-in for the bits of a room that Maple.apply touches: members, a round,
+ * a player array Rules.isOut can read, a log sink and somewhere to put the
+ * restriction. Built here rather than mocked so the test exercises the same shape
+ * server.js hands it.
+ */
+function mapleRoom(playerCount, round) {
+  var players = [];
+  for (var i = 0; i < playerCount; i++) {
+    // outUntilRound is what Rules.isOut actually reads, so the fixture gives it
+    // the real field rather than an invented "eliminated" flag the engine ignores.
+    players.push({
+      id: 'p' + i, name: 'P' + i, seat: i, points: 0,
+      hands: {}, enabled: true, outUntilRound: -1
+    });
+  }
+  return {
+    members: players,
+    state: { round: round, over: false, players: players, rounds: 5 },
+    log: []
+  };
+}
+
+/**
+ * The log sink, matching how server.js really writes to a room: a module-level
+ * addLog(room, text), because a room is a plain {code, members, state, phase, log}
+ * object with no addLog of its own.
+ *
+ * It is passed to Maple.apply deliberately rather than hung on the fixture. The
+ * first version of this fixture DID give the room an addLog method, so the suite
+ * passed happily while the real server would have thrown a TypeError the first
+ * time Sweet Tooth fired, in the middle of a live match. A fixture that is more
+ * forgiving than production is worse than no fixture at all.
+ */
+function mapleLog(room, text) {
+  room.log.push(text);
+}
+
+test('Maple is independent: she is never draftable, and rolls with no owner', function () {
+  // The whole point of her being separate. She must stay out of server.js's
+  // draftable list, and her ability must not care who - or whether - anybody
+  // holds an Ally at all.
+  var server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+
+  var draftList = /const ALLIES = \[([\s\S]*?)\];/.exec(server);
+  assert(draftList, 'the draftable Ally list exists');
+  assert(!/\bmaple\b/.test(draftList[1]),
+    'and Maple is NOT in it - she cannot be drafted');
+
+  // Every roll she makes goes through the seeded helper here, with no member
+  // lookup, so she fires even on a table where nobody has anything special.
+  var room = mapleRoom(3, 1);
+  var victim = Maple.apply(room, Rules, function () { return 0.01; }, mapleLog);
+  assert(victim !== null, 'she fires with no Ally in play at all');
+  equal(room.members[victim].ally, undefined, 'and no member owns an Ally');
+});
+
+test('Sweet Tooth fires on 40%, and 40% of nothing', function () {
+  // One roll per round. Below the threshold she lands; at or above it she does not.
+  function attempt(roll) {
+    var room = mapleRoom(3, 1);
+    return Maple.apply(room, Rules, function () { return roll; }, mapleLog);
+  }
+
+  assert(attempt(0.39) !== null, '0.39 is under 40% so she fires');
+  equal(attempt(0.40), null, '0.40 is not under 40% so she does not');
+  equal(attempt(0.99), null, 'and neither does 0.99');
+
+  // The threshold has to sit where the description says, not somewhere near it.
+  equal(Maple.CHANCE_PERCENT, 40, 'the chance is exactly 40%');
+  equal(Maple.ROUNDS, 3, 'and it lasts exactly 3 rounds');
+});
+
+test('the victim may only play nice cards for three rounds', function () {
+  var room = mapleRoom(3, 2);
+  var victim = Maple.apply(room, Rules, function () { return 0.01; }, mapleLog);
+
+  var blocked = Maple.blocked(room, victim);
+  assert(blocked.length > 0, 'the victim has cards taken away');
+
+  // Aggressive and dishonest, all six, every one of them a real card id.
+  ['zombie', 'knife', 'steal', 'trick', 'alvin', 'phoenix'].forEach(function (id) {
+    assert(blocked.indexOf(id) !== -1, id + ' is off the menu');
+    assert(Maple.isNice(id) === false, id + ' is not nice');
+    assert(Rules.SEATS && Cards.byId(id), 'and ' + id + ' is a real card');
+  });
+
+  // Everything else stays playable, so a restricted player is never stuck with
+  // nothing at all - that is the failure mode that would make a match unwinnable.
+  ['bonus', 'hunter', 'judge', 'reveal', 'skipall', 'stealturn', 'curse', 'ghost']
+    .forEach(function (id) {
+      assert(Maple.isNice(id), id + ' is still nice');
+      assert(blocked.indexOf(id) === -1, id + ' is still allowed');
+    });
+
+  // Nobody else is touched.
+  room.members.forEach(function (m) {
+    if (m.seat === victim) return;
+    equal(Maple.isRestricted(room, m.seat), false, m.name + ' is unaffected');
+    deepEqual(Maple.blocked(room, m.seat), [], m.name + ' has nothing blocked');
+  });
+
+  // Three rounds: the one it fired in, and the next two.
+  equal(Maple.untilRound(2), 4, 'fired in round 2 it covers 2, 3 and 4');
+  for (var round = 2; round <= 4; round++) {
+    room.state.round = round;
+    assert(Maple.isRestricted(room, victim), 'still restricted in round ' + round);
+  }
+  room.state.round = 5;
+  equal(Maple.isRestricted(room, victim), false, 'and free again in round 5');
+});
+
+test('Sweet Tooth does not stack, and does not fire twice', function () {
+  // Same guard as applyTed: while somebody is still restricted there is no second
+  // roll, so two players can never be hit at once by one Maple.
+  var room = mapleRoom(4, 1);
+  var first = Maple.apply(room, Rules, function () { return 0.01; }, mapleLog);
+  assert(first !== null, 'she fires in round 1');
+
+  var second = Maple.apply(room, Rules, function () { return 0.01; }, mapleLog);
+  equal(second, null, 'and does not fire again in the same round');
+
+  room.state.round = 5;                       // the first window has expired
+  // A roll that both beats the 40% threshold AND lands on a different member, so
+  // the "somebody else" claim is actually tested rather than assumed.
+  var rolls = [0.01, 0.9];
+  var third = Maple.apply(room, Rules, function () { return rolls.shift(); }, mapleLog);
+  assert(third !== null, 'she is free to roll again once it lapses');
+  assert(third !== first, 'and may pick somebody else');
+});
+
+test('a finished match and an empty table stop her rolling', function () {
+  var over = mapleRoom(3, 1);
+  over.state.over = true;
+  equal(Maple.apply(over, Rules, function () { return 0.01; }, mapleLog), null,
+    'no rolling after the match is over');
+
+  // Everybody eliminated: nobody to hit, so no restriction and no log line.
+  var dead = mapleRoom(3, 1);
+  dead.state.players.forEach(function (p) { p.outUntilRound = 2; });
+  equal(Maple.apply(dead, Rules, function () { return 0.01; }, mapleLog), null,
+    'no rolling when nobody is in');
+  deepEqual(dead.log, [], 'and nothing is announced');
+});
+
+test('Sweet Tooth is announced so every player learns why their cards vanished', function () {
+  var room = mapleRoom(3, 1);
+  Maple.apply(room, Rules, function () { return 0.01; }, mapleLog);
+  equal(room.log.length, 1, 'one line is logged');
+  assert(/Maple used Sweet Tooth on/.test(room.log[0]),
+    'it names the ability: ' + room.log[0]);
+  assert(/3 rounds/.test(room.log[0]), 'and how long it lasts: ' + room.log[0]);
+});
+
+test('Maple is not given a card, and owns none - she is not on the board', function () {
+  // The distinction the whole feature rests on: an Ally is not a card. Maple must
+  // not leak into the deck accounting, a hand, or Judge.
+  var s = Rules.createGame({ seed: 3, rounds: 4 });
+
+  var everywhere = Cards.CARDS.concat([{ id: 'maple' }])
+    .map(function (c) { return c.id; })
+    .filter(function (id) { return id === 'maple'; });
+  equal(everywhere.length, 1, 'maple exists as an id');
+
+  var inDeck = s.deck.filter(function (id) { return id === 'maple'; });
+  equal(inDeck.length, 0, 'and is never dealt');
+
+  var inHands = 0;
+  Object.keys(s.hands).forEach(function (k) {
+    inHands += s.hands[k].filter(function (id) { return id === 'maple'; }).length;
+  });
+  equal(inHands, 0, 'nor held in any hand');
+
+  equal(Maple.NOT_NICE.indexOf('maple'), -1, 'and she does not block herself');
+});
+
 suite('Cards against each other');
 
 test('a Hunter holding up across a whole round changes nothing', function () {
