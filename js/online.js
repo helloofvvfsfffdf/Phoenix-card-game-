@@ -7,13 +7,27 @@
   let state = null;
 
   const names = {
-    phoenix: 'The Legendary Inferno',
-    tilly: 'The Chaos Queen',
-    maple: 'The Fearless Shadow',
-    louie: 'The Midnight Trickster',
-    simba: 'The Ginger Phantom',
-    elsie: 'The Ancient Empress'
+    phoenix: 'Sneaky Snatcher — Steals one random opponent card each round.',
+    tilly: 'Trouble Maker — 50% chance to eliminate an opponent for one round. Protective Paws: 40% Phoenix block.',
+    ted: 'Slobbery Surprise — 50% chance to hide a random opponent’s cards for 3 rounds. Protective Howl: 60% Phoenix block.',
+    louie: 'Puppet Master — 40% chance to control an opponent’s next turn. Quick Reflexes: 80% Phoenix block.',
+    simba: 'Card Sabotage — Blocks one opponent card for a round. Sharp Claws: 60% Phoenix block.',
+    elsie: 'Untouchable — Blocks Phoenix 100%, Louie 70%, Maple 20%.',
+    maple: 'Sweet Tooth — 40% chance to force nice cards for 3 rounds (independent).'
   };
+
+  function hiddenCard(index, clickable) {
+    const node = el(clickable ? 'button' : 'div', 'card');
+    if (clickable) node.type = 'button';
+    node.dataset.tone = 'neutral';
+    node.title = 'Ted has hidden this card!';
+    node.setAttribute('aria-label', 'Hidden card ' + (index + 1));
+    node.append(el('span','card-corner','?'));
+    node.append(el('span','card-art','🐶'));
+    node.append(el('span','card-name','Card ' + (index + 1)));
+    node.append(el('span','card-blurb','Hidden by Ted’s Slobbery Surprise'));
+    return node;
+  }
 
   function el(tag, cls, text) {
     const node = document.createElement(tag);
@@ -264,6 +278,7 @@
       if (s.draftTurn === s.seat) {
         s.availableAllies.forEach(id=>{
           const button=el('button','online-primary',id.toUpperCase()+' — '+names[id]);
+          const portrait=el('img','online-portrait'); portrait.src='assets/allies/'+id+'.jpg'; portrait.alt=id; button.prepend(portrait);
           button.onclick=()=>{button.disabled=true;send({type:'chooseAlly',ally:id});};
           actions.append(button);
         });
@@ -335,7 +350,7 @@
       // Playable cards
       const movesGrid = el('div', 'online-card-grid');
 
-      s.moves.forEach(move => {
+      s.moves.forEach((move, moveIndex) => {
         const card = window.PhoenixCards.byId(move.cardId);
         if (!card) return;
 
@@ -343,7 +358,7 @@
           s.players.find(p => p.id === move.targetId);
 
         const option = el('div', 'online-card-option');
-        const button = cardFace(card, true);
+        const button = s.tedObscured ? hiddenCard(s.hand.indexOf(move.cardId) >= 0 ? s.hand.indexOf(move.cardId) : moveIndex, true) : cardFace(card, true);
 
         button.onclick = () => {
           send({
@@ -381,11 +396,11 @@
         'online-card-grid online-private-cards'
       );
 
-      s.hand.forEach(id => {
+      s.hand.forEach((id, index) => {
         const card = window.PhoenixCards.byId(id);
 
         if (card) {
-          handGrid.append(cardFace(card, false));
+          handGrid.append(s.tedObscured ? hiddenCard(index, false) : cardFace(card, false));
         } else {
           handGrid.append(el('span', 'online-card', id));
         }
