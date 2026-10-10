@@ -110,16 +110,24 @@ function applyPhoenix(room) {
   addLog(room, 'Phoenix stole a random card from ' + target.name + '!');
 }
 function applyTed(room) {
-  const s=room.state, owner=room.members.find(m=>m.ally==='ted');
-  if(!owner||!s||s.over||!chance(50))return;
-  const targets=room.members.filter(m=>m!==owner&&!Rules.isOut(s.players[m.seat],s));
-  if(!targets.length)return;
-  const victim=targets[crypto.randomInt(targets.length)];
-  // Active in the current round and the following two rounds.
-  room.tedHiddenUntil=room.tedHiddenUntil||{};
-  room.tedHiddenUntil[victim.seat]=s.round+2;
-  addLog(room,'🐶 Ted used Slobbery Surprise on '+victim.name+'! Their cards are hidden for 3 rounds.');
+  const s = room.state, owner = room.members.find(m => m.ally === 'ted');
+  if (!owner || !s || s.over) return;
+
+  // Only one opponent can be affected at a time. Do not reroll or
+  // extend the effect while any opponent is still hidden.
+  room.tedHiddenUntil = room.tedHiddenUntil || {};
+  const activeVictim = Object.entries(room.tedHiddenUntil)
+    .some(([, untilRound]) => untilRound >= s.round);
+  if (activeVictim || !chance(50)) return;
+
+  const targets = room.members.filter(m => m !== owner && !Rules.isOut(s.players[m.seat], s));
+  if (!targets.length) return;
+  const victim = targets[crypto.randomInt(targets.length)];
+  // Active in this round and the following two rounds.
+  room.tedHiddenUntil = { [victim.seat]: s.round + 2 };
+  addLog(room, '🐶 Ted used Slobbery Surprise on ' + victim.name + '! Their cards are hidden for 3 rounds.');
 }
+
 function startGame(room) {
   const oldMembers = room.members.slice();
   room.members = room.turnOrder.map(i=>oldMembers[i]);
