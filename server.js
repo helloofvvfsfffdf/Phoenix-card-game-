@@ -49,7 +49,7 @@ function validOwnerPassword(input) {
   return crypto.timingSafeEqual(supplied, expected);
 }
 const rooms = new Map();
-const ALLIES = ['phoenix','tilly','louie','simba','elsie'];
+const ALLIES = ['phoenix','tilly','louie','simba','elsie','ted'];
 const rollDie = () => crypto.randomInt(1, 7);
 const chance = percent => crypto.randomInt(100) < percent;
 function addLog(room, text) { room.log.push(text); if (room.log.length > 150) room.log.splice(0, room.log.length - 150); }
@@ -102,12 +102,23 @@ function applyPhoenix(room) {
   const victims = room.members.filter(m=>m!==owner && s.hands[Rules.SEATS[m.seat].id].length && !Rules.isOut(s.players[m.seat],s));
   if (!victims.length) { addLog(room, 'Phoenix found no opponent with cards to steal.'); return; }
   const target = victims[crypto.randomInt(victims.length)];
-  const defence = {tilly:40,louie:80,simba:60,elsie:100}[target.ally] || 0;
-  if (chance(defence)) {addLog(room, target.name + "'s " + target.ally.toUpperCase() + ' blocked Phoenix’s theft!');return;}
+  const defence = {tilly:40,louie:80,simba:60,elsie:100,ted:60}[target.ally] || 0;
+  if (chance(defence)) {addLog(room, target.ally==='ted' ? '🐶 Ted howled and scared Phoenix away from ' + target.name + '!' : target.name + "'s " + target.ally.toUpperCase() + ' blocked Phoenix’s theft!');return;}
   const from = s.hands[Rules.SEATS[target.seat].id];
   const [card] = from.splice(crypto.randomInt(from.length),1);
   s.hands[Rules.SEATS[owner.seat].id].push(card);
   addLog(room, 'Phoenix stole a random card from ' + target.name + '!');
+}
+function applyTed(room) {
+  const s=room.state, owner=room.members.find(m=>m.ally==='ted');
+  if(!owner||!s||s.over||!chance(50))return;
+  const targets=room.members.filter(m=>m!==owner&&!Rules.isOut(s.players[m.seat],s));
+  if(!targets.length)return;
+  const victim=targets[crypto.randomInt(targets.length)];
+  // Active in the current round and the following two rounds.
+  room.tedHiddenUntil=room.tedHiddenUntil||{};
+  room.tedHiddenUntil[victim.seat]=s.round+2;
+  addLog(room,'🐶 Ted used Slobbery Surprise on '+victim.name+'! Their cards are hidden for 3 rounds.');
 }
 function startGame(room) {
   const oldMembers = room.members.slice();
@@ -115,9 +126,10 @@ function startGame(room) {
   room.members.forEach((m,i)=>{m.seat=i;});
   const s = Rules.createGame({rounds:room.requestedRounds,fixedOrder:true,rotateStart:false,roundStartSeat:0,seed:crypto.randomBytes(4).readUInt32BE(0)});
   s.players.forEach((p,i)=>{p.enabled=i<room.members.length;if(room.members[i])p.name=room.members[i].name;});
-  room.state=s;room.phase='playing';room.lastPhoenixRound=1;
+  room.state=s;room.phase='playing';room.lastPhoenixRound=1;room.tedHiddenUntil={};
   addLog(room, 'Match started! Turn order: '+room.members.map(m=>m.name).join(' → '));
   applyPhoenix(room);
+  applyTed(room);
 }
 
 const INSTANCE_ID = crypto.randomBytes(4).toString('hex');
@@ -141,7 +153,7 @@ function snapshot(room,member){
  const mine=Rules.SEATS[member.seat].id;
  const acting=s&&!s.over&&((pending&&pending.chooserId===mine)||(!pending&&current.id===mine));
  const moves=acting?(pending?pending.options:Rules.legalMoves(s,s.turnInRound).map(m=>({cardId:m.cardId,targetId:m.targetId}))):[];
- return {type:'state',phase:room.phase||'lobby',dice:room.dice?{next:room.dice.group[room.dice.next],rolls:room.dice.rolls,order:room.dice.order}:null,draftTurn:room.phase==='draft'?room.allyOrder[room.draftIndex]:null,availableAllies:ALLIES.filter(a=>!room.members.some(m=>m.ally===a)),code:room.code,host:member.seat===0,seat:member.seat,started:!!s,players,round:s?s.round:0,rounds:s?s.rounds:0,over:s?!!s.over:false,winner:s&&s.over&&s.winnerSeat>=0?s.players[s.winnerSeat].id:null,current:current?current.id:null,hand:s?(s.hands[mine]||[]):[],deckCount:s?s.deck.length:0,discardCount:s?s.discard.length:0,acting:!!acting,pending:pending?{kind:pending.kind,chooserId:pending.chooserId,targetId:pending.targetId}:null,moves,log:room.log.slice(-35)};
+ return {type:'state',phase:room.phase||'lobby',dice:room.dice?{next:room.dice.group[room.dice.next],rolls:room.dice.rolls,order:room.dice.order}:null,draftTurn:room.phase==='draft'?room.allyOrder[room.draftIndex]:null,availableAllies:ALLIES.filter(a=>!room.members.some(m=>m.ally===a)),code:room.code,host:member.seat===0,seat:member.seat,started:!!s,players,round:s?s.round:0,rounds:s?s.rounds:0,over:s?!!s.over:false,winner:s&&s.over&&s.winnerSeat>=0?s.players[s.winnerSeat].id:null,current:current?current.id:null,hand:s?(s.hands[mine]||[]):[],deckCount:s?s.deck.length:0,discardCount:s?s.discard.length:0,acting:!!acting,pending:pending?{kind:pending.kind,chooserId:pending.chooserId,targetId:pending.targetId}:null,moves,tedObscured:!!(s&&room.tedHiddenUntil&&room.tedHiddenUntil[member.seat]>=s.round),log:room.log.slice(-35)};
 }
 function broadcast(room){room.members.forEach(m=>send(m.ws,snapshot(room,m)));}
 function error(ws,msg){send(ws,{type:'error',message:msg});}
@@ -203,11 +215,11 @@ function handle(ws,data){
   if(!options.some(o=>o.cardId===cardId&&(o.targetId||null)===(targetId||null)))return error(ws,'That move is not legal.');
   const result=pending?Rules.resolvePendingChoice(s,cardId,targetId):Rules.playCard(s,s.turnInRound,cardId,targetId);
   if(!result.ok)return error(ws,result.error||'Move rejected.');
-  (result.events||[]).forEach(e=>addLog(room,e.text));if(s.round!==room.lastPhoenixRound && !s.over){room.lastPhoenixRound=s.round;applyPhoenix(room);}
+  (result.events||[]).forEach(e=>addLog(room,e.text));if(s.round!==room.lastPhoenixRound && !s.over){room.lastPhoenixRound=s.round;applyPhoenix(room);applyTed(room);}
   broadcast(room);return;
  }
 }
-function ally(id){return ['phoenix','tilly','maple','louie','simba','elsie'].includes(id)?id:'phoenix';}
+function ally(id){return ['phoenix','tilly','maple','louie','simba','elsie','ted'].includes(id)?id:'phoenix';}
 wss.on('connection',ws=>{
  ws.on('message',raw=>{try{handle(ws,JSON.parse(raw.toString()));}catch(e){error(ws,'Invalid request.');}});
  ws.on('close',()=>{const m=ws.member;if(!m)return;const room=m.room;m.ws=null;if(room.phase==='lobby'){room.members.splice(m.seat,1);room.members.forEach((p,i)=>p.seat=i);if(!room.members.length){rooms.delete(room.code);console.log(`[PHOENIX diagnostic] DELETE instance=${INSTANCE_ID} room=${room.code} reason=host-disconnected`);}}else{room.log.push(m.name+' disconnected. Match paused.');}broadcast(room);});
