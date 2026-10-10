@@ -321,7 +321,63 @@
           'Waiting for the host to start the match.'
         ));
       }
-    } else if (s.over) {
+    
+} else if (s.over) {
+  const winner = s.players.find(p => p.id === s.winner);
+
+  const victory = el('div', 'phoenix-victory');
+
+  victory.append(el('h1', '', '🏆 VICTORY! 🏆'));
+
+  if (winner) {
+    const champion = el('div', 'phoenix-champion');
+
+    // The real ally photo, alongside the trophy.
+    const photo = el('img', 'phoenix-victory-ally');
+    photo.src = 'assets/allies/' + winner.ally + '.jpg';
+    photo.alt = winner.ally + ' the winning ally';
+
+    const trophy = el('div', 'phoenix-victory-trophy', '🏆');
+
+    const display = el('div', 'phoenix-victory-display');
+    display.append(photo, trophy);
+    champion.append(display);
+
+    champion.append(el(
+      'h2',
+      '',
+      winner.name + ' & ' + winner.ally.toUpperCase() + ' WON!'
+    ));
+
+    champion.append(el(
+      'p',
+      '',
+      winner.points.toLocaleString() + ' POINTS'
+    ));
+
+    victory.append(champion);
+  }
+
+  const standings = el('div', 'phoenix-victory-standings');
+  standings.append(el('h3', '', 'FINAL LEADERBOARD'));
+
+  [...s.players]
+    .sort((a, b) => b.points - a.points)
+    .forEach((player, index) => {
+      const medal = ['🥇', '🥈', '🥉'][index] || '🏅';
+
+      standings.append(el(
+        'p',
+        '',
+        medal + ' ' + player.name +
+        ' & ' + (player.ally || 'No ally').toUpperCase() +
+        ' — ' + player.points.toLocaleString() + ' points'
+      ));
+    });
+
+  victory.append(standings);
+  actions.append(victory);
+
       actions.append(el('h3', '', 'Match complete!'));
 
       const winner =
