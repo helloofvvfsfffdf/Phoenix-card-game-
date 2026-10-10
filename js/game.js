@@ -46,6 +46,7 @@
     this.seed = null;
     this.order = null;
     this.log = [];
+    this.lastEvents = [];
     this.lastError = null;
   }
 
@@ -70,6 +71,7 @@
     });
     this.order = this.state.players.map(function (p) { return p.name; }).join(' -> ');
     this.log = [];
+    this.lastEvents = [];
     this.lastError = null;
     this.push('start', 'New game: ' + Rules.SEAT_COUNT + ' players, '
       + this.state.rounds + ' rounds. Turn order: ' + this.order + '. Seed '
@@ -99,6 +101,7 @@
   /** Copies engine events into the log, preserving their order. */
   Game.prototype.record = function (events) {
     if (!events) return;
+    this.lastEvents = events; // Presentation reads completed engine events, never proposed moves.
     for (var i = 0; i < events.length; i++) {
       this.push(events[i].type, events[i].text);
     }

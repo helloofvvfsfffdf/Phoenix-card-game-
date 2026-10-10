@@ -1,0 +1,69 @@
+/* Bounded non-interactive overlays, not screen flashes or game locks. */
+.cinematic {
+  position: fixed; z-index: 80; left: var(--fx-x); top: var(--fx-y);
+  width: 124px; height: 124px; margin: -62px; pointer-events: none;
+  color: var(--fx-color); isolation: isolate; animation: fx-envelope 1.4s ease-out both;
+}
+.cinematic-seal {
+  display: grid; place-items: center; width: 100%; height: 100%;
+  border: 2px solid currentColor; border-radius: 50%;
+  background: radial-gradient(ellipse, #151023ed 25%, transparent 70%);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--fx-color) 35%, transparent), inset 0 0 18px #ffffff12;
+  font-size: 56px; text-shadow: 0 0 12px currentColor; animation: fx-seal 1.2s ease-out both;
+}
+.cinematic-label {
+  position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  max-width: min(240px, 70vw); width: max-content; padding: 6px 10px;
+  border-radius: 8px; background: #11101bef; font-size: 12px;
+  font-weight: 800; text-align: center; line-height: 1.4;
+}
+.cinematic-mote {
+  position: absolute; top: 50%; left: 50%; width: 5px; height: 9px;
+  border-radius: 50%; background: currentColor;
+  transform: rotate(calc(var(--i) * 45deg)); animation: fx-mote 1.1s ease-out both;
+}
+.cinematic-slash .cinematic-seal { border-radius: 5%; animation: fx-slash .65s ease-out both; }
+.cinematic-shield .cinematic-seal { border-radius: 25% 25% 48% 48%; animation: fx-shield 1.1s ease-out both; }
+.cinematic-mist .cinematic-seal { border-style: dotted; animation: fx-mist 1.2s ease-out both; }
+.cinematic-rise .cinematic-seal { animation: fx-rise 1.2s ease-out both; }
+.cinematic-impact .cinematic-seal { border-width: 4px; animation: fx-impact .95s ease-out both; }
+.cinematic-reveal .cinematic-seal { border-style: double; border-width: 6px; animation: fx-reveal 1.1s ease-out both; }
+.cinematic-orbit .cinematic-seal { border-style: dashed; animation: fx-orbit 1.1s ease-out both; }
+.cinematic-illusion .cinematic-seal { border-radius: 15%; animation: fx-illusion 1.1s ease-out both; }
+.cinematic-rune .cinematic-seal { border-radius: 12%; animation: fx-rune 1.2s ease-out both; }
+.cinematic-flame .cinematic-seal { border-radius: 50% 50% 15% 15%; animation: fx-flame 1.2s ease-out both; }
+.cinematic-flame .cinematic-mote, .cinematic-burn .cinematic-mote { animation: fx-ember 1.2s ease-out both; }
+.cinematic-burn .cinematic-seal { width: 75%; margin: auto; border-radius: 8%; animation: fx-burn 1.2s ease-in both; }
+.cinematic-slobber .cinematic-seal { border-radius: 35% 55% 30% 50%; animation: fx-slobber 1.1s ease-out both; }
+.cinematic-slobber .cinematic-mote { width: 9px; height: 15px; }
+.cinematic-transfer { animation: fx-transfer 1.3s ease-in-out both; }
+.cinematic-transfer .cinematic-seal { width: 65%; margin: auto; border-radius: 10%; }
+@keyframes fx-envelope { 0% { opacity: 0; } 12%,65% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes fx-seal { from { transform: scale(.55); } to { transform: scale(1.05); } }
+@keyframes fx-mote { from { opacity: .8; transform: rotate(calc(var(--i) * 45deg)) translateY(-18px); } to { opacity: 0; transform: rotate(calc(var(--i) * 45deg)) translateY(-95px); } }
+@keyframes fx-slash { from { transform: rotate(-35deg) scaleX(.1); opacity: .2; } to { transform: rotate(-35deg) scaleX(1.2); opacity: 0; } }
+@keyframes fx-shield { 0% { transform: scale(.7); } 35% { transform: scale(1.08); } 100% { transform: scale(1); } }
+@keyframes fx-mist { from { transform: scale(.75) translateY(10px); opacity: .4; } to { transform: scale(1.2) translateY(-15px); opacity: .8; } }
+@keyframes fx-rise { from { transform: translateY(25px) scale(.7); } to { transform: translateY(-22px) scale(1); } }
+@keyframes fx-impact { 0% { transform: scale(1.35); } 25% { transform: scale(.9); } 100% { transform: scale(1.05); } }
+@keyframes fx-reveal { from { transform: scaleX(.25); } to { transform: scaleX(1); } }
+@keyframes fx-orbit { from { transform: rotate(-100deg) scale(.65); } to { transform: rotate(0) scale(1.05); } }
+@keyframes fx-illusion { 0% { transform: skewX(-12deg) scale(.7); } 45% { transform: skewX(8deg); } 100% { transform: skewX(0); } }
+@keyframes fx-rune { from { transform: rotate(25deg) scale(.6); } to { transform: rotate(0) scale(1); } }
+@keyframes fx-flame { from { transform: translateY(25px) scale(.65); } to { transform: translateY(-25px) scale(1.12); } }
+@keyframes fx-ember { from { opacity: .9; transform: translate(calc((var(--i) - 4) * 10px), 10px); } to { opacity: 0; transform: translate(calc((var(--i) - 4) * 18px), -110px); } }
+@keyframes fx-burn { 0%,30% { transform: scale(1); } 100% { transform: scale(.15) translateY(-40px); opacity: 0; } }
+@keyframes fx-slobber { 0% { transform: scale(.6); } 30% { transform: scale(1.1,.8); } 100% { transform: scale(1); } }
+@keyframes fx-transfer { 0% { opacity: 0; transform: translate(0,0) scale(.6); } 15% { opacity: 1; } 80% { opacity: 1; transform: translate(var(--fx-dx), var(--fx-dy)) scale(.9); } 100% { opacity: 0; transform: translate(var(--fx-dx), var(--fx-dy)) scale(.5); } }
+.cinematic-reduced, .cinematic-inert { animation: fx-envelope .6s ease-out both; }
+.cinematic-reduced .cinematic-seal, .cinematic-inert .cinematic-seal { animation: none; transform: none; }
+.cinematic-inert .cinematic-seal { opacity: .55; border-style: dotted; }
+.effects-controls { display: grid; gap: 14px; }
+.effects-controls label { font-size: 14px; line-height: 1.5; }
+.effects-controls select, #settings-effects-preview { padding: 10px; border: 1px solid #c9a558; border-radius: 8px; background: #211b30; color: #fff0cc; }
+@media (prefers-reduced-motion: reduce) {
+  .cinematic { animation: fx-envelope .6s ease-out both; }
+  .cinematic .cinematic-seal { animation: none; transform: none; }
+  .cinematic-mote { display: none; }
+  .phoenix-victory, .phoenix-victory-trophy { animation: none; }
+}

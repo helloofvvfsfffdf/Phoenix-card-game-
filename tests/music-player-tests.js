@@ -17,6 +17,11 @@ function browser(saved, mode) {
       hidden: true, textContent: '', children: [], listeners: {},
       setAttribute: function (key, value) { this[key] = value; },
       getAttribute: function (key) { return this[key] || null; },
+      removeAttribute: function (key) { delete this[key]; },
+      focus: function () { document.activeElement = this; },
+      tabIndex: 0,
+      getClientRects: function () { return [{}]; },
+      isConnected: true,
       addEventListener: function (key, fn) { this.listeners[key] = fn; },
       appendChild: function (child) { this.children.push(child); },
       replaceChildren: function () { this.children = []; }
@@ -60,13 +65,13 @@ function browser(saved, mode) {
   } };
   context.window = context;
   vm.runInNewContext(source, context);
-  function dispatch(type, target) {
-    (listeners[type] || []).slice().forEach(function (fn) { fn({ target: target }); });
+  function dispatch(type, target, details) {
+    (listeners[type] || []).slice().forEach(function (fn) { fn(Object.assign({ target: target }, details)); });
   }
   dispatch('DOMContentLoaded');
   var button = nodes['music-enable-button'];
   return {
-    api: context.PhoenixMusicPlayer, audio: audio, attempts: attempts, button: button,
+    api: context.PhoenixMusicPlayer, settings: context.PhoenixMusicSettings, nodes: nodes, context: context, document: document, audio: audio, attempts: attempts, button: button,
     dispatch: dispatch,
     click: function () { dispatch('click', button); button.listeners.click(); },
     saved: function () { return JSON.parse(data); }
@@ -74,6 +79,57 @@ function browser(saved, mode) {
 }
 
 module.exports = function (test, equal, deepEqual) {
+  test('Settings traps focus and Escape returns to the match', function () {
+    var b = browser();
+    b.document.getElementById('phoenix-game').hidden = false;
+    b.nodes['match-settings'].focus();
+    b.settings.open();
+    var first = b.nodes['settings-volume-slider'], last = b.nodes['settings-back'];
+    b.nodes.settings.querySelectorAll = function () { return [first, last]; };
+    var prevented = 0;
+    b.dispatch('keydown', last, { key: 'Tab', preventDefault: function () { prevented++; } });
+    equal(b.document.activeElement, first);
+    b.dispatch('keydown', first, { key: 'Tab', shiftKey: true, preventDefault: function () { prevented++; } });
+    equal(b.document.activeElement, last);
+    b.dispatch('keydown', last, { key: 'Escape', preventDefault: function () { prevented++; } });
+    equal(b.nodes.settings.hidden, true);
+    equal(b.document.activeElement, b.nodes['match-settings']);
+    equal(prevented, 3);
+  });
+  test('match Settings preserves visibility and playback, then restores background input and focus', function () {
+    var b = browser({ track: 'calm', volume: 0.63 });
+    b.attempts[0].resolve();
+    b.document.getElementById('phoenix-game').hidden = false;
+    b.nodes['match-settings'].focus();
+    b.settings.open();
+    equal(b.nodes['phoenix-game'].hidden, false);
+    equal(b.nodes['phoenix-game'].inert, true);
+    equal(b.api.isPlaying(), true);
+    equal(b.nodes['settings-back'].textContent, '← RETURN TO MATCH');
+    b.settings.leave();
+    equal(b.nodes['phoenix-game'].hidden, false);
+    equal(b.nodes['settings'].hidden, true);
+    equal(!!b.nodes['phoenix-game'].inert, false);
+    equal(b.document.activeElement, b.nodes['match-settings']);
+    equal(b.attempts.length, 1, 'opening settings never restarts music');
+  });
+  test('online Settings does not undo state updates or send player to the main menu', function () {
+    var b = browser();
+    b.document.getElementById('online-screen').hidden = false;
+    b.document.getElementById('phoenix-menu').hidden = true;
+    b.settings.open();
+    b.document.getElementById('online-room').textContent = 'live update';
+    b.settings.leave();
+    equal(b.nodes['online-screen'].hidden, false);
+    equal(b.nodes['phoenix-menu'].hidden, true);
+    equal(b.nodes['online-room'].textContent, 'live update');
+  });
+  test('music success cannot hide recovery while sound effects are still blocked', function () {
+    var b = browser();
+    b.context.PhoenixCinematics = { isAudioBlocked: function () { return true; } };
+    b.attempts[0].resolve();
+    equal(b.button.hidden, false);
+  });
   test('autoplay rejection shows global recovery; click retries saved track and volume', function () {
     var b = browser({ track: 'mysterious', volume: 0.63 });
     equal(b.attempts.length, 1);

@@ -200,6 +200,7 @@
       feedback('Could not connect to the multiplayer server.');
 
     socket.onclose = () => {
+      if (window.PhoenixCinematics) window.PhoenixCinematics.resetNetwork();
       state = null;
       feedback('Disconnected from the server. Reload to reconnect.');
       $('online-actions').replaceChildren();
@@ -215,9 +216,12 @@
 
       if (message.type === 'error') {
         feedback(message.message);
+      } else if (message.type === 'effect') {
+        if (window.PhoenixCinematics) window.PhoenixCinematics.show(message.effect, 'online-screen');
       } else if (message.type === 'state') {
         state = message;
         render();
+        if (window.PhoenixCinematics) window.PhoenixCinematics.consume(message.effects);
       }
     };
   }
@@ -235,6 +239,7 @@
   }
 
   function leave() {
+    if (window.PhoenixCinematics) window.PhoenixCinematics.resetNetwork();
     if (socket) socket.close();
     socket = null;
     state = null;
@@ -668,6 +673,7 @@ function renderPlaying() {
 
     state.players.forEach((player, index) => {
       const seat = el('div', 'online-seat' + (state.current === player.id ? ' online-current' : ''));
+      seat.dataset.effectSeat = index;
 
       // No ally until the draft assigns one, so the portrait waits for it. A
       // broken image icon on every seat would look like a bug rather than a
@@ -804,6 +810,11 @@ function renderPlaying() {
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    const settingsButton = el('button', 'online-primary', 'Settings');
+    settingsButton.id = 'online-settings';
+    settingsButton.type = 'button';
+    settingsButton.onclick = () => window.PhoenixMusicSettings.open();
+    $('online-back').insertAdjacentElement('beforebegin', settingsButton);
     $('online-back').onclick = leave;
     $('online-create').onclick = () => join('create');
     $('online-join').onclick = () => join('join');

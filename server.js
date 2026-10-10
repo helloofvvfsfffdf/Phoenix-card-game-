@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { WebSocketServer, WebSocket } = require('ws');
 const Rules = require('./js/rules.js');
 const Maple = require('./js/maple.js');
+const Effects = require('./js/effects.js');
 const Gallery = require('./js/gallery.js');
 
 const ROOT = __dirname;
@@ -280,12 +281,34 @@ const ALLIES = [
 const rollDie = () => crypto.randomInt(1, 7);
 const chance = percent => crypto.randomInt(100) < percent;
 
-function addLog(room, message) {
-  room.log.push(message);
+function addLog(room, message, privateSeat, privateText) {
+  room.log.push(privateText ? { publicText: message, privateSeat, privateText } : message);
 
   if (room.log.length > 150) {
     room.log.splice(0, room.log.length - 150);
   }
+}
+
+function effectJournal(room) {
+  if (!room.effects) room.effects = { stream: crypto.randomBytes(16).toString('hex'), sequence: 0, events: [] };
+  return room.effects;
+}
+
+function emitEffect(room, key, actor, target) {
+  Effects.append(effectJournal(room), Effects.publicEvent(key, actor, target));
+}
+
+function recordEvents(room, events) {
+  Effects.fromRules(events).forEach(event => Effects.append(effectJournal(room), event));
+  (events || []).forEach(event => {
+    const text = Effects.publicLog(event);
+    if (!text) return;
+    if (text !== event.text) {
+      const played = (events || []).find(e => e.type === 'card');
+      const privateSeat = event.type === 'result' && played ? played.seat : event.seat;
+      addLog(room, text, privateSeat, event.text);
+    } else addLog(room, text);
+  });
 }
 
 function beginRollStage(room, phase) {
@@ -427,6 +450,7 @@ function applyPhoenix(room) {
   }[target.ally] || 0;
 
   if (chance(defence)) {
+    emitEffect(room, 'block-' + target.ally, target.seat, target.seat);
     addLog(
       room,
       target.ally === 'ted'
@@ -447,6 +471,7 @@ function applyPhoenix(room) {
   );
 
   s.hands[Rules.SEATS[owner.seat].id].push(card);
+  emitEffect(room, 'ally-phoenix', owner.seat, target.seat);
 
   addLog(
     room,
@@ -479,6 +504,7 @@ function applyTed(room) {
   room.tedHiddenUntil = {
     [victim.seat]: s.round + 2
   };
+  emitEffect(room, 'ally-ted', owner.seat, victim.seat);
 
   addLog(
     room,
@@ -499,7 +525,8 @@ function applyTed(room) {
  * way to be tested at all, because requiring this file starts a server.
  */
 function applyMaple(room) {
-  Maple.apply(room, Rules, null, addLog);
+  const victim = Maple.apply(room, Rules, null, addLog);
+  if (victim !== null) emitEffect(room, 'ally-maple', -1, victim);
 }
 
 function startGame(room) {
@@ -761,7 +788,13 @@ function snapshot(room, member) {
     // instead of a card silently going missing.
     mapleBlocked: Maple.blocked(room, member.seat),
 
-    log: room.log.slice(-35)
+    effects: effectJournal(room),
+
+    log: room.log.slice(-35).map(entry => {
+      if (typeof entry === 'string') return entry;
+      const obscured = s && room.tedHiddenUntil && room.tedHiddenUntil[member.seat] >= s.round;
+      return entry.privateSeat === member.seat && !obscured ? entry.privateText : entry.publicText;
+    })
   };
 }
 
@@ -818,11 +851,7 @@ function skipUnplayableTurns(room) {
 
     const events = Rules.advanceTurn(s);
 
-    for (const event of events) {
-      if (event.text) {
-        addLog(room, event.text);
-      }
-    }
+    recordEvents(room, events);
 
     if (s.round !== room.lastPhoenixRound && !s.over) {
       room.lastPhoenixRound = s.round;
@@ -1130,6 +1159,8 @@ function handle(ws, data) {
     // same reason the move is checked against `options` above.
     const mapleBlocked = Maple.blocked(room, m.seat);
     if (mapleBlocked.length && mapleBlocked.indexOf(cardId) !== -1) {
+      // This rejection is private feedback, not a public claim of a card play.
+      send(ws, { type: 'effect', effect: Effects.publicEvent('maple-restriction', m.seat, m.seat) });
       return error(
         ws,
         'Maple will not let you play that - nice cards only for ' +
@@ -1158,9 +1189,7 @@ function handle(ws, data) {
       );
     }
 
-    (result.events || []).forEach(event => {
-      addLog(room, event.text);
-    });
+    recordEvents(room, result.events);
 
     if (
       s.round !== room.lastPhoenixRound &&
