@@ -213,18 +213,30 @@
    circle); only the column layout around it is new. The image itself is
    assets/allies/<id>.jpg, the same path the seat tiles use.
    -------------------------------------------------------------------------- */
+/* Draft choices sit in their own grid rather than the plain .online-card-grid,
+   because a description needs more room than a bare card face: 210px a track
+   gives roughly two or three across on a desktop and still collapses to a single
+   column on a phone. auto-fill means no media query is needed for the reflow. */
+.online-draft-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
 .online-draft-choice {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  width: 150px;
+  width: 100%;
   padding: 12px 12px 16px;
   background: #263c5e;
   color: #fff;
   border: 1px solid #6b91c2;
   border-radius: 12px;
   cursor: pointer;
+  text-align: center;
 }
 
 .online-draft-choice:hover,
@@ -240,9 +252,35 @@
 
 .online-draft-choice strong {
   letter-spacing: .5px;
+  /* Each ally's own colour, taken from the --ally-color the catalogue sets.
+     The same variable the main-menu ally picker uses. */
+  color: var(--ally-color, #fff);
 }
 
 .online-draft-choice small {
   color: #b6c7dd;
   font-size: 11px;
+}
+
+/* The description is the reason this tile is worth reading, so it gets real
+   contrast and a comfortable line height, and it wraps rather than truncating -
+   a clipped ability is worse than no ability. min-height keeps the grid tidy
+   when one ally's text is much longer than its neighbour's. */
+.online-draft-desc {
+  margin: 8px 0 0;
+  color: #dbe6f3;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: break-word;
+}
+
+/* On a phone the grid drops to one narrow column; let the text use all of it. */
+@media (max-width: 560px) {
+  .online-draft-choice {
+    padding: 12px 10px 14px;
+  }
+
+  .online-draft-desc {
+    font-size: 12.5px;
+  }
 }
