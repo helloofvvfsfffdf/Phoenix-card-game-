@@ -43,18 +43,18 @@
     prepare(!options.reduced);
     var document = root.document, config = plan(root.innerWidth, root.innerHeight, options.reduced);
     var stage = document.createElement('section'); stage.className = 'phoenix-takeover' + (options.reduced ? ' phoenix-static' : '') + (options.preview ? ' phoenix-preview' : '');
-    stage.setAttribute('role', 'region'); stage.setAttribute('aria-label', 'Phoenix card cinematic'); stage.dataset.phase = options.reduced ? 'impact' : 'summoning';
+    stage.setAttribute('role', 'region'); stage.setAttribute('aria-label', options.intro ? 'Welcome to Phoenix' : 'Phoenix card cinematic'); stage.dataset.phase = options.reduced ? 'impact' : 'summoning';
     var canvas = document.createElement('canvas'); canvas.width = config.width; canvas.height = config.height;
     canvas.setAttribute('aria-hidden', 'true'); canvas.className = 'phoenix-fire-canvas'; stage.appendChild(canvas);
     var fallback = document.createElement('div'); fallback.className = 'phoenix-static-art'; fallback.setAttribute('aria-hidden', 'true');
     var bird = document.createElement('img'); bird.src = 'assets/phoenix/phoenix-hero.svg'; bird.alt = ''; fallback.appendChild(bird); stage.appendChild(fallback);
     var title = document.createElement('div'); title.className = 'phoenix-scene-title';
-    var eyebrow = document.createElement('p'); eyebrow.textContent = 'THE LEGENDARY CARD';
+    var eyebrow = document.createElement('p'); eyebrow.textContent = options.intro ? 'WELCOME TO THE TABLE' : 'THE LEGENDARY CARD';
     var heading = document.createElement('h2'); heading.textContent = 'PHOENIX';
-    var caption = document.createElement('p'); caption.className = 'phoenix-scene-caption'; caption.textContent = options.preview ? 'CINEMATIC PREVIEW · NO GAMEPLAY CHANGES' : 'THE TABLE FALLS. THE PHOENIX RISES.';
+    var caption = document.createElement('p'); caption.className = 'phoenix-scene-caption'; caption.textContent = options.intro ? 'ONE TABLE. EVERY MOVE MATTERS.' : options.preview ? 'CINEMATIC PREVIEW · NO GAMEPLAY CHANGES' : 'THE TABLE FALLS. THE PHOENIX RISES.';
     title.appendChild(eyebrow); title.appendChild(heading); title.appendChild(caption); stage.appendChild(title);
     var status = document.createElement('p'); status.className = 'phoenix-scene-status'; status.setAttribute('role','status'); status.textContent = 'Phoenix rises.'; stage.appendChild(status);
-    var skip = document.createElement('button'); skip.type = 'button'; skip.className = 'phoenix-scene-skip'; skip.textContent = 'Return to game'; stage.appendChild(skip);
+    var skip = document.createElement('button'); skip.type = 'button'; skip.className = 'phoenix-scene-skip'; skip.textContent = options.intro ? 'Enter PHOENIX · Skip intro' : 'Return to game'; stage.appendChild(skip);
     document.body.appendChild(stage);
     var ctx = canvas.getContext ? canvas.getContext('2d', {alpha:true}) : null;
     var mask = document.createElement('canvas'); mask.width = 700; mask.height = 630;
@@ -124,7 +124,7 @@
       }
       frame=request(draw);
     } else { canvas.hidden=true; stage.dataset.media=options.reduced?'static-reduced':'static-fallback'; }
-    phaseTimer=setTimeout(function(){if(!stopped){stage.dataset.phase='impact';status.textContent=options.preview?'Phoenix cinematic preview. No game state changed.':'Phoenix unleashed. The confirmed result is on the table.';}},config.impact);
+    phaseTimer=setTimeout(function(){if(!stopped){stage.dataset.phase='impact';status.textContent=options.intro?'Welcome to Phoenix.':options.preview?'Phoenix cinematic preview. No game state changed.':'Phoenix unleashed. The confirmed result is on the table.';}},config.impact);
     timer=setTimeout(function(){stop(true);},config.duration);
     return controller;
   }

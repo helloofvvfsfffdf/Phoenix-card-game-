@@ -27,7 +27,7 @@ async function verifySequence(label,expected,exerciseTabSwitch){
   assert.strictEqual(fireworks.winner,expected.name.toUpperCase()+(expected.ally?' & '+expected.ally.toUpperCase():''));await screenshot('phoenix-integrated-'+label+'-victory.png');
   await wait(500);const moving=await evaluate(inspect);assert.notStrictEqual(fireworks.hash,moving.hash);await wait(3700);
   const end=await evaluate(inspect);assert.strictEqual(end.present,false);assert.strictEqual(end.d.sequence.length,6);assert.deepStrictEqual(end.d.sequence.map(s=>s.effect),['Boss Death',...Array(5).fill('Simple Turbulence Fireworks')]);
-  end.d.sequence.forEach((s,i)=>assert(Math.abs(s.at-[0,3.15,4.28,4.82,5.58,6.2][i])<.12));assert.strictEqual(end.d.error,null);
+  end.d.sequence.forEach((s,i)=>assert(Math.abs(s.at-[0,3.15,4.28,4.82,5.58,6.2][i])<.12,label+' launch '+i+' timing: '+JSON.stringify(end.d.sequence)));assert.strictEqual(end.d.error,null);
   assert.strictEqual(end.d.stopReason,'complete');assert(end.d.stoppedAt>=9.69);assert(end.d.visibleSeconds>=9.4,'sequence must stay visibly on screen, not jump through the timeline');
   console.log('PASS: complete actual '+label+' win, exact effects/timing, '+fireworks.winner+', moving framebuffer and cleanup');
 }

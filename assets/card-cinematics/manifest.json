@@ -1,0 +1,160 @@
+{
+  "runtime": "Effekseer 1.80.7",
+  "authoring": "Original PHOENIX procedural sprite compositions; no sample effect binaries",
+  "effects": [
+    {
+      "id": "bonus",
+      "url": "assets/card-cinematics/bonus.efk",
+      "nodes": 84,
+      "maxParticles": 84,
+      "bytes": 83216,
+      "sha256": "97cf8503327d48cb26d4ec78ad737bf301130055b207b15894a2ab122c7b20f7"
+    },
+    {
+      "id": "knife",
+      "url": "assets/card-cinematics/knife.efk",
+      "nodes": 31,
+      "maxParticles": 31,
+      "bytes": 30814,
+      "sha256": "c6f60f84f423668d27afaa7bf98d5a69be642fe4b7e21068e47888631f064cc5"
+    },
+    {
+      "id": "hunter",
+      "url": "assets/card-cinematics/hunter.efk",
+      "nodes": 162,
+      "maxParticles": 162,
+      "bytes": 160288,
+      "sha256": "792811bf1cc273dec1cf48785822f9b9deda25ead3b78f03c692b041726ddf57"
+    },
+    {
+      "id": "zombie",
+      "url": "assets/card-cinematics/zombie.efk",
+      "nodes": 137,
+      "maxParticles": 137,
+      "bytes": 135584,
+      "sha256": "9d29dd2d986e017387bf64078905a03ba415b50efbe8222ea1dec53aa1795639"
+    },
+    {
+      "id": "steal",
+      "url": "assets/card-cinematics/steal.efk",
+      "nodes": 135,
+      "maxParticles": 135,
+      "bytes": 133604,
+      "sha256": "c6f8ca5298d2ebe56356f389b46775408983d5524f66e0344a17bb6f307b9619"
+    },
+    {
+      "id": "judge",
+      "url": "assets/card-cinematics/judge.efk",
+      "nodes": 78,
+      "maxParticles": 78,
+      "bytes": 77330,
+      "sha256": "805b0d1b533f8866b2c129f39d7bc1537eec3eefdfdf0fb7467089cda69f041b"
+    },
+    {
+      "id": "reveal",
+      "url": "assets/card-cinematics/reveal.efk",
+      "nodes": 151,
+      "maxParticles": 151,
+      "bytes": 149456,
+      "sha256": "290094c99a145dd78f85077617ab4e955e817f52239a007535fda4296e0f890d"
+    },
+    {
+      "id": "skipall",
+      "url": "assets/card-cinematics/skipall.efk",
+      "nodes": 119,
+      "maxParticles": 119,
+      "bytes": 117800,
+      "sha256": "0f67f57018c8214fcffebc31cf0edc7b10c439e1b0fc6c1767b023fed9664a6c"
+    },
+    {
+      "id": "phoenix",
+      "url": "assets/card-cinematics/phoenix.efk",
+      "nodes": 486,
+      "maxParticles": 486,
+      "bytes": 480440,
+      "sha256": "665959a7ba5eaee60f4c7310f14fdcef89752620bc8f33651973af0abe5fb1cc"
+    },
+    {
+      "id": "trick",
+      "url": "assets/card-cinematics/trick.efk",
+      "nodes": 212,
+      "maxParticles": 212,
+      "bytes": 209684,
+      "sha256": "72456754d138f3f529a24a1e75332f4f747276bc85964543c451d2e65e4a22bf"
+    },
+    {
+      "id": "stealturn",
+      "url": "assets/card-cinematics/stealturn.efk",
+      "nodes": 108,
+      "maxParticles": 108,
+      "bytes": 106972,
+      "sha256": "465dd9a11b62d1102e4ac7ad5f37f1b69b5b207d202c649b5b8277ff72d97aa8"
+    },
+    {
+      "id": "curse",
+      "url": "assets/card-cinematics/curse.efk",
+      "nodes": 162,
+      "maxParticles": 162,
+      "bytes": 160284,
+      "sha256": "cbead892df5884acdc325459eca26e7016d72d7b748f923b22c202bd1c12a036"
+    },
+    {
+      "id": "ghost",
+      "url": "assets/card-cinematics/ghost.efk",
+      "nodes": 115,
+      "maxParticles": 115,
+      "bytes": 113854,
+      "sha256": "8a65fb856345957f2bfa462e66497c277100ce8af477013a1a01abc239d4ab4a"
+    },
+    {
+      "id": "alvin",
+      "url": "assets/card-cinematics/alvin.efk",
+      "nodes": 84,
+      "maxParticles": 84,
+      "bytes": 83220,
+      "sha256": "ed2a9dfff0f6198480f58df3a6d945718d72663dc0fbaa81548736dab4684cb7"
+    }
+  ],
+  "textures": [
+    {
+      "url": "assets/card-cinematics/textures/coin.png",
+      "bytes": 4242,
+      "sha256": "a16a917b1da8436b0e8608e1c44fb720bab84e75d12dcdc4a54da40eb1d62330"
+    },
+    {
+      "url": "assets/card-cinematics/textures/ember.png",
+      "bytes": 2842,
+      "sha256": "a7de475948509971c986389f4e70966f874752ba92c84e3740e31f104cd87bc2"
+    },
+    {
+      "url": "assets/card-cinematics/textures/feather.png",
+      "bytes": 6342,
+      "sha256": "d71e7dbecd0de0ddd0d0d6276dee3367ad3628ba1378d9feaedca78495036f06"
+    },
+    {
+      "url": "assets/card-cinematics/textures/ring.png",
+      "bytes": 4295,
+      "sha256": "5de7133ad7394ca35a17fc44617076885791930b6074e4acee7e21a36aa1339e"
+    },
+    {
+      "url": "assets/card-cinematics/textures/rune.png",
+      "bytes": 4233,
+      "sha256": "7a61b17a669b243ceaa93eab7b06dcc5934cd750238115e012843d9dbcb7f767"
+    },
+    {
+      "url": "assets/card-cinematics/textures/slash.png",
+      "bytes": 602,
+      "sha256": "1351c37b424d6cdc278be977ae3134d6b2baff82a9dc6c410d65f702201f19a7"
+    },
+    {
+      "url": "assets/card-cinematics/textures/smoke.png",
+      "bytes": 7974,
+      "sha256": "9824ade0f0207b370cf430679ecae0ea82dab5ccfe60d5b5b0296d93d4489ac9"
+    },
+    {
+      "url": "assets/card-cinematics/textures/star.png",
+      "bytes": 2265,
+      "sha256": "169ff2c0a6d6005016c5963d6e22a5adddf13ae8e872a5aadb35d6fe8320f642"
+    }
+  ]
+}

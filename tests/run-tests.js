@@ -559,6 +559,9 @@ require('./victory-integration-tests')(test,equal,deepEqual,assert);
 suite('Forced-choice turn regression fixes');
 require('./forced-choice-regression-tests')(test,equal,deepEqual,assert);
 
+suite('Original card cinematic preview catalogue');
+require('./card-cinematic-catalog-tests')(test,equal,deepEqual,assert);
+
 /* ===================================================================== */
 /* The deck                                                               */
 /* ===================================================================== */

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PHOENIX · Card cinematic atelier</title>
+  <link rel="stylesheet" href="css/card-effects-gallery.css">
+  <script defer src="assets/victory/vendor/gsap.min.js"></script>
+  <script defer src="assets/victory/vendor/effekseer.min.js"></script>
+  <script defer src="js/cards.js"></script>
+  <script defer src="js/card-cinematic-catalog.js"></script>
+  <script defer src="js/card-effects-gallery.js"></script>
+</head>
+<body>
+  <header class="masthead"><a class="brand" href="/">PHOENIX<span>THE CINEMATIC ATELIER</span></a><div class="edition">CARD STUDIES / 01<span>14 ORIGINAL COMPOSITIONS · VISUALS ONLY</span></div></header>
+  <main>
+    <aside class="catalog"><div class="section-label">CHOOSE YOUR MOMENT <span>01—14</span></div><nav id="card-list" aria-label="Card effects"></nav><p class="gallery-note">A fictional table. No live match, no hidden player data, no sound. These studies are not integrated into gameplay.</p></aside>
+    <section class="workspace" aria-label="Cinematic preview">
+      <div class="study-heading"><div><p id="study-number" class="section-label"></p><h1 id="study-title"></h1></div><span class="silent-badge">◌ SILENT STUDY</span></div>
+      <div id="stage" class="stage">
+        <div class="stage-grid"></div><div class="stage-glow"></div><canvas id="particles" aria-hidden="true"></canvas>
+        <div class="stage-topline"><span id="stage-card-name"></span><span>FICTIONAL DEMONSTRATION</span></div>
+        <div class="table-seat actor"><span class="seat-label">YOU / ACTOR</span><strong id="actor-score">20,000</strong><span id="actor-status">READY</span></div>
+        <div class="table-seat target"><span class="seat-label">OPPONENT / TARGET</span><strong id="target-score">30,000</strong><span id="target-status">READY</span></div>
+        <div id="hero" class="hero" aria-hidden="true"></div>
+        <div id="played-card" class="played-card"><span>PHOENIX</span><div id="card-emblem"></div><strong id="card-name"></strong><small>THE CARD IS PLAYED</small></div>
+        <div id="hand" class="demo-hand" aria-hidden="true"></div>
+        <div class="other-seats" aria-hidden="true"><span class="other-seat">OPPONENT II</span><span class="other-seat">OPPONENT III</span></div>
+        <div class="announcement"><p id="scene-kicker">THE CARD IS PLAYED</p><h2 id="scene-title"></h2><p id="scene-caption"></p></div>
+        <div id="progress" class="progress"></div>
+      </div>
+      <div class="transport"><button id="replay" class="primary" type="button">↻ Replay effect</button><button id="pause" type="button">Pause</button><button id="tour" type="button" aria-pressed="false">Play all 14</button><span id="renderer-status" role="status">Preparing renderer…</span></div>
+      <div class="options"><label>Outcome <select id="variant"></select></label><label>Rendering <select id="quality"><option value="balanced">Balanced</option><option value="high">High</option><option value="low">Low / mobile</option></select></label><label class="check"><input id="reduced" type="checkbox"> Reduced motion</label></div>
+      <div class="study-details"><div><p class="section-label">ART DIRECTION</p><p id="motif"></p><p id="budget" class="muted"></p></div><div><p class="section-label">ACTUAL CARD RULE</p><p id="card-rule"></p><p id="privacy" class="muted">All hands and scores here are invented demonstration data.</p></div></div>
+      <p id="error" role="alert"></p>
+    </section>
+  </main>
+  <footer>EFFEKSEER 1.80.7 × GSAP 3.15.0 <span>PREVIEW FIRST. PLAY NEVER STOPS.</span></footer>
+</body>
+</html>
