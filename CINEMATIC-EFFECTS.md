@@ -227,6 +227,12 @@ leaving test music audible; these are functional checks, not subjective listenin
 or physical-device validation. Test tabs and temporary servers are closed afterward.
 # Phoenix-only quality experiment
 
+The approved Effekseer winning-screen study is now integrated on
+`feat/effekseer-victory-integration`. See `VICTORY-INTEGRATION.md` for the exact
+9.7-second schedule, bundled assets, winner/ally identity, lifecycle and validation.
+This supersedes the earlier five-second CSS winner stage described below; all
+other card/ally designs remain unchanged.
+
 The `experiment/phoenix-fire-takeover` branch replaces only the legendary Phoenix
 card's small overlay with locally bundled photographed fire, original giant
 bird artwork and a 4.4-second full-screen stage. See `PHOENIX-EXPERIMENT.md` for

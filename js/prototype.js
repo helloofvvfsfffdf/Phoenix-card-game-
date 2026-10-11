@@ -27,6 +27,7 @@
     if (window.PhoenixMusicPlayer) window.PhoenixMusicPlayer.setMatchActive('local', !!game() && !!game().state && !game().state.over);
   }
   function leave() {
+    if (window.PhoenixCinematics) window.PhoenixCinematics.cleanup();
     mode = 'menu';
     document.body.classList.remove('phoenix-testing-mode');
     $('phoenix-menu').hidden = false;
@@ -132,4 +133,8 @@
     });
     leave();
   });
+  window.PhoenixLocalAllies = {forPlayer:function(id,state) {
+    var player=state && state.players.find(function(p){return p.id===id;});
+    return player && player.isHuman ? window.PhoenixAllies.selected() : state===testerState ? botAllies[id] || null : null;
+  }};
 })();

@@ -275,6 +275,11 @@
       lastEffectEvents = game.lastEvents;
       if (window.PhoenixCinematics) window.PhoenixCinematics.rules(lastEffectEvents);
     }
+    if (window.PhoenixCinematics) {
+      var winner = game.state.players[game.state.winnerSeat];
+      var ally = winner && window.PhoenixLocalAllies ? window.PhoenixLocalAllies.forPlayer(winner.id,game.state) : null;
+      window.PhoenixCinematics.localMatch(game.state,ally && ally.id);
+    }
   }
 
   /**

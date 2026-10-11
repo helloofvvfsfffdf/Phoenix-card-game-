@@ -553,6 +553,9 @@ require('./celebration-tests')(test, equal, deepEqual, assert);
 suite('Phoenix-only filmed fire experiment');
 require('./phoenix-scene-tests')(test,equal,deepEqual,assert);
 
+suite('Approved Effekseer victory integration');
+require('./victory-integration-tests')(test,equal,deepEqual,assert);
+
 /* ===================================================================== */
 /* The deck                                                               */
 /* ===================================================================== */

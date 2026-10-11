@@ -13,6 +13,7 @@
   var endings = E.endCursor(), celebration = null, previewing = false, previewSerial = 0;
   var warmup = null;
   var phoenix = null, pendingEnd = null, phoenixBuffer = null, phoenixLoad = null, phoenixContext = null;
+  var localState = null, localArmed = false, localFinished = new WeakSet();
 
   function isAudioBlocked() { return prefs.sound && prefs.volume > 0 && audioBlocked; }
   function refreshButton() {
@@ -219,8 +220,8 @@
   function finishPhoenix(runEnd) {
     var stage = phoenix; phoenix = null;
     if (stage) { stage.stop(false); stopSounds(); }
-    var kind = pendingEnd; pendingEnd = null;
-    if (runEnd && kind) celebrate(kind);
+    var result = pendingEnd; pendingEnd = null;
+    if (runEnd && result) celebrate(result.kind,result.winner);
   }
   function startPhoenix(isPreview) {
     finishPhoenix(false); clearVisuals(); stopSounds();
@@ -234,7 +235,7 @@
   function finishCelebration() {
     if (!celebration) return;
     var c = celebration, focused = document.activeElement === c.skip; celebration = null;
-    clearTimeout(c.timer); c.node.remove(); stopSounds();
+    clearTimeout(c.timer); if (c.stop) c.stop(false); else c.node.remove(); stopSounds();
     // Never steal focus on entry; if the skip control held it on dismissal,
     // restore the existing match Settings control rather than losing it.
     if (focused) {
@@ -242,12 +243,18 @@
       if (button && !document.getElementById('online-screen').hidden) button.focus();
     }
   }
-  function celebrate(kind) {
+  function celebrate(kind, winner) {
     finishCelebration(); clearVisuals(); stopSounds(); previewing = false;
     if (document.hidden) return;
     sound(kind, false);
     var mode = E.motion(prefs, media.matches);
     if (mode === 'off') return;
+    if (kind === 'victory' && window.PhoenixVictoryScene) {
+      celebration = window.PhoenixVictoryScene.start({winner:winner,reduced:mode === 'reduced',
+        restoreFocus:document.getElementById(!document.getElementById('online-screen').hidden?'online-settings':'btn-play-again'),
+        onFinish:finishCelebration});
+      return;
+    }
     var node = document.createElement('section');
     node.className = 'match-celebration celebration-' + kind + (mode === 'reduced' ? ' celebration-reduced' : '');
     node.setAttribute('role', 'region'); node.setAttribute('aria-label', 'Match result celebration');
@@ -285,7 +292,24 @@
     document.body.appendChild(node);
     celebration = { node: node, skip: skip, timer: setTimeout(finishCelebration, kind === 'victory' ? 5000 : 2400) };
   }
-  function match(snapshot) { var kind = endings.consume(snapshot); if (kind) { if (phoenix) pendingEnd = kind; else celebrate(kind); } }
+  function prepareVictory() {
+    if (window.PhoenixVictoryScene && E.motion(prefs,media.matches) === 'full') window.PhoenixVictoryScene.prepare().catch(function(){ /* Result fallback is handled by the scene. */ });
+  }
+  function result(kind,winner) { if (phoenix) pendingEnd={kind:kind,winner:winner}; else celebrate(kind,winner); }
+  function match(snapshot) {
+    if (snapshot && snapshot.started && !snapshot.over) prepareVictory();
+    var kind = endings.consume(snapshot);
+    if (kind) result(kind,(snapshot.players || []).find(function(p){return p.id === snapshot.winner;}));
+  }
+  function localMatch(state, ally) {
+    if (!state || document.getElementById('phoenix-game').hidden) return;
+    if (localState !== state) {localState=state;localArmed=!state.over;}
+    if (!state.over) {localArmed=true;prepareVictory();return;}
+    if (!localArmed || localFinished.has(state)) return;
+    localArmed=false;localFinished.add(state);
+    var winner=state.players[state.winnerSeat];
+    if (!state.tied && winner) result('victory',{name:winner.name,ally:ally});
+  }
   function stopPreview() {
     if (!previewing) return;
     previewSerial++; previewing = false; finishPhoenix(false); stopSounds(); clearVisuals();
@@ -313,7 +337,7 @@
   }
   function cleanup() { finishPhoenix(false); finishCelebration(); clearVisuals(); stopSounds(); previewSerial++; previewing = false; }
   window.PhoenixCinematics = {
-    show: show, consume: consume, match: match, preview: preview, stopPreview: stopPreview, skipCelebration: finishCelebration,
+    show: show, consume: consume, match: match, localMatch:localMatch, preview: preview, stopPreview: stopPreview, skipCelebration: finishCelebration,
     resetNetwork: function () { network.reset(); endings.reset(); cleanup(); },
     rules: function (events) { displayBatch(E.fromRules(events), 'phoenix-game'); },
     unlock: unlock, isAudioBlocked: isAudioBlocked, update: update,
@@ -352,5 +376,6 @@
     soundBuffers = Object.create(null);
     phoenixBuffer=null;phoenixLoad=null;phoenixContext=null;
     if (window.PhoenixFireScene) window.PhoenixFireScene.release();
+    if (window.PhoenixVictoryScene) window.PhoenixVictoryScene.release();
   });
 }());

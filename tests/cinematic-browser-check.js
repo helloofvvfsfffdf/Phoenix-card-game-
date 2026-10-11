@@ -109,7 +109,7 @@ async function main() {
         await new Promise(r=>setTimeout(r,500));const matchPaused=a.paused;let moves=0;
         while(!smokeStates.get(smokeHost).over&&moves++<150){const ws=smokePeers.find(w=>smokeStates.get(w).acting),s=smokeStates.get(ws),m=s.moves.find(m=>m.cardId!=='phoenix'&&!(s.mapleBlocked||[]).includes(m.cardId))||s.moves.find(m=>!(s.mapleBlocked||[]).includes(m.cardId));await action(ws,{type:'move',cardId:m.cardId,targetId:m.targetId});}
         const final=smokeStates.get(smokeHost),result=PhoenixEffects.matchResult(final),stage=PhoenixCinematics.diagnostics().celebration;window.smokeWinner=final.winner;
-        await new Promise(r=>setTimeout(r,5500));const cleaned=PhoenixCinematics.diagnostics();
+        await new Promise(r=>setTimeout(r,result==='victory'?11000:5500));const cleaned=PhoenixCinematics.diagnostics();
         // Repeated authoritative state uses the actual message handler again.
         smokeHost.onmessage({data:JSON.stringify(final)});const duplicate=PhoenixCinematics.diagnostics().celebration;
         const musicResumed=!a.paused;PhoenixOnline.leave();smokePeers.forEach(ws=>ws.close());
@@ -168,12 +168,12 @@ async function main() {
     await evaluate(`new Promise(r=>setTimeout(()=>r(true),1100))`);
     const shot = await call('Page.captureScreenshot', { format:'png' });
     const screenshot = path.join(temp, 'phoenix-victory-desktop.png');fs.writeFileSync(screenshot,Buffer.from(shot.data,'base64'));
-    const stage = await evaluate(`(()=>{const n=document.querySelector('.match-celebration');return {beams:n.querySelectorAll('.celebration-beam').length,bursts:n.querySelectorAll('.celebration-burst').length,particles:n.querySelectorAll('.celebration-particle').length,overflow:document.documentElement.scrollWidth>innerWidth,skip:!!n.querySelector('button')};})()`);
-    assert(stage.beams===6 && stage.bursts===3 && stage.particles===56 && !stage.overflow && stage.skip);
+     const stage = await evaluate(`(()=>{const n=document.querySelector('.match-celebration');return {integrated:n.classList.contains('phoenix-winning-screen'),canvas:!!n.querySelector('canvas'),overflow:document.documentElement.scrollWidth>innerWidth,skip:!!n.querySelector('button')};})()`);
+     assert(stage.integrated && stage.canvas && !stage.overflow && stage.skip);
     await evaluate(`PhoenixCinematics.skipCelebration();true`);
     await call('Emulation.setDeviceMetricsOverride',{width:375,height:812,deviceScaleFactor:1,mobile:true});
     const mobile = await evaluate(`(()=>{PhoenixCinematics.match(smokeSnapshot(false,'mobile-fixture'));PhoenixCinematics.match(smokeSnapshot(true,'mobile-fixture'));const n=document.querySelector('.match-celebration');const title=n.querySelector('h2').getBoundingClientRect();const result={overflow:document.documentElement.scrollWidth>innerWidth,particles:n.querySelectorAll('.celebration-particle').length,titleFits:title.left>=0&&title.right<=innerWidth};PhoenixCinematics.skipCelebration();PhoenixMusicSettings.open();result.choices=document.getElementById('settings-effects-choice').options.length;result.settingsOverflow=document.documentElement.scrollWidth>innerWidth;PhoenixMusicSettings.leave();return result;})()`);
-    assert(!mobile.overflow && !mobile.settingsOverflow && mobile.titleFits && mobile.particles===32);
+     assert(!mobile.overflow && !mobile.settingsOverflow && mobile.titleFits && mobile.particles===0);
     await call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
     const reduced = await evaluate(`(async()=>{await new Promise(r=>setTimeout(r,100));PhoenixCinematics.match(smokeSnapshot(false,'reduced-fixture'));PhoenixCinematics.match(smokeSnapshot(true,'reduced-fixture'));const n=document.querySelector('.match-celebration');const result={className:n.className,particles:n.querySelectorAll('.celebration-particle').length,titleAnimation:getComputedStyle(n.querySelector('h2')).animationName};PhoenixCinematics.skipCelebration();return result;})()`);
     assert(reduced.className.includes('reduced') && reduced.particles===0 && reduced.titleAnimation==='none');

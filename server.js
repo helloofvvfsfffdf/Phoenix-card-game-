@@ -586,7 +586,10 @@ const mime = {
   '.svg': 'image/svg+xml',
   '.json': 'application/json',
   '.mp3': 'audio/mpeg',
-  '.mp4': 'video/mp4'
+  '.mp4': 'video/mp4',
+  '.wasm': 'application/wasm',
+  '.efk': 'application/octet-stream',
+  '.efkefc': 'application/octet-stream'
 };
 
 const httpServer = http.createServer((req, res) => {
