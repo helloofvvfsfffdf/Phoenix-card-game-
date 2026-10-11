@@ -12,7 +12,10 @@
 <link rel="stylesheet" href="css/effects.css" />
 <link rel="stylesheet" href="css/phoenix-scene.css" />
 <link rel="stylesheet" href="css/victory-scene.css" />
+<link rel="stylesheet" href="css/defeat-scene.css" />
 <link rel="stylesheet" href="css/card-cinematic-scene.css" />
+<link rel="stylesheet" href="css/match-showcase.css" />
+<link rel="stylesheet" href="css/mode-access.css" />
 <link rel="stylesheet" href="css/allies.css" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128293;</text></svg>" />
 <title>Phoenix</title>
@@ -330,12 +333,32 @@
         <button id="settings-phoenix-cinematic" type="button">Experience Phoenix cinematic</button>
         <p class="settings-note">Phoenix-only quality experiment: a full-screen fire sequence, with no match or gameplay changes.</p>
         <p id="settings-effects-status" class="settings-status" aria-live="polite"></p>
+        <button id="settings-victory-test" type="button">Test victory visuals</button>
+        <p class="settings-note">Silent test of the actual orb/fireworks victory screen. No match, score or winner is changed.</p>
+        <button id="settings-defeat-test" type="button">Test defeat visuals</button>
+        <p class="settings-note">Silent test of the actual catastrophic-defeat screen shown when you lose. No match, score or winner is changed.</p>
+        <button id="settings-victory-report" type="button">Copy cinematic diagnostic</button>
+        <pre id="settings-victory-report-text" class="settings-status" style="white-space:pre-wrap;overflow-wrap:anywhere" hidden></pre>
       </div>
       <button class="settings-back" id="settings-back" type="button">&#8592; MAIN MENU</button>
     </div>
   </section>
 
 <button id="music-enable-button" class="music-enable-button" type="button" hidden>Click to enable music</button>
+<div class="mode-access-overlay" id="mode-access-overlay" hidden>
+  <div class="mode-access-shell" role="dialog" aria-modal="true" aria-labelledby="mode-access-title">
+    <h2 id="mode-access-title">ENTER ACCESS CODE</h2>
+    <p class="mode-access-note">Multiplayer Testing is creator-only. Enter the private access code to continue.</p>
+    <form id="mode-access-form">
+      <input id="mode-access-input" type="password" autocomplete="off" maxlength="256" placeholder="Access code" aria-label="Access code" />
+      <div class="mode-access-actions">
+        <button id="mode-access-cancel" type="button">CANCEL</button>
+        <button type="submit">UNLOCK &rarr;</button>
+      </div>
+    </form>
+    <p id="mode-access-feedback" class="mode-access-feedback" aria-live="polite"></p>
+  </div>
+</div>
 <div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
 
 <script src="js/cards.js"></script>
@@ -353,13 +376,16 @@
 <script src="js/card-cinematic-catalog.js"></script>
 <script src="js/card-cinematic-art.js"></script>
 <script src="js/card-cinematic-scene.js"></script>
+<script src="js/match-showcase.js"></script>
 <script src="js/victory-scene.js"></script>
+<script src="js/defeat-scene.js"></script>
 <script src="js/effects-client.js"></script>
 <script src="js/rules.js"></script>
 <script src="js/parser.js"></script>
 <script src="js/prompt.js"></script>
 <script src="js/game.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/mode-access.js"></script>
 <script src="js/prototype.js"></script>
 <script src="js/allies.js"></script>
 <!-- The browser half of multiplayer. This used to point at js/online.js, which

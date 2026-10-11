@@ -271,6 +271,7 @@
     renderRelay();
     renderLog();
     renderWin();
+    if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.local(game);
     if (game.lastEvents !== lastEffectEvents) {
       lastEffectEvents = game.lastEvents;
       if (window.PhoenixCinematics) window.PhoenixCinematics.rules(lastEffectEvents);

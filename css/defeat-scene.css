@@ -1,0 +1,65 @@
+/* Scoped adaptation of the approved defeat-preview.css. Same typography,
+ * colours, layout and GSAP/Effekseer-driven animation; only the standalone
+ * preview controls become a full-screen dismissal, like the victory scene. */
+.phoenix-defeat-screen { position:fixed;inset:0;z-index:106;width:100%;height:100svh;min-height:600px;overflow:hidden;isolation:isolate;display:grid;place-items:center;animation:none;background:radial-gradient(ellipse at 50% 42%,#2d1d3a,#15121e 48%,#080910 90%);color:#eee9e2;font:14px system-ui,sans-serif; }
+.phoenix-defeat-screen * { box-sizing:border-box; }
+.phoenix-defeat-screen button { font:inherit;cursor:pointer;pointer-events:auto; }
+.phoenix-defeat-screen::before { content:'';position:absolute;inset:0;z-index:6;pointer-events:none;opacity:.045;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.7' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' opacity='.8' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.phoenix-defeat-screen::after { content:'';position:absolute;inset:0;z-index:5;box-shadow:inset 0 0 120px #090912aa;pointer-events:none; }
+.phoenix-defeat-screen .pd-table-grid { position:absolute;inset:36% -25% -60%;z-index:0;opacity:.45;background-image:linear-gradient(#b69acf16 1px,transparent 1px),linear-gradient(90deg,#b69acf16 1px,transparent 1px);background-size:48px 48px;transform:perspective(550px) rotateX(58deg);transform-origin:50% 0;mask-image:linear-gradient(transparent,#0009 40%,transparent 86%); }
+.phoenix-defeat-screen .pd-ember-glow { position:absolute;left:50%;top:42%;width:min(55vw,500px);height:260px;transform:translate(-50%,-50%);background:radial-gradient(ellipse,#b281e322,transparent 70%);z-index:0;opacity:0;pointer-events:none; }
+.phoenix-defeat-screen .pd-canvas-mount,.phoenix-defeat-screen .pd-effects { position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1; }
+.phoenix-defeat-screen .pd-impact-well { position:absolute;left:50%;top:39%;width:72%;height:66%;transform:translate(-50%,-50%);background:radial-gradient(ellipse,#100813 8%,#64375177 26%,#a9699419 43%,transparent 67%);opacity:0;z-index:2;pointer-events:none; }
+.phoenix-defeat-screen .pd-shockwave { position:absolute;left:50%;top:38%;width:220px;height:220px;margin:-110px;border:2px solid #d99ae088;border-radius:50%;opacity:0;z-index:2;box-shadow:0 0 35px #be6baa44,inset 0 0 30px #cf88d222;pointer-events:none; }
+.phoenix-defeat-screen .pd-shock-two { border-width:1px;border-color:#9d7bc855; }
+.phoenix-defeat-screen .pd-impact-cut { position:absolute;left:8%;right:8%;top:39%;height:1px;background:linear-gradient(90deg,transparent,#f5bdda,#c8a1f0,transparent);box-shadow:0 0 22px #eb9ec577;opacity:0;z-index:3;pointer-events:none; }
+.phoenix-defeat-screen .pd-impact-vignette { position:absolute;inset:0;background:radial-gradient(ellipse,transparent 25%,#0009 90%);opacity:.35;z-index:3;pointer-events:none; }
+.phoenix-defeat-screen .pd-light-scar { position:absolute;top:47%;height:1px;width:39%;z-index:1;background:linear-gradient(90deg,transparent,#aa79d577);box-shadow:0 0 18px #b189e444;transform-origin:100% 50%;pointer-events:none; }
+.phoenix-defeat-screen .pd-scar-left { left:0;transform:rotate(25deg); }
+.phoenix-defeat-screen .pd-scar-right { right:0;transform:rotate(-25deg) scaleX(-1); }
+.phoenix-defeat-screen .pd-ash-field { position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:3; }
+.phoenix-defeat-screen .pd-ash-feather { position:absolute;left:50%;top:36%;width:3px;height:20px;background:linear-gradient(#e2b9ff,#8c5caf55);clip-path:polygon(50% 0,100% 65%,50% 100%,0 65%);opacity:0;filter:drop-shadow(0 0 5px #c699ff); }
+.phoenix-defeat-screen .pd-ash-feather.is-ember { width:2px;height:6px;background:#e9c3a0;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%); }
+.phoenix-defeat-screen .pd-stage-topline { position:absolute;top:25px;left:28px;right:28px;display:flex;justify-content:space-between;gap:20px;color:#a98fbf;font-size:8px;letter-spacing:2px;z-index:7;text-transform:uppercase; }
+.phoenix-defeat-screen .pd-defeat-composition { position:relative;z-index:4;width:100%;max-width:650px;margin:0 auto;text-align:center;padding:48px 16px 38px;perspective:750px; }
+.phoenix-defeat-screen .pd-fallen-crest { display:block;width:210px;height:132px;margin:0 auto 12px;filter:drop-shadow(0 0 20px #d19be633); }
+.phoenix-defeat-screen .pd-fallen-crest svg { display:block;width:100%;height:100%; }
+.phoenix-defeat-screen .pd-crest-left { transform-origin:116px 85px; }
+.phoenix-defeat-screen .pd-crest-right { transform-origin:124px 85px; }
+.phoenix-defeat-screen .pd-defeat-eyebrow { color:#ce9cb9;font-size:9px;letter-spacing:4px;margin:0 0 16px;text-transform:uppercase; }
+.phoenix-defeat-screen .pd-defeat-title { font:400 clamp(54px,10vw,126px)/1 Georgia,serif;letter-spacing:.065em;margin:0 0 22px;color:#f0e8f6;text-shadow:0 0 42px #c6a1ea22;white-space:nowrap; }
+.phoenix-defeat-screen .pd-defeat-letter { display:inline-block;background:linear-gradient(180deg,#fff5f7 10%,#e3bacc 52%,#ab80b7 100%);background-clip:text;-webkit-background-clip:text;color:transparent;will-change:transform,opacity; }
+.phoenix-defeat-screen .pd-defeat-rule { display:flex;align-items:center;justify-content:center;gap:15px;width:210px;margin:0 auto 23px; }
+.phoenix-defeat-screen .pd-defeat-rule span { height:1px;flex:1;background:linear-gradient(90deg,transparent,#b696cf80); }
+.phoenix-defeat-screen .pd-defeat-rule span:last-child { transform:rotate(180deg); }
+.phoenix-defeat-screen .pd-defeat-rule i { width:5px;height:5px;background:#b898cf;transform:rotate(45deg); }
+.phoenix-defeat-screen .pd-defeat-caption { color:#d8c9e8;font-size:19px;margin:0 0 16px; }
+.phoenix-defeat-screen .pd-defeat-caption em { color:#f2e7ff;font-style:italic; }
+.phoenix-defeat-screen .pd-defeat-winner { display:inline-flex;align-items:center;justify-content:center;gap:14px;padding:11px 20px;border:1px solid #d4b1eb33;border-radius:6px;background:#08071170;max-width:90%;margin-top:1px; }
+.phoenix-defeat-screen .pd-winner-label { font-size:8px;letter-spacing:2px;color:#a98abf;flex-shrink:0; }
+.phoenix-defeat-screen .pd-winner-name { font:400 18px Georgia,serif;color:#eddbff;overflow-wrap:anywhere;min-width:0; }
+.phoenix-defeat-screen .pd-defeat-note { margin-top:20px;font-size:8px;letter-spacing:3px;color:#b990a8;text-transform:uppercase; }
+.phoenix-defeat-screen .pd-stage-footer { position:absolute;bottom:22px;left:28px;right:28px;display:flex;justify-content:space-between;gap:20px;color:#8f7aa3;font-size:7px;letter-spacing:1px;z-index:7;text-transform:uppercase; }
+.phoenix-defeat-screen .pd-skip { position:absolute;right:28px;bottom:44px;z-index:8;border:1px solid #9f79b755;border-radius:4px;background:#24182c;color:#e4c7ee;padding:9px 14px;font-size:11px; }
+.phoenix-defeat-screen .pd-skip:hover { border-color:#d0a3e6;color:#f4e7fb; }
+.phoenix-defeat-screen button:focus-visible { outline:2px solid #d6b6ff;outline-offset:5px; }
+.phoenix-defeat-screen .pd-live-status { position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden; }
+.phoenix-defeat-screen.pd-fallback .pd-defeat-letter,.phoenix-defeat-screen.pd-fallback .pd-defeat-eyebrow,.phoenix-defeat-screen.pd-fallback .pd-defeat-caption,.phoenix-defeat-screen.pd-fallback .pd-defeat-winner,.phoenix-defeat-screen.pd-fallback .pd-defeat-note { opacity:1!important;transform:none!important; }
+.phoenix-defeat-screen.pd-fallback .pd-defeat-rule { transform:scaleX(1)!important;opacity:1!important; }
+@media(max-width:600px) {
+  .phoenix-defeat-screen { min-height:0; }
+  .phoenix-defeat-screen .pd-stage-topline { top:20px;left:18px;right:18px;font-size:7px;letter-spacing:1.2px; }
+  .phoenix-defeat-screen .pd-stage-topline .pd-topline-right { display:none; }
+  .phoenix-defeat-screen .pd-defeat-composition { padding-top:40px; }
+  .phoenix-defeat-screen .pd-fallen-crest { width:175px;height:110px;margin-bottom:14px; }
+  .phoenix-defeat-screen .pd-defeat-title { font-size:57px;letter-spacing:.04em; }
+  .phoenix-defeat-screen .pd-defeat-caption { font-size:17px; }
+  .phoenix-defeat-screen .pd-defeat-note { font-size:7px;letter-spacing:2.4px; }
+  .phoenix-defeat-screen .pd-defeat-winner { padding:10px 16px;gap:12px; }
+  .phoenix-defeat-screen .pd-winner-name { font-size:17px; }
+  .phoenix-defeat-screen .pd-light-scar { width:31%; }
+  .phoenix-defeat-screen .pd-shockwave { width:150px;height:150px;margin:-75px; }
+  .phoenix-defeat-screen .pd-stage-footer { left:18px;right:18px;font-size:6px;letter-spacing:.7px; }
+  .phoenix-defeat-screen .pd-skip { right:18px;bottom:40px;padding:11px 13px; }
+}
+@media(prefers-reduced-motion:reduce) { .phoenix-defeat-screen * { scroll-behavior:auto!important; } }

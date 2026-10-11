@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PHOENIX · Card cinematic · Dramatic v2 preview</title>
+<link rel="stylesheet" href="css/card-cinematic-dramatic.css">
+<script defer src="assets/victory/vendor/gsap.min.js"></script>
+<script defer src="assets/victory/vendor/effekseer.min.js"></script>
+<script defer src="js/cards.js"></script>
+<script defer src="js/card-cinematic-catalog.js"></script>
+<script defer src="js/card-cinematic-art.js"></script>
+<script defer src="js/particle-runtime.js"></script>
+<script defer src="js/card-cinematic-dramatic-preview.js"></script>
+</head>
+<body>
+<header class="cd-head">
+  <a class="cd-back-menu" href="index.html">&#8592;&nbsp;Back to menu</a>
+  <h1>PHOENIX · CARD CINEMATIC · DRAMATIC V2</h1>
+  <p>Step&nbsp;1 review harness &mdash; this is the same dramatic engine now playing in the live game (all five concepts always on). <strong>Left</strong> is today's approved animation, untouched. <strong>Right</strong> is the redesigned dramatic system, driven by one per-card beat map: <em>Vanish</em> (the card bursts into coloured shards with a shockwave ring and a flash frame), <em>Aurora</em> (themed bloom, rotating rays, rising embers, deepening vignette), <em>on-the-beat captions</em> (dark hold, then a snap-in at the particle peak), <em>Curtain</em> (hero pose, caption wipe, bloom collapse &mdash; still ending at the approved duration) and <em>Punch</em> (burst screen-shake). Standalone page: never loaded by the game, no match state, no audio, no network, one Effekseer context per stage. The Phoenix card is intentionally identical on both sides. The concept toggles below are for comparing each piece against the approved behaviour &mdash; the live game keeps them all enabled.</p>
+</header>
+<div class="cd-controls">
+  <label>Card <select id="cd-card"></select></label>
+  <button id="cd-play" type="button">&#8635; Replay both</button>
+  <button id="cd-tour" type="button" aria-pressed="false">Play all 14</button>
+  <label><input id="cd-reduced" type="checkbox"> Reduced motion</label>
+  <div class="cd-concepts">
+    <span class="cd-concepts-title">Dramatic system &mdash; untick any concept to fall back to today's approved behaviour for that piece.</span>
+    <label><input id="cd-c-vanish" type="checkbox" checked> Vanish burst</label>
+    <label><input id="cd-c-aurora" type="checkbox" checked> Aurora lighting</label>
+    <label><input id="cd-c-caption" type="checkbox" checked> On-the-beat caption</label>
+    <label><input id="cd-c-curtain" type="checkbox" checked> Curtain exit</label>
+    <label><input id="cd-c-punch" type="checkbox" checked> Shake &amp; flash</label>
+  </div>
+</div>
+<div class="cd-scrub">
+  <button id="cd-back" type="button" title="Step back one frame">&#8676;</button>
+  <button id="cd-pause" type="button" title="Pause / resume both sides">&#10074;&#10074;</button>
+  <button id="cd-fwd" type="button" title="Step forward one frame">&#8677;</button>
+  <input id="cd-scrub" type="range" min="0" max="5.4" step="0.01" value="0" aria-label="Scrub both timelines to the same instant">
+  <span id="cd-time">0.00s</span>
+  <label><input id="cd-spot" type="checkbox" checked> Highlight differences</label>
+  <span class="cd-hint">Scrub or step to freeze both sides on the same frame; parts that differ get an orange outline.</span>
+</div>
+<div class="cd-stages">
+  <section class="cd-stage" id="cd-original" data-side="original">
+    <h2><span>ORIGINAL</span><span>approved today</span></h2>
+    <div class="cd-mount">
+      <canvas aria-hidden="true"></canvas>
+      <div class="cd-backdrop">
+        <div class="cd-aurora"></div>
+        <div class="cd-rays"></div>
+        <div class="cd-ember"></div>
+      </div>
+      <div class="cd-halo"></div>
+      <div class="cd-dom">
+        <div class="cd-hero-wrap"><div class="cd-hero"></div></div>
+        <div class="cd-card"><span class="cd-card-brand">PHOENIX</span><span class="cd-card-icon"></span><span class="cd-card-name"></span></div>
+        <div class="cd-message"><strong></strong><small></small></div>
+        <div class="cd-shock"></div>
+        <div class="cd-shock-echo"></div>
+        <div class="cd-shards"></div>
+      </div>
+      <div class="cd-flash"></div>
+      <div class="cd-vignette"></div>
+      <div class="cd-tint"></div>
+    </div>
+  </section>
+  <section class="cd-stage" id="cd-dramatic" data-side="dramatic">
+    <h2><span>DRAMATIC V2</span><span>proposal</span></h2>
+    <div class="cd-mount">
+      <canvas aria-hidden="true"></canvas>
+      <div class="cd-backdrop">
+        <div class="cd-aurora"></div>
+        <div class="cd-rays"></div>
+        <div class="cd-ember"></div>
+      </div>
+      <div class="cd-halo"></div>
+      <div class="cd-dom">
+        <div class="cd-hero-wrap"><div class="cd-hero"></div></div>
+        <div class="cd-card"><span class="cd-card-brand">PHOENIX</span><span class="cd-card-icon"></span><span class="cd-card-name"></span></div>
+        <div class="cd-message"><strong></strong><small></small></div>
+        <div class="cd-shock"></div>
+        <div class="cd-shock-echo"></div>
+        <div class="cd-shards"></div>
+      </div>
+      <div class="cd-flash"></div>
+      <div class="cd-vignette"></div>
+      <div class="cd-tint"></div>
+    </div>
+  </section>
+</div>
+<div class="cd-delta" id="cd-delta" aria-live="polite"></div>
+<p class="cd-note" id="cd-note"></p>
+</body>
+</html>

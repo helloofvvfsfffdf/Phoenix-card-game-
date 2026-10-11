@@ -97,4 +97,10 @@ module.exports=function(test,equal,deepEqual,assert){
     equal(overlay(b),undefined);b.document.hidden=true;b.dispatch('visibilitychange');equal(b.fx.diagnostics().phoenix,null);
     b.document.hidden=false;b.dispatch('visibilitychange');assert(overlay(b));equal(child(overlay(b),'pv-winner').textContent,'JOSHUA & TED');b.advance(9700);equal(b.timers.size,0);
   });
+  test('Settings victory visual test uses the actual scene silently without changing result baselines',function(){
+    var b=runtime();assert(b.fx.testVictory());var n=overlay(b);assert(n);equal(child(n,'pv-winner').textContent,'VICTORY PREVIEW & PHOENIX');equal(b.fx.diagnostics().voices,0);
+    b.fx.stopPreview();equal(overlay(b),undefined);equal(b.timers.size,0);
+    b.fx.match(snapshot(false,null,'after-preview'));b.fx.match(snapshot(true,'human','after-preview'));assert(overlay(b));equal(child(overlay(b),'pv-winner').textContent,'JOSHUA & TED');
+    b.fx.cleanup();b.fx.update({visuals:'off'});equal(b.fx.testVictory(),false);equal(overlay(b),undefined);
+  });
 };

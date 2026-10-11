@@ -201,6 +201,7 @@
 
     socket.onclose = () => {
       if (window.PhoenixCinematics) window.PhoenixCinematics.resetNetwork('disconnect');
+      if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.reset();
       state = null;
       feedback('Disconnected from the server. Reload to reconnect.');
       $('online-actions').replaceChildren();
@@ -219,8 +220,11 @@
       } else if (message.type === 'effect') {
         if (window.PhoenixCinematics) window.PhoenixCinematics.show(message.effect, 'online-screen');
       } else if (message.type === 'state') {
+        const previous = state;
         state = message;
+        feedback('');
         render();
+        if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.observe(previous, message);
         if (window.PhoenixCinematics) window.PhoenixCinematics.consume(message.effects);
         if (window.PhoenixCinematics) window.PhoenixCinematics.match(message);
       }
@@ -241,6 +245,7 @@
 
   function leave() {
     if (window.PhoenixCinematics) window.PhoenixCinematics.resetNetwork('leave');
+    if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.reset();
     if (socket) socket.close();
     socket = null;
     state = null;
@@ -326,9 +331,9 @@
     // than hidden behind whoever's turn it happens to be.
     state.players.forEach((player, index) => {
       const value = state.dice.rolls[index];
-      const line = el('div', 'online-seat' + (index === waiting ? ' online-current' : ''));
+      const line = el('div', 'online-seat online-dice-row' + (index === waiting ? ' online-current' : ''));
       line.append(el('strong', '', player.name + (index === state.seat ? ' (you)' : '')));
-      line.append(el('span', '', value ? 'rolled ' + value : 'not rolled yet'));
+      line.append(el('span', 'online-dice-value', value ? 'rolled ' + value : 'not rolled yet'));
       actions.append(line);
     });
 
@@ -675,6 +680,7 @@ function renderPlaying() {
 
     renderHand();
     renderLog();
+    if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.decorate('online-screen');
   }
 
   function renderSeats() {
@@ -686,33 +692,27 @@ function renderPlaying() {
       const seat = el('div', 'online-seat' + (actingId === player.id ? ' online-current' : ''));
       seat.dataset.effectSeat = index;
 
-      // No ally until the draft assigns one, so the portrait waits for it. A
-      // broken image icon on every seat would look like a bug rather than a
-      // phase the game has not reached yet.
-      if (player.ally) {
-        const picture = el('img', 'online-portrait');
-        picture.src = 'assets/allies/' + player.ally + '.jpg';
-        picture.alt = player.ally;
-        seat.append(picture);
-      }
+      seat.append(el('span', 'online-player-number', String(index + 1).padStart(2, '0')));
+      if (player.eliminated) seat.classList.add('online-out');
 
       const meta = el('div', 'online-seat-meta');
       meta.append(el('strong', '', player.name + (index === state.seat ? ' (you)' : '')));
 
       const info = player.ally ? allyInfo(player.ally) : null;
 
-      meta.append(el(
-        'small',
-        '',
-        player.ally
-          ? (info ? info.name : player.ally.toUpperCase()) +
-            (info && info.title ? ' — ' + info.title : '')
-          : 'Ally not chosen yet'
-      ));
+      const allyName = info ? info.name : player.ally;
+      meta.append(el('small', 'online-ally-label', player.ally
+        ? 'Ally: ' + allyName.charAt(0).toUpperCase() + allyName.slice(1).toLowerCase()
+        : 'Ally not chosen yet'));
+      if (info && info.title) meta.append(el('small', 'online-ally-title', info.title));
+      if (info && info.desc) meta.append(el('p', 'online-ally-description', info.desc));
 
-      meta.append(el('span', '', state.started
-        ? player.points.toLocaleString() + ' points · ' + player.handCount + ' cards'
-        : player.connected ? 'Connected' : 'Disconnected'));
+      if (state.started) {
+        const score = el('span', 'online-score', player.points.toLocaleString());
+        score.dataset.player = player.id;
+        meta.append(score);
+        meta.append(el('small', 'online-hand-count', 'points · ' + player.handCount + ' cards'));
+      } else meta.append(el('span', '', player.connected ? 'Connected' : 'Disconnected'));
 
       if (state.started && player.eliminated) {
         meta.append(el('small', '', 'Eliminated this round'));

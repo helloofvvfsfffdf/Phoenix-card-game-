@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PHOENIX · Card cinematic improvements (preview)</title>
+<link rel="stylesheet" href="css/card-cinematic-improvements.css">
+<script defer src="assets/victory/vendor/gsap.min.js"></script>
+<script defer src="assets/victory/vendor/effekseer.min.js"></script>
+<script defer src="js/cards.js"></script>
+<script defer src="js/card-cinematic-catalog.js"></script>
+<script defer src="js/card-cinematic-art.js"></script>
+<script defer src="js/particle-runtime.js"></script>
+<script defer src="js/card-cinematic-improvements-preview.js"></script>
+</head>
+<body>
+<header class="ci-head">
+  <h1>PHOENIX · CARD CINEMATIC IMPROVEMENTS</h1>
+  <p>Step&nbsp;1 review harness. <strong>Left</strong> is today's approved animation; <strong>right</strong> is the proposed version with the timing, transition and halo refinements (items&nbsp;5&ndash;8). This page is standalone &mdash; it is never loaded by the game and carries no match state. The Phoenix card is intentionally left identical on both sides.</p>
+</header>
+<div class="ci-controls">
+  <label>Card <select id="ci-card"></select></label>
+  <button id="ci-play" type="button">&#8635; Replay both</button>
+  <button id="ci-tour" type="button" aria-pressed="false">Play all 14</button>
+  <label><input id="ci-reduced" type="checkbox"> Reduced motion</label>
+  <div class="ci-strength">
+    <span class="ci-strength-title">Emphasis per refinement &mdash; 0.0&times; = approved behaviour, 1.0&times; = my proposal, 2&ndash;3&times; = exaggerated. Drag any slider to rebuild both sides.</span>
+    <label>6 &middot; Handoff <input id="ci-s-handoff" type="range" min="0" max="3" step="0.1" value="1"><b id="ci-v-handoff">1.0&times;</b></label>
+    <label>5 &middot; Caption cue <input id="ci-s-caption" type="range" min="0" max="3" step="0.1" value="1"><b id="ci-v-caption">1.0&times;</b></label>
+    <label>8 &middot; Halo drift <input id="ci-s-halo" type="range" min="0" max="3" step="0.1" value="1"><b id="ci-v-halo">1.0&times;</b></label>
+    <label>7 &middot; Exit stagger <input id="ci-s-exit" type="range" min="0" max="3" step="0.1" value="1"><b id="ci-v-exit">1.0&times;</b></label>
+  </div>
+</div>
+<div class="ci-scrub">
+  <button id="ci-back" type="button" title="Step back one frame">&#8676;</button>
+  <button id="ci-pause" type="button" title="Pause / resume both sides">&#10074;&#10074;</button>
+  <button id="ci-fwd" type="button" title="Step forward one frame">&#8677;</button>
+  <input id="ci-scrub" type="range" min="0" max="5.4" step="0.01" value="0" aria-label="Scrub both timelines to the same instant">
+  <span id="ci-time">0.00s</span>
+  <label><input id="ci-spot" type="checkbox" checked> Highlight differences</label>
+  <span class="ci-hint">Scrub or step to freeze both sides on the same frame. Any part that differs gets an orange outline, and the table underneath names the exact property.</span>
+</div>
+<div class="ci-stages">
+  <section class="ci-stage" id="ci-original" data-side="original">
+    <h2><span>ORIGINAL</span><span>approved</span></h2>
+    <div class="ci-mount">
+      <canvas aria-hidden="true"></canvas>
+      <div class="ci-halo"></div>
+      <div class="ci-hero"></div>
+      <div class="ci-card"><span class="ci-card-brand">PHOENIX</span><span class="ci-card-icon"></span><span class="ci-card-name"></span></div>
+      <div class="ci-message"><strong></strong><small></small></div>
+    </div>
+  </section>
+  <section class="ci-stage" id="ci-improved" data-side="improved">
+    <h2><span>IMPROVED</span><span>items 5&ndash;8</span></h2>
+    <div class="ci-mount">
+      <canvas aria-hidden="true"></canvas>
+      <div class="ci-halo"></div>
+      <div class="ci-hero"></div>
+      <div class="ci-card"><span class="ci-card-brand">PHOENIX</span><span class="ci-card-icon"></span><span class="ci-card-name"></span></div>
+      <div class="ci-message"><strong></strong><small></small></div>
+    </div>
+  </section>
+</div>
+<div class="ci-delta" id="ci-delta" aria-live="polite"></div>
+<p class="ci-note" id="ci-note"></p>
+</body>
+</html>

@@ -39,14 +39,14 @@ async function main(){try{
   mainTarget=target.targetId;
   await call('Runtime.enable');await call('Page.enable');await call('Page.addScriptToEvaluateOnNewDocument',{source:`localStorage.setItem('phoenix.music.v1',JSON.stringify({track:'off',volume:.25}));localStorage.setItem('phoenix.effects.v1',JSON.stringify({sound:false,volume:.35,visuals:'full'}));window.gameErrors=[];addEventListener('error',e=>gameErrors.push(e.message));addEventListener('unhandledrejection',e=>gameErrors.push(String(e.reason)));`});
   await call('Page.navigate',{url:base+'/'});
-  await evaluate(`new Promise((resolve,reject)=>{let tries=0;const t=setInterval(()=>{if(window.phoenix&&window.PhoenixOnline){clearInterval(t);resolve(true);}else if(tries++>200){clearInterval(t);reject(Error('game not ready'));}},50);})`);
+  await evaluate(`new Promise((resolve,reject)=>{let tries=0;const t=setInterval(()=>{if(window.phoenix&&window.PhoenixOnline&&typeof document.getElementById('online-create').onclick==='function'){clearInterval(t);resolve(true);}else if(tries++>200){clearInterval(t);reject(Error('game not ready'));}},50);})`);
   const online=await evaluate(`(async()=>{
     const Native=WebSocket;window.winPeers=[];window.winStates=new Map();function track(ws){winPeers.push(ws);ws.addEventListener('message',e=>{const s=JSON.parse(e.data);if(s.type==='state')winStates.set(ws,s);});return ws;}
     window.WebSocket=class extends Native{constructor(...args){super(...args);track(this);window.winHost=this;}};
     const next=ws=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('snapshot timeout')),6000);function handler(e){const s=JSON.parse(e.data);if(!['state','error'].includes(s.type))return;clearTimeout(timer);ws.removeEventListener('message',handler);s.type==='error'?reject(Error(s.message)):resolve(s);}ws.addEventListener('message',handler);});
     const action=async(ws,data)=>{const waits=winPeers.map(next);ws.send(JSON.stringify(data));return Promise.all(waits);};
     window.winMatch=async()=>{
-    for(let attempt=0;attempt<7;attempt++){
+    for(let attempt=0;attempt<20;attempt++){
       winPeers=[];winStates=new Map();PhoenixOnline.enter();document.getElementById('online-name').value='Joshua';document.getElementById('online-owner-password').value=${JSON.stringify(process.env.PHOENIX_BROWSER_OWNER_PASSWORD)};document.getElementById('online-create').click();await next(winHost);
       for(const name of ['Alex','Riley']){const ws=track(new Native('ws://'+location.host));await new Promise(r=>ws.addEventListener('open',r,{once:true}));await action(ws,{type:'join',name,code:winStates.get(winHost).code});}
       await action(winHost,{type:'start',rounds:5});let guard=0;while(['turnDice','allyDice'].includes(winStates.get(winHost).phase)){if(guard++>150)throw Error('dice did not finish');await action(winPeers[winStates.get(winHost).dice.next],{type:'roll'});}
@@ -57,7 +57,7 @@ async function main(){try{
       const final=winStates.get(winHost);if(!final.over)throw Error('real match did not finish');
       if(PhoenixEffects.matchResult(final)==='victory'){window.winFinal=final;return {name:final.players.find(p=>p.id===final.winner).name,ally:final.players.find(p=>p.id===final.winner).ally,moves:guard,observers:winPeers.map(ws=>PhoenixEffects.matchResult(winStates.get(ws))),attempts:attempt+1};}
       await new Promise(r=>setTimeout(r,2500));PhoenixOnline.leave();winPeers.forEach(ws=>ws.close());
-    }throw Error('No browser-player win in seven real matches');};return winMatch();
+    }throw Error('No browser-player win in twenty real matches');};return winMatch();
   })()`);
   assert.strictEqual(online.observers.filter(k=>k==='victory').length,1);assert.strictEqual(online.observers.filter(k=>k==='defeat').length,2);await verifySequence('online-desktop',online,true);
   assert.strictEqual(await evaluate(`winHost.onmessage({data:JSON.stringify(winFinal)});PhoenixCinematics.diagnostics().celebration`),null,'repeated actual snapshot cannot replay');
@@ -79,8 +79,21 @@ async function main(){try{
   const interrupted=await evaluate(`winMatch()`);await awaitScene();await wait(300);
   await evaluate(`(()=>{const c=document.querySelector('.phoenix-winning-screen canvas'),gl=c.getContext('webgl2')||c.getContext('webgl');gl.getExtension('WEBGL_lose_context').loseContext();return true;})()`);await wait(200);
   const lost=await evaluate(inspect);assert(lost.present&&lost.d.phase==='fallback'&&lost.visible===0);assert.strictEqual(lost.winner,interrupted.name.toUpperCase()+' & '+interrupted.ally.toUpperCase());
+  assert.strictEqual(await evaluate(`PhoenixVictoryScene.prepare().then(r=>r.ready)`),true,'a lost renderer must be recreated, not reused forever');
   await evaluate(`PhoenixOnline.leave();winPeers.forEach(ws=>ws.close());true`);assert.strictEqual(await evaluate(`PhoenixCinematics.diagnostics().celebration`),null);
   console.log('PASS: graphics context loss retains correct winner/ally, static fallback and disconnect cleanup');
+  const recovered=await evaluate(`winMatch()`);await verifySequence('recovered-after-context-loss',recovered);
+  await evaluate(`PhoenixOnline.leave();winPeers.forEach(ws=>ws.close());true`);
+  const failure=await evaluate(`(async()=>{
+    PhoenixVictoryScene.release();const create=effekseer.createContext;
+    effekseer.createContext=function(...args){const context=create.apply(this,args),load=context.loadEffect;context.loadEffect=function(url,scale,done,fail){
+      if(url.includes('boss_death')){setTimeout(()=>fail('Injected temporary asset failure',url),0);return null;}return load.call(this,url,scale,done,fail);
+    };return context;};
+    try{await PhoenixVictoryScene.prepare();return null;}catch(error){return error.message;}finally{effekseer.createContext=create;}
+  })()`);assert(failure.includes('Injected temporary asset failure'));
+  assert.strictEqual(await evaluate(`PhoenixVictoryScene.prepare(true).then(r=>r.ready)`),true,'failed asset preparation must be retryable');
+  const loadRecovered=await evaluate(`winMatch()`);await verifySequence('recovered-after-asset-failure',loadRecovered);
+  await evaluate(`PhoenixOnline.leave();winPeers.forEach(ws=>ws.close());true`);
   assert.deepStrictEqual(await evaluate('gameErrors'),[]);console.log('PASS: actual three-player server win, correct name/drafted ally, opponent defeat results, repeated snapshot suppression, leave cleanup and no JS errors');
 }finally{for(const p of pending.values())clearTimeout(p.timer);if(socket){try{await call('Browser.close',{},null);}catch(e){}socket.close();}edge.kill();}}
 main().catch(e=>{console.error(e);process.exitCode=1;});

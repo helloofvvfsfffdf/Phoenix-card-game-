@@ -17,6 +17,7 @@
     {name:'Simple Turbulence Fireworks',time:6.2,x:7,y:9,scale:1.3}
   ];
   var renderer = null, preparation = null, active = null, generation = 0;
+  var preparationError = null, retryAfter = 0;
   var last = {phase:'idle',sequence:[],frames:0,error:null};
   function identity(value) {
     value = value || {};
@@ -32,14 +33,28 @@
     var lose=instance.gl.getExtension('WEBGL_lose_context');if(lose)lose.loseContext();
     instance.canvas.remove();
   }
-  function prepare() {
+  function prepare(forceRetry) {
+    // A rejected prewarm or a lost context is not a reusable renderer. Retry
+    // once on victory, or after a cooldown during play; never retry per frame.
+    if (preparation && ((preparationError && (forceRetry || Date.now() >= retryAfter)) ||
+      (renderer && renderer.settled && !renderer.ready))) {
+      generation++;
+      if (renderer) {renderer.cancelled=true;if(renderer.settled)dispose(renderer);renderer=null;}
+      preparation=null;preparationError=null;
+    }
     if (preparation) return preparation;
     var epoch = generation;
     preparation = new Promise(function (resolve,reject) {
       if (!root.effekseer || !root.document) { reject(new Error('Effekseer unavailable')); return; }
-      var timeout = setTimeout(function () { reject(new Error('Victory media loading timed out')); },10000);
-      function failed(error) { clearTimeout(timeout); reject(error instanceof Error ? error : new Error(String(error))); }
+      var finished=false,instance=null;
+      var timeout = setTimeout(function () { failed('Victory media loading timed out'); },10000);
+      function failed(error) {
+        if(finished)return;finished=true;clearTimeout(timeout);
+        if(instance){instance.cancelled=true;if(instance.settled)dispose(instance);if(renderer===instance)renderer=null;}
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
       function initialized() {
+        if(finished)return;
         if (epoch !== generation) { failed('Victory preparation cancelled'); return; }
         try {
           var canvas = root.document.createElement('canvas');
@@ -47,10 +62,10 @@
             canvas.getContext('webgl',{alpha:false,antialias:true,preserveDrawingBuffer:true});
           if (!gl) throw new Error('WebGL unavailable');
           var context = root.effekseer.createContext(); context.init(gl);
-          var instance = {canvas:canvas,gl:gl,context:context,assets:{},ready:false,settled:false,cancelled:false}; renderer = instance;
+          instance = {canvas:canvas,gl:gl,context:context,assets:{},ready:false,settled:false,cancelled:false}; renderer = instance;
           canvas.addEventListener('webglcontextlost',function (event) {
             event.preventDefault(); instance.ready=false;
-            if (active) active.fallback('Graphics context lost');
+            if (!instance.cancelled && active) active.fallback('Graphics context lost');
           });
           function load(url) { return new Promise(function (done,fail) {
             var effect = context.loadEffect(url,1,function () { instance.assets[url]=effect; done(effect); },function (reason,file) { fail(new Error(file+': '+reason)); });
@@ -58,16 +73,19 @@
           Promise.allSettled([load('assets/victory/effects/boss-death/boss_death.efk'),
             load('assets/victory/effects/fireworks/Simple_Turbulence_Fireworks.efkefc')]).then(function (effects) {
             instance.settled=true;
-            if (instance.cancelled || epoch !== generation) {dispose(instance);failed('Victory preparation cancelled');return;}
+            if (finished || instance.cancelled || epoch !== generation) {dispose(instance);failed('Victory preparation cancelled');return;}
             var failure=effects.find(function(effect){return effect.status==='rejected';});
             if(failure){failed(failure.reason);return;}
             instance.effects = {'Boss Death':effects[0].value,'Simple Turbulence Fireworks':effects[1].value};
-            instance.ready=true; clearTimeout(timeout); resolve(instance);
+            instance.ready=true;finished=true;clearTimeout(timeout);resolve(instance);
           },failed);
         } catch (error) { failed(error); }
       }
       if(root.PhoenixParticleRuntime)root.PhoenixParticleRuntime.prepare().then(initialized,failed);
       else root.effekseer.initRuntime('assets/victory/vendor/effekseer.wasm',initialized,function () { failed('Effekseer runtime initialization failed'); });
+    });
+    preparation.then(function(){if(epoch===generation)preparationError=null;},function(error){
+      if(epoch===generation){preparationError=String(error.message || error);retryAfter=Date.now()+5000;}
     });
     return preparation;
   }
@@ -81,7 +99,7 @@
       if(renderer.settled)dispose(renderer);
       renderer.canvas.remove();renderer=null;
     }
-    preparation=null;
+    preparation=null;preparationError=null;retryAfter=0;
   }
   function start(options) {
     options=options || {};
@@ -146,7 +164,7 @@
     }
     function resume() {
       if(stopped || !paused)return;paused=false;pauseDuration+=Date.now()-pausedAt;pausedAt=null;
-      if(timeline){lastTime=timeline.time();if(!reduced){root.gsap.ticker.add(render);ticking=true;}timeline.resume();}
+      if(timeline){lastTime=timeline.time();if(lastTime===0)beginOpening();if(!reduced){root.gsap.ticker.add(render);ticking=true;}timeline.resume();}
       else if(last.phase==='fallback')scheduleEnd();
     }
     function fallback(error) {
@@ -163,6 +181,10 @@
       var handle=renderer.context.play(renderer.effects[launch.name],launch.x,launch.y,0);
       if (handle) handle.setScale(launch.scale,launch.scale,launch.scale);
       last.sequence.push({effect:launch.name,at:Number(timeline.time().toFixed(3))});
+    }
+    function beginOpening() {
+      if(last.phase!=='loading')return;
+      phase('opening','THE FINAL MOMENT');status.textContent='The final moment.';spawn(LAUNCHES[0]);
     }
     function render() {
       if (stopped || !renderer || !renderer.ready) return;
@@ -186,7 +208,7 @@
       gsap.set(letters,{opacity:0,y:reduced?0:36,rotateX:reduced?0:-55,scale:reduced?1:.91});
       gsap.set(elements.rule,{scaleX:0});gsap.set(finish,{autoAlpha:0,y:reduced?0:12});gsap.set(elements['progress-fill'],{scaleX:0});gsap.set(elements.halo,{opacity:0,scale:1});gsap.set(elements.rays,{opacity:0,rotation:0});
       timeline=gsap.timeline({paused:true,onComplete:function(){stop(true,'complete');}});
-      timeline.addLabel('opening',0).call(function(){phase('opening','THE FINAL MOMENT');status.textContent='The final moment.';spawn(LAUNCHES[0]);},null,0);
+      timeline.addLabel('opening',0).call(beginOpening,null,0);
       timeline.to(opening,{opacity:1,duration:.45,ease:'power2.out'},.12).to(opening,{opacity:0,duration:.45},1.35);
       timeline.to(elements.halo,{opacity:.6,duration:.22,ease:'power1.out'},.32).to(elements.halo,{opacity:.16,duration:1.3,ease:'power2.out'},.6);
       timeline.addLabel('celebration',3.15).call(function(){if(!reduced)renderer.context.stopAll();phase('celebration','VICTORY');status.textContent=winner.name+' wins'+(winner.ally?' with '+winner.ally.toUpperCase():'')+'.';spawn(LAUNCHES[1]);},null,'celebration');
@@ -203,12 +225,18 @@
       timeline.to(finish,{autoAlpha:1,y:0,duration:.8,ease:'power2.out'},7.0);
       timeline.to(elements.halo,{opacity:.42,duration:1.4},7.7);
       timeline.to(elements['progress-fill'],{scaleX:1,duration:DURATION,ease:'none'},0);
+      // The root ticker may still be on a pre-render/pre-shader timestamp.
+      // Sync that clock while this timeline is paused, before anchoring time 0;
+      // otherwise a cold first tick can jump the opening by hundreds of ms.
+      if(!reduced && gsap.ticker.tick)gsap.ticker.tick();
       if (!reduced && !paused) {gsap.ticker.add(render);ticking=true;}
-      if(!paused)timeline.play(0);
+      // Launch the time-zero effect before playback, not on a potentially
+      // delayed first animation frame. The timeline callback is idempotent.
+      if(!paused){beginOpening();timeline.play(0);}
     }
     watchdog=setTimeout(function(){fallback('Victory initialization timed out');},10500);
     if (reduced) {try{build();}catch(error){fallback(error.message);}}
-    else prepare().then(function(instance){
+    else prepare(true).then(function(instance){
       if(stopped)return;
       if(!instance.ready){fallback('Graphics context unavailable');return;}
       try{build();}catch(error){fallback(error.message);}
@@ -218,7 +246,8 @@
   function diagnostics() {
     return {phase:last.phase,sequence:last.sequence.slice(),frames:last.frames,error:last.error,winner:last.winner,
       active:!!active,ready:!!(renderer&&renderer.ready),time:active?active.time():0,paused:active?active.paused():false,
-      stopReason:last.stopReason||null,stoppedAt:last.stoppedAt,visibleSeconds:last.visibleSeconds,endPhase:last.endPhase,hiddenAtStop:last.hiddenAtStop};
+       stopReason:last.stopReason||null,stoppedAt:last.stoppedAt,visibleSeconds:last.visibleSeconds,endPhase:last.endPhase,hiddenAtStop:last.hiddenAtStop,
+       preparationError:preparationError};
   }
   return {DURATION:DURATION,LAUNCHES:LAUNCHES,identity:identity,prepare:prepare,start:start,release:release,diagnostics:diagnostics};
 }));

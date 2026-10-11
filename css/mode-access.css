@@ -1,0 +1,102 @@
+/*
+ * Phoenix - css/mode-access.css
+ * ---------------------------------------------------------------------------
+ * Creator access-code dialog for Multiplayer Testing. The theme is borrowed
+ * from the lobby and gallery so it feels like the same game: the navy radial
+ * backdrop, .online-panel-style surface, the gold accent.
+ */
+
+.mode-access-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: radial-gradient(circle at top, #263452, #090f1c 75%);
+  color: #f7e5c0;
+  font-family: system-ui, sans-serif;
+}
+
+.mode-access-overlay[hidden] {
+  display: none !important;
+}
+
+.mode-access-shell {
+  width: 100%;
+  max-width: 460px;
+  padding: 24px;
+  border: 1px solid #75572e;
+  border-radius: 18px;
+  background: #151b2d;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+}
+
+.mode-access-shell h2 {
+  margin: 4px 0 6px;
+  color: #ffd16b;
+  font-size: clamp(20px, 5vw, 26px);
+  letter-spacing: 1px;
+}
+
+.mode-access-note {
+  margin: 0 0 14px;
+  color: #cbb78e;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mode-access-shell input[type="password"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #75572e;
+  border-radius: 10px;
+  background: #0d1424;
+  color: #f7e5c0;
+  font: inherit;
+  letter-spacing: 2px;
+}
+
+.mode-access-shell input[type="password"]:focus {
+  outline: none;
+  border-color: #ffd16b;
+}
+
+.mode-access-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.mode-access-actions button {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #75572e;
+  border-radius: 10px;
+  background: #1d2640;
+  color: #f7e5c0;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.mode-access-actions button[type="submit"] {
+  background: #d9a137;
+  border-color: #d9a137;
+  color: #1a1206;
+}
+
+.mode-access-actions button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.mode-access-feedback {
+  margin: 12px 0 0;
+  min-height: 1.2em;
+  color: #ff9d7a;
+  font-size: 13px;
+}

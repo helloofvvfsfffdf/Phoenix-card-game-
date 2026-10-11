@@ -50,8 +50,8 @@
       var seat = element('div', 'testing-seat');
       if (!state.over && state.players[state.turnInRound].id === player.id) seat.classList.add('is-current');
       var ally = botAllies[player.id] || window.PhoenixAllies.selected();
-      if (ally) { var portrait = element('img', 'testing-ally-photo'); portrait.src = ally.src; portrait.alt = ally.name; seat.appendChild(portrait); seat.appendChild(element('strong', '', ally.name)); seat.appendChild(element('small', 'testing-ally-title', ally.title)); }
-      seat.appendChild(element('span', 'testing-original-name', player.name));
+      seat.appendChild(element('strong', 'testing-original-name', player.name));
+      if (ally) { seat.appendChild(element('span', '', 'Ally: '+ally.name.charAt(0)+ally.name.slice(1).toLowerCase())); seat.appendChild(element('small', 'testing-ally-title', ally.title)); seat.appendChild(element('small', 'testing-ally-description', ally.desc)); }
       seat.appendChild(element('span', '', player.points + ' points'));
       var count = state.hands && state.hands[player.id] ? state.hands[player.id].length : 0;
       seat.appendChild(element('small', '', count + ' cards'));
@@ -77,7 +77,9 @@
       var button = element('button', 'testing-move');
       button.type = 'button';
       button.appendChild(element('strong', '', card.name));
-      button.appendChild(element('span', 'art', card.glyph || '✦'));
+      var art=element('span','art');
+      if(window.PhoenixCardCinematicArt)art.innerHTML=window.PhoenixCardCinematicArt.icon(card.id);else art.textContent=card.glyph || '✦';
+      art.setAttribute('aria-hidden','true');button.appendChild(art);
       var target = move.targetId ? window.PhoenixRules.playerById(state, move.targetId) : null;
       button.appendChild(element('small', '', target ? 'Target: ' + target.name : (card.blurb || 'Play this card')));
       button.addEventListener('click', function () {
@@ -103,12 +105,12 @@
     $('menu-test').addEventListener('click', function () { window.PhoenixModeAccess.request('test'); });
     $('back-to-menu').addEventListener('click', leave);
 
-    document.addEventListener('phoenix-ally-confirmed', function (event) { if (event.detail.mode === 'test' && window.PhoenixModeAccess.isUnlocked('test')) enter('test'); });
-    document.addEventListener('phoenix-mode-unlocked', function(event) { if(event.detail.mode==='single') enter('single'); else if(event.detail.mode==='test') window.PhoenixAllies.open('test'); });
-    // Multiplayer opens the LOBBY, not the ally picker. The ally is drafted
-    // in-match by the server after the dice, so asking for one here would ask for
-    // a choice the server throws away - which is why the picker is only used by
-    // the local tester above.
+    // Note: the legacy ally picker is NOT used anymore - not for the online
+    // lobby (allies are drafted in-match after the dice) and not for the local
+    // tester either (the human seat keeps the currently selected ally and bots
+    // draw a random one). Both single player and Multiplayer Testing go straight
+    // into their match once the access code unlocks them.
+    document.addEventListener('phoenix-mode-unlocked', function(event) { if(event.detail.mode==='single') enter('single'); else if(event.detail.mode==='test') enter('test'); });
     $('menu-multi').addEventListener('click', function () {
       window.PhoenixOnline.enter();
     });

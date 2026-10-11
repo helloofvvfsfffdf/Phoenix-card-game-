@@ -556,6 +556,9 @@ require('./phoenix-scene-tests')(test,equal,deepEqual,assert);
 suite('Approved Effekseer victory integration');
 require('./victory-integration-tests')(test,equal,deepEqual,assert);
 
+suite('Approved Effekseer defeat integration');
+require('./defeat-integration-tests')(test,equal,deepEqual,assert);
+
 suite('Forced-choice turn regression fixes');
 require('./forced-choice-regression-tests')(test,equal,deepEqual,assert);
 
@@ -564,6 +567,9 @@ require('./card-cinematic-catalog-tests')(test,equal,deepEqual,assert);
 
 suite('Approved card cinematics in gameplay');
 require('./card-cinematic-integration-tests')(test,equal,deepEqual,assert);
+
+suite('Showcase-style match UI and confirmed dice');
+require('./match-showcase-tests')(test,equal,deepEqual,assert);
 
 /* ===================================================================== */
 /* The deck                                                               */

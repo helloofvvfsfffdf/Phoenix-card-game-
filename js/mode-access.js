@@ -1,6 +1,9 @@
 (function(){'use strict';
 let pending=null;const unlocked=new Set();const $=id=>document.getElementById(id);
-function request(mode){if(!['single','test'].includes(mode))return;if(unlocked.has(mode)){document.dispatchEvent(new CustomEvent('phoenix-mode-unlocked',{detail:{mode}}));return;}pending=mode;$('mode-access-overlay').hidden=false;$('mode-access-feedback').textContent='';$('mode-access-input').value='';$('mode-access-input').focus();}
+// Only Multiplayer Testing ('test') is wired to the access-code gate in this
+// build. Single Player is deliberately left alone: its menu button keeps its
+// current behaviour, so requests for 'single' are not acted on here either.
+function request(mode){if(mode!=='test')return;if(unlocked.has(mode)){document.dispatchEvent(new CustomEvent('phoenix-mode-unlocked',{detail:{mode}}));return;}pending=mode;$('mode-access-overlay').hidden=false;$('mode-access-feedback').textContent='';$('mode-access-input').value='';$('mode-access-input').focus();}
 function cancel(){pending=null;$('mode-access-overlay').hidden=true;$('mode-access-input').value='';}
 document.addEventListener('DOMContentLoaded',()=>{
  $('mode-access-cancel').onclick=cancel;

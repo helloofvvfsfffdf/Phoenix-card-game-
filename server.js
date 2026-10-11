@@ -68,6 +68,54 @@ const authCleanup = setInterval(() => {
 
 authCleanup.unref();
 
+/**
+ * Multiplayer Testing is gated by the same private access code the server was
+ * started with (PHOENIX_MODE_ACCESS_CODE). Single Player is deliberately left
+ * alone: its menu button keeps its current behaviour and is not part of this
+ * gate, so nothing here accepts or rejects a single-player mode.
+ *
+ * The code is never logged, and the comparison goes through SHA-256 digests
+ * and timingSafeEqual exactly like the owner password. A small per-IP budget
+ * keeps brute-forcing finite without sharing the owner-password limiter.
+ */
+const ACCESS_CODE_WINDOW_MS = 15 * 60 * 1000;
+const ACCESS_CODE_MAX_FAILURES = 10;
+const accessCodeFails = new Map();
+
+function accessCodeRecord(ip, now) {
+  let record = accessCodeFails.get(ip);
+  if (!record) record = { failures: [] };
+  record.failures = record.failures.filter(t => now - t < ACCESS_CODE_WINDOW_MS);
+  accessCodeFails.set(ip, record);
+  return record;
+}
+
+function validAccessCode(input) {
+  if (typeof input !== 'string' || input.length > 256) {
+    return false;
+  }
+  const supplied = crypto
+    .createHash('sha256')
+    .update(input)
+    .digest();
+  const expected = crypto
+    .createHash('sha256')
+    .update(MODE_ACCESS_CODE)
+    .digest();
+  return crypto.timingSafeEqual(supplied, expected);
+}
+
+const accessCodeCleanup = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of accessCodeFails) {
+    if (record.failures.every(t => now - t >= ACCESS_CODE_WINDOW_MS)) {
+      accessCodeFails.delete(ip);
+    }
+  }
+}, 60 * 60 * 1000);
+
+accessCodeCleanup.unref();
+
 function validOwnerPassword(input) {
   if (typeof input !== 'string' || input.length > 256) {
     return false;
@@ -377,6 +425,10 @@ function diceRoll(room, member) {
   if (d.group[d.next] !== idx) return false;
 
   const value = rollDie();
+  // Public presentation record survives tie-group resets and phase changes.
+  // It never drives dice ordering; d.rolls remains the sole rules input.
+  room.diceSerial = (room.diceSerial || 0) + 1;
+  room.lastDiceRoll = { id: room.diceSerial, phase: room.phase, seat: idx, value };
   d.rolls[idx] = value;
   d.next++;
 
@@ -604,6 +656,41 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
 
+  // Access-code check for the creator-only Multiplayer Testing entry. This is
+  // the only JSON API route; everything else below is static file serving.
+  if (req.method === 'POST' && pathname === '/api/mode-access') {
+    let body = '';
+    req.on('data', chunk => {
+      if (body.length < 4096) body += chunk;
+    });
+    req.on('end', () => {
+      let code = null;
+      try { code = JSON.parse(body || '{}').code; } catch (e) { /* not JSON */ }
+      const now = Date.now();
+      const ip = (req.socket.remoteAddress || '').replace(/^::ffff:/, '') || 'unknown';
+      const record = accessCodeRecord(ip, now);
+      const respond = payload => {
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'X-Content-Type-Options': 'nosniff'
+        });
+        res.end(JSON.stringify(payload));
+      };
+      if (record.failures.length >= ACCESS_CODE_MAX_FAILURES) {
+        respond({ ok: false, message: 'Too many attempts. Try again later.' });
+        return;
+      }
+      if (validAccessCode(code)) {
+        accessCodeFails.delete(ip);
+        respond({ ok: true });
+        return;
+      }
+      record.failures.push(now);
+      respond({ ok: false, message: 'That code is not recognised.' });
+    });
+    return;
+  }
+
   const file = path.resolve(
     ROOT,
     '.' + (pathname === '/' ? '/index.html' : pathname)
@@ -731,7 +818,8 @@ function snapshot(room, member) {
       ? {
           next: room.dice.group[room.dice.next],
           rolls: room.dice.rolls,
-          order: room.dice.order
+          order: room.dice.order,
+          lastRoll: room.lastDiceRoll || null
         }
       : null,
 

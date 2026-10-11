@@ -1,0 +1,47 @@
+/* Standalone comparison page for proposed card-cinematic refinements (items 5-8).
+   Not loaded by the game; carries no game state, audio or network. */
+:root{color-scheme:dark;--ink:#eee9e2;--muted:#91929e;--line:#ffffff14;--panel:#10111a;font-family:Arial,Helvetica,sans-serif;background:#0b0c12;color:var(--ink)}
+*{box-sizing:border-box}body{margin:0}
+.ci-head{padding:20px 28px;border-bottom:1px solid var(--line)}
+.ci-head h1{font:600 18px Georgia,serif;letter-spacing:4px;margin:0 0 6px}
+.ci-head p{margin:0;color:var(--muted);font-size:12px;line-height:1.7;max-width:1100px}
+.ci-controls{display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:14px 28px;border-bottom:1px solid var(--line)}
+.ci-controls select,.ci-controls button{font:inherit;border:1px solid #ffffff24;background:#1c1d27;color:var(--ink);border-radius:6px;padding:9px 12px}
+.ci-controls button{cursor:pointer}.ci-controls button:hover{border-color:#ff873d}
+.ci-strength{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center;padding:12px 28px;border-bottom:1px solid var(--line);background:#10121c}
+.ci-strength-title{flex-basis:100%;color:var(--muted);font-size:11px;letter-spacing:.4px;line-height:1.6}
+.ci-strength label{display:flex;gap:8px;align-items:center;font-size:12px;color:#d8d5df}
+.ci-strength input[type=range]{width:150px;accent-color:#ff873d}
+.ci-strength b{font-variant-numeric:tabular-nums;color:#ff873d;min-width:36px;text-align:right}
+.ci-scrub{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:12px 28px;border-bottom:1px solid var(--line);background:#0e0f17}
+.ci-scrub button{font:inherit;border:1px solid #ffffff24;background:#1c1d27;color:var(--ink);border-radius:6px;padding:7px 11px;cursor:pointer;min-width:46px}
+.ci-scrub button:hover{border-color:#ff873d}
+.ci-scrub input[type=range]{flex:1;min-width:220px;accent-color:#ff873d}
+.ci-scrub #ci-time{font-variant-numeric:tabular-nums;color:#f3ede2;min-width:64px;text-align:right}
+.ci-hint{color:var(--muted);font-size:11px;line-height:1.5;flex-basis:100%}
+.ci-delta{margin:0 28px 8px;border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden}
+.ci-delta table{width:100%;border-collapse:collapse;font-size:12px}
+.ci-delta th,.ci-delta td{padding:7px 12px;text-align:left;border-bottom:1px solid #ffffff0d;color:#c9c7d2;font-variant-numeric:tabular-nums}
+.ci-delta th{color:var(--muted);font-weight:600;font-size:10px;letter-spacing:1px;text-transform:uppercase}
+.ci-delta tr:last-child td{border-bottom:0}
+.ci-delta tr.ci-row-diff td{background:#ff873d14;color:#f7efe6}
+.ci-delta .ci-empty{padding:12px;color:var(--muted);font-size:12px}
+.ci-stages{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:18px 28px}
+.ci-stage{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel)}
+.ci-stage h2{font:600 11px Arial,Helvetica,sans-serif;letter-spacing:2px;color:var(--muted);margin:0 0 10px;display:flex;justify-content:space-between;gap:10px}
+.ci-stage[data-side="improved"] h2 span:last-child{color:#ff873d}
+.ci-mount{position:relative;height:400px;overflow:hidden;border-radius:8px;background:radial-gradient(ellipse at 50% 42%,#1b1d2b,#0b0c12 70%);contain:layout paint}
+.ci-mount canvas{position:absolute;inset:0;width:100%;height:100%}
+.ci-mount .ci-diff{outline:2px solid #ff873d;outline-offset:3px;border-radius:8px;box-shadow:0 0 0 5px #ff873d22}
+.ci-halo{position:absolute;inset:15%;background:radial-gradient(ellipse,color-mix(in srgb,var(--ci-color) 12%,transparent),transparent 68%);opacity:0;will-change:transform}
+.ci-hero{position:absolute;left:50%;top:50%;width:115px;height:115px;transform:translate(-50%,-50%);color:var(--ci-color);filter:drop-shadow(0 0 15px color-mix(in srgb,var(--ci-color) 35%,transparent))}
+.ci-hero svg,.ci-card-icon svg{width:100%;height:100%}
+.ci-card{position:absolute;left:50%;top:50%;width:104px;height:148px;transform:translate(-50%,-50%);border:1px solid var(--ci-color);border-radius:9px;background:linear-gradient(145deg,#242535f5,#0c0f1af5);box-shadow:0 12px 35px #0005;display:flex;align-items:center;justify-content:space-around;flex-direction:column;padding:12px;text-align:center;color:var(--ci-color)}
+.ci-card-brand{font:9px Georgia,serif;letter-spacing:2px;color:#ebdfcc}.ci-card-icon{width:56px;height:56px}.ci-card-name{font:14px Georgia,serif;color:#f3ede2}
+.ci-message{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);border:1px solid color-mix(in srgb,var(--ci-color) 40%,transparent);border-radius:8px;padding:10px 18px;background:#0c101ce8;text-align:center;opacity:0;box-shadow:0 8px 24px #0004}
+.ci-message strong{display:block;font:18px Georgia,serif;letter-spacing:1px;color:#f3ede2}
+.ci-message small{display:block;font:9px Arial,Helvetica,sans-serif;letter-spacing:.7px;line-height:1.6;margin-top:5px;color:#d6d3dd}
+.ci-note{padding:2px 28px 26px;color:var(--muted);font-size:12px;line-height:1.7;min-height:22px}
+.ci-stage.ci-reduced .ci-mount{background:#0b0c12}
+@media(max-width:1040px){.ci-stages{grid-template-columns:1fr}}
+@media(max-width:600px){.ci-mount{height:340px}.ci-hero{width:95px;height:95px}}
