@@ -1,0 +1,4 @@
+# Preserve approved runtime/effect bytes and their manifest hashes on every OS.
+assets/victory/vendor/*.js -text
+assets/victory/vendor/*.wasm -text
+assets/victory/effects/** -text

@@ -1,0 +1,14 @@
+'use strict';
+const fs=require('fs'),path=require('path'),crypto=require('crypto'),Cards=require('../js/cards'),Catalog=require('../js/card-cinematic-catalog');
+module.exports=function(test,equal,deepEqual,assert){
+  const manifest=require('../assets/card-cinematics/manifest.json'),root=path.resolve(__dirname,'..');
+  test('the preview covers exactly every real PHOENIX card, including the earned legendary card',function(){deepEqual(Object.keys(Catalog).sort(),Cards.ids().sort());deepEqual(manifest.effects.map(e=>e.id).sort(),Cards.ids().sort());});
+  test('each card has its own bounded original Effekseer binary and editable project',function(){
+    equal(new Set(manifest.effects.map(e=>e.sha256)).size,Cards.ids().length);
+    manifest.effects.forEach(e=>{assert(e.maxParticles>0&&e.maxParticles<=512);assert(Catalog[e.id].duration<=5.4);const binary=fs.readFileSync(path.join(root,e.url));equal(binary.length,e.bytes);equal(crypto.createHash('sha256').update(binary).digest('hex'),e.sha256);assert(fs.existsSync(path.join(root,'assets/card-cinematics/source',e.id+'.efkproj')));});
+  });
+  test('all original particle textures are bundled, hashed PNGs',function(){manifest.textures.forEach(e=>{const data=fs.readFileSync(path.join(root,e.url));equal(data.readUInt32BE(0),0x89504e47);equal(crypto.createHash('sha256').update(data).digest('hex'),e.sha256);});});
+  test('the isolated gallery includes no sound, game controller, auth or multiplayer scripts',function(){const html=fs.readFileSync(path.join(root,'card-effects.html'),'utf8');assert(!/sound-design|effects-client|online-client|music\.js|game\.js|rules\.js|opening-cinematic/.test(html));const js=fs.readFileSync(path.join(root,'js/card-effects-gallery.js'),'utf8');assert(!/new Audio|AudioContext|WebSocket|\.playCard\(|\.resolvePendingChoice\(/.test(js));});
+  test('card preview variants represent failure, reflection, hidden information and mandatory choices',function(){assert(Catalog.judge.variants.includes('Failed'));assert(Catalog.judge.variants.includes('No evil cards'));assert(Catalog.zombie.variants.includes('Reflected'));assert(Catalog.alvin.variants.includes('Reveal & choose'));assert(Catalog.alvin.variants.includes('Destroy chosen card'));assert(Catalog.curse.variants.includes('Trigger after play'));assert(Catalog.curse.caption.includes('SECRET'));assert(Catalog.knife.caption.includes('POINTS UNTOUCHED'));});
+  test('website intro reuses the approved fire stage without invoking audio or a victory',function(){const source=fs.readFileSync(path.join(root,'js/opening-cinematic.js'),'utf8');assert(source.includes('PhoenixFireScene.start'));assert(source.includes('intro:true'));assert(source.includes("prefs.visuals==='off'"));assert(!/sound\(|AudioContext|PhoenixVictoryScene|WebSocket/.test(source));});
+};

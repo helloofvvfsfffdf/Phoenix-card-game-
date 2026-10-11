@@ -27,6 +27,7 @@
   var chosenChoice = null; // a forced-choice card waiting for its target
   var hoverTarget = null;  // the target button the pointer is on
   var toastTimer = null;
+  var lastEffectEvents = null;
 
   /**
    * The hand fan: how far each card tilts and drops per step away from the
@@ -62,6 +63,8 @@
   function newGame(options) {
     var rounds = Number(($('rounds-select') || {}).value) || Rules.DEFAULT_ROUNDS;
     game = GameApi.create({ rounds: rounds, seed: (options || {}).seed });
+    lastEffectEvents = null;
+    if (window.PhoenixCinematics) window.PhoenixCinematics.cleanup();
     chosenCard = null;
     hoverTarget = null;
     $('win-screen').hidden = true;
@@ -255,6 +258,9 @@
   /* --------------------------------------------------------------------- */
 
   function render() {
+    if (window.PhoenixMusicPlayer) {
+      window.PhoenixMusicPlayer.setMatchActive('local', !$('phoenix-game').hidden && !!game.state && !game.state.over);
+    }
     renderStatus();
     renderBoard();
     renderSeatSwitches();
@@ -265,6 +271,15 @@
     renderRelay();
     renderLog();
     renderWin();
+    if (game.lastEvents !== lastEffectEvents) {
+      lastEffectEvents = game.lastEvents;
+      if (window.PhoenixCinematics) window.PhoenixCinematics.rules(lastEffectEvents);
+    }
+    if (window.PhoenixCinematics) {
+      var winner = game.state.players[game.state.winnerSeat];
+      var ally = winner && window.PhoenixLocalAllies ? window.PhoenixLocalAllies.forPlayer(winner.id,game.state) : null;
+      window.PhoenixCinematics.localMatch(game.state,ally && ally.id);
+    }
   }
 
   /**
@@ -533,6 +548,7 @@
       var out = Rules.isOut(player, state);
       var disabled = Rules.isDisabled(player);
       var seat = make('div', 'seat');
+      seat.setAttribute('data-effect-seat', String(player.seat));
       seat.classList.add('is-' + player.id);
       if (player.isHuman) seat.classList.add('is-human');
       if (player.seat === state.turnInRound && !state.over && !disabled) {

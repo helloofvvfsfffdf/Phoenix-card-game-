@@ -24,8 +24,10 @@
       $('testing-feedback').textContent = 'Local test match started. Only you control the players.';
       renderTest();
     }
+    if (window.PhoenixMusicPlayer) window.PhoenixMusicPlayer.setMatchActive('local', !!game() && !!game().state && !game().state.over);
   }
   function leave() {
+    if (window.PhoenixCinematics) window.PhoenixCinematics.cleanup();
     mode = 'menu';
     document.body.classList.remove('phoenix-testing-mode');
     $('phoenix-menu').hidden = false;
@@ -34,6 +36,7 @@
     $('game-toolbar').hidden = true;
     $('testing-panel').hidden = true;
     $('win-screen').hidden = true;
+    if (window.PhoenixMusicPlayer) window.PhoenixMusicPlayer.setMatchActive('local', false);
   }
   function renderTest() {
     if (mode !== 'test' || !game()) return;
@@ -102,11 +105,25 @@
 
     document.addEventListener('phoenix-ally-confirmed', function (event) { if (event.detail.mode === 'test' && window.PhoenixModeAccess.isUnlocked('test')) enter('test'); });
     document.addEventListener('phoenix-mode-unlocked', function(event) { if(event.detail.mode==='single') enter('single'); else if(event.detail.mode==='test') window.PhoenixAllies.open('test'); });
-    ['menu-cards', 'menu-settings'].forEach(function (id) {
+    // Multiplayer opens the LOBBY, not the ally picker. The ally is drafted
+    // in-match by the server after the dice, so asking for one here would ask for
+    // a choice the server throws away - which is why the picker is only used by
+    // the local tester above.
+    $('menu-multi').addEventListener('click', function () {
+      window.PhoenixOnline.enter();
+    });
+
+    // Settings is no longer a stub - it opens the background music screen.
+    $('menu-settings').addEventListener('click', function () {
+      window.PhoenixMusicSettings.open();
+    });
+    $('menu-cinematics').addEventListener('click', function () {
+      window.location.href = 'card-effects.html';
+    });
+
+    ['menu-cards'].forEach(function (id) {
       $(id).addEventListener('click', function () {
-        $('menu-feedback').textContent = id === 'menu-multi'
-          ? 'Online multiplayer is locked. Real invite codes will require a server.'
-          : 'This section is coming in a future build.';
+        $('menu-feedback').textContent = 'This section is coming in a future build.';
       });
     });
     ['btn-new', 'btn-play-again'].forEach(function (id) {
@@ -119,4 +136,8 @@
     });
     leave();
   });
+  window.PhoenixLocalAllies = {forPlayer:function(id,state) {
+    var player=state && state.players.find(function(p){return p.id===id;});
+    return player && player.isHuman ? window.PhoenixAllies.selected() : state===testerState ? botAllies[id] || null : null;
+  }};
 })();

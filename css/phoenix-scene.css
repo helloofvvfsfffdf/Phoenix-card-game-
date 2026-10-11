@@ -1,0 +1,22 @@
+/* Phoenix experiment only: one filmed-fire decoder and capped Canvas2D stage.
+   No white flashes, strobing, camera shake or persistent blur on the live board. */
+.phoenix-takeover { position:fixed;inset:0;z-index:57;overflow:hidden;isolation:isolate;pointer-events:none;background:radial-gradient(ellipse at 50% 45%,#180b08e8,#060509fa 80%);color:#ffe2a0;animation:phoenix-stage 4.4s ease both; }
+.phoenix-preview { z-index:107; }
+.phoenix-fire-canvas { display:block;width:100%;height:100%; }
+.phoenix-static-art { position:absolute;inset:0;background:linear-gradient(#09050970,#090509ce),url('../assets/phoenix/fire-poster.jpg') center/cover; }
+.phoenix-static-art img { position:absolute;width:min(125vw,120vh);max-width:none;left:50%;top:40%;transform:translate(-50%,-50%);filter:drop-shadow(0 0 18px #da652a60); }
+.phoenix-scene-title { position:absolute;left:50%;bottom:17%;transform:translateX(-50%);width:95%;text-align:center;filter:drop-shadow(0 3px 12px #090509); }
+.phoenix-scene-title>p:first-child { font-size:clamp(10px,1.7vw,15px);letter-spacing:.4em;color:#ffbd77; }
+.phoenix-scene-title h2 { margin:0;line-height:1.05;font-family:Georgia,serif;font-size:clamp(40px,9vw,108px);letter-spacing:.14em;font-weight:700;color:#fff1bf;text-shadow:0 0 30px #b760294d;animation:phoenix-name 4.4s ease both; }
+.phoenix-scene-caption { font-size:clamp(9px,1.5vw,13px);letter-spacing:.14em;margin-top:14px;color:#e9b784; }
+.phoenix-scene-status { position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%); }
+.phoenix-scene-skip { position:absolute;bottom:max(20px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);pointer-events:auto;padding:11px 20px;border:1px solid #b98b55;border-radius:25px;background:#100c12ed;color:#ffe3bc;font:inherit;cursor:pointer; }
+.phoenix-scene-skip:focus-visible { outline:3px solid #ffe3bc;outline-offset:4px; }
+#settings-phoenix-cinematic { padding:13px 18px;border:1px solid #eea65d;border-radius:9px;background:linear-gradient(110deg,#472016,#21131e);color:#ffe4b0;font:inherit;cursor:pointer; }
+.phoenix-static { animation:phoenix-static-stage 1.8s ease both; }
+.phoenix-static .phoenix-scene-title h2 { animation:none; }
+@keyframes phoenix-stage { 0%{opacity:0} 13%,78%{opacity:1} 100%{opacity:0} }
+@keyframes phoenix-name { 0%,18%{opacity:0;transform:translateY(14px);letter-spacing:.23em} 39%,79%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-8px)} }
+@keyframes phoenix-static-stage { from{opacity:0} 25%,75%{opacity:1} to{opacity:0} }
+@media(prefers-reduced-motion:reduce) { .phoenix-takeover,.phoenix-scene-title h2 { animation:none; } }
+@media(max-width:600px) { .phoenix-scene-title { bottom:21%; }.phoenix-scene-title h2 { letter-spacing:.07em; }.phoenix-scene-caption { max-width:85%;margin:12px auto;line-height:1.5; } }

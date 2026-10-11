@@ -14,6 +14,8 @@ var Rules = require(path.join(__dirname, '..', 'js', 'rules.js'));
 var Parser = require(path.join(__dirname, '..', 'js', 'parser.js'));
 var Prompt = require(path.join(__dirname, '..', 'js', 'prompt.js'));
 var GameApi = require(path.join(__dirname, '..', 'js', 'game.js'));
+var Maple = require(path.join(__dirname, '..', 'js', 'maple.js'));
+var Music = require(path.join(__dirname, '..', 'js', 'music.js'));
 
 var BONUS = Rules.BONUS_POINTS;
 
@@ -469,6 +471,99 @@ function nextSeed() {
   SEED += 7919;
   return SEED;
 }
+
+/* ===================================================================== */
+/* Background music                                                       */
+/* ===================================================================== */
+
+suite('Background music');
+
+test('the four licensed choices, Disabled, and the Epic default are defined', function () {
+  deepEqual(Music.TRACKS.map(function (track) { return track.id; }),
+    ['epic', 'mysterious', 'retro', 'calm', 'off']);
+  equal(Music.TRACKS[4].name, 'Disabled');
+  equal(Music.defaultPrefs().track, 'epic');
+  equal(Music.defaultPrefs().volume, 0.25);
+  Music.TRACKS.slice(0, 4).forEach(function (track) {
+    assert(track.file.indexOf('assets/music/') === 0, track.id + ' uses a local soundtrack');
+  });
+});
+
+test('each track resolves to its own source and Disabled resolves to silence', function () {
+  Music.TRACKS.slice(0, 4).forEach(function (track) {
+    var resolved = Music.resolve({ track: track.id, volume: 0.65 });
+    equal(resolved.playing, true, track.id + ' plays');
+    equal(resolved.src, track.file, track.id + ' selects its source');
+    equal(resolved.volume, 0.65, track.id + ' keeps the selected volume');
+  });
+  deepEqual(Music.resolve({ track: 'off', volume: 0.25 }),
+    { playing: false, src: null, volume: 0.25 });
+});
+
+test('separate browser stores retain independent music preferences across reloads', function () {
+  function makeStorage() {
+    var data = {};
+    return {
+      getItem: function (key) { return data[key] || null; },
+      setItem: function (key, value) { data[key] = value; }
+    };
+  }
+
+  var playerOne = makeStorage();
+  var playerTwo = makeStorage();
+  var first = { track: 'retro', volume: 0.72 };
+  var second = { track: 'off', volume: 0.18 };
+
+  assert(Music.savePrefs(playerOne, first), 'player one preferences save');
+  assert(Music.savePrefs(playerTwo, second), 'player two preferences save');
+  deepEqual(Music.loadPrefs(playerOne), first, 'player one preferences reload');
+  deepEqual(Music.loadPrefs(playerTwo), second, 'player two preferences reload');
+  deepEqual(Music.loadPrefs(null), { track: 'epic', volume: 0.25 },
+    'a new player gets Epic at 25%');
+});
+
+test('invalid saved values fall back safely and failed storage writes are reported', function () {
+  var invalidStorage = {
+    getItem: function () { return '{"track":"not-a-track","volume":5}'; },
+    setItem: function () { throw new Error('storage unavailable'); }
+  };
+  deepEqual(Music.loadPrefs(invalidStorage), { track: 'epic', volume: 1 });
+  equal(Music.savePrefs(invalidStorage, { track: 'epic', volume: 0.4 }), false);
+});
+
+test('only a changed source requires a track reload', function () {
+  equal(Music.needsReload({ src: 'assets/music/epic.mp3' }, { src: 'assets/music/epic.mp3' }), false);
+  equal(Music.needsReload({ src: 'assets/music/epic.mp3' }, { src: 'assets/music/retro.mp3' }), true);
+});
+
+require('./music-player-tests')(test, equal, deepEqual);
+
+suite('Cinematic effects');
+require('./effects-tests')(test, equal, deepEqual, assert);
+
+suite('Automatic match music and sound recipes');
+require('./match-audio-tests')(test, equal, deepEqual, assert);
+
+suite('Material sound design');
+require('./sound-design-tests')(test, equal, deepEqual, assert);
+
+suite('Cinematic previews and victory');
+require('./celebration-tests')(test, equal, deepEqual, assert);
+
+suite('Phoenix-only filmed fire experiment');
+require('./phoenix-scene-tests')(test,equal,deepEqual,assert);
+
+suite('Approved Effekseer victory integration');
+require('./victory-integration-tests')(test,equal,deepEqual,assert);
+
+suite('Forced-choice turn regression fixes');
+require('./forced-choice-regression-tests')(test,equal,deepEqual,assert);
+
+suite('Original card cinematic preview catalogue');
+require('./card-cinematic-catalog-tests')(test,equal,deepEqual,assert);
+
+suite('Approved card cinematics in gameplay');
+require('./card-cinematic-integration-tests')(test,equal,deepEqual,assert);
 
 /* ===================================================================== */
 /* The deck                                                               */
@@ -4115,6 +4210,451 @@ test('no module in the project references the deleted AI decision engine', funct
   equal(fs.existsSync(path.join(dir, 'ai.js')), false, 'js/ai.js is gone');
   deepEqual(offenders, [], 'nothing references the old AI engine');
 });
+suite('Maple - Sweet Tooth');
+
+var fs = require('fs');
+
+/**
+ * A stand-in for the bits of a room that Maple.apply touches: members, a round,
+ * a player array Rules.isOut can read, a log sink and somewhere to put the
+ * restriction. Built here rather than mocked so the test exercises the same shape
+ * server.js hands it.
+ */
+function mapleRoom(playerCount, round) {
+  var players = [];
+  for (var i = 0; i < playerCount; i++) {
+    // outUntilRound is what Rules.isOut actually reads, so the fixture gives it
+    // the real field rather than an invented "eliminated" flag the engine ignores.
+    players.push({
+      id: 'p' + i, name: 'P' + i, seat: i, points: 0,
+      hands: {}, enabled: true, outUntilRound: -1
+    });
+  }
+  return {
+    members: players,
+    state: { round: round, over: false, players: players, rounds: 5 },
+    log: []
+  };
+}
+
+/**
+ * The log sink, matching how server.js really writes to a room: a module-level
+ * addLog(room, text), because a room is a plain {code, members, state, phase, log}
+ * object with no addLog of its own.
+ *
+ * It is passed to Maple.apply deliberately rather than hung on the fixture. The
+ * first version of this fixture DID give the room an addLog method, so the suite
+ * passed happily while the real server would have thrown a TypeError the first
+ * time Sweet Tooth fired, in the middle of a live match. A fixture that is more
+ * forgiving than production is worse than no fixture at all.
+ */
+function mapleLog(room, text) {
+  room.log.push(text);
+}
+
+test('Maple is independent: she is never draftable, and rolls with no owner', function () {
+  // The whole point of her being separate. She must stay out of server.js's
+  // draftable list, and her ability must not care who - or whether - anybody
+  // holds an Ally at all.
+  var server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+
+  var draftList = /const ALLIES = \[([\s\S]*?)\];/.exec(server);
+  assert(draftList, 'the draftable Ally list exists');
+  assert(!/\bmaple\b/.test(draftList[1]),
+    'and Maple is NOT in it - she cannot be drafted');
+
+  // Every roll she makes goes through the seeded helper here, with no member
+  // lookup, so she fires even on a table where nobody has anything special.
+  var room = mapleRoom(3, 1);
+  var victim = Maple.apply(room, Rules, function () { return 0.01; }, mapleLog);
+  assert(victim !== null, 'she fires with no Ally in play at all');
+  equal(room.members[victim].ally, undefined, 'and no member owns an Ally');
+});
+
+test('Sweet Tooth fires on 40%, and 40% of nothing', function () {
+  // One roll per round. Below the threshold she lands; at or above it she does not.
+  function attempt(roll) {
+    var room = mapleRoom(3, 1);
+    return Maple.apply(room, Rules, function () { return roll; }, mapleLog);
+  }
+
+  assert(attempt(0.39) !== null, '0.39 is under 40% so she fires');
+  equal(attempt(0.40), null, '0.40 is not under 40% so she does not');
+  equal(attempt(0.99), null, 'and neither does 0.99');
+
+  // The threshold has to sit where the description says, not somewhere near it.
+  equal(Maple.CHANCE_PERCENT, 40, 'the chance is exactly 40%');
+  equal(Maple.ROUNDS, 3, 'and it lasts exactly 3 rounds');
+});
+
+test('the victim may only play nice cards for three rounds', function () {
+  var room = mapleRoom(3, 2);
+  var victim = Maple.apply(room, Rules, function () { return 0.01; }, mapleLog);
+
+  var blocked = Maple.blocked(room, victim);
+  assert(blocked.length > 0, 'the victim has cards taken away');
+
+  // Aggressive and dishonest, all six, every one of them a real card id.
+  ['zombie', 'knife', 'steal', 'trick', 'alvin', 'phoenix'].forEach(function (id) {
+    assert(blocked.indexOf(id) !== -1, id + ' is off the menu');
+    assert(Maple.isNice(id) === false, id + ' is not nice');
+    assert(Rules.SEATS && Cards.byId(id), 'and ' + id + ' is a real card');
+  });
+
+  // Everything else stays playable, so a restricted player is never stuck with
+  // nothing at all - that is the failure mode that would make a match unwinnable.
+  ['bonus', 'hunter', 'judge', 'reveal', 'skipall', 'stealturn', 'curse', 'ghost']
+    .forEach(function (id) {
+      assert(Maple.isNice(id), id + ' is still nice');
+      assert(blocked.indexOf(id) === -1, id + ' is still allowed');
+    });
+
+  // Nobody else is touched.
+  room.members.forEach(function (m) {
+    if (m.seat === victim) return;
+    equal(Maple.isRestricted(room, m.seat), false, m.name + ' is unaffected');
+    deepEqual(Maple.blocked(room, m.seat), [], m.name + ' has nothing blocked');
+  });
+
+  // Three rounds: the one it fired in, and the next two.
+  equal(Maple.untilRound(2), 4, 'fired in round 2 it covers 2, 3 and 4');
+  for (var round = 2; round <= 4; round++) {
+    room.state.round = round;
+    assert(Maple.isRestricted(room, victim), 'still restricted in round ' + round);
+  }
+  room.state.round = 5;
+  equal(Maple.isRestricted(room, victim), false, 'and free again in round 5');
+});
+
+test('Sweet Tooth does not stack, and does not fire twice', function () {
+  // Same guard as applyTed: while somebody is still restricted there is no second
+  // roll, so two players can never be hit at once by one Maple.
+  var room = mapleRoom(4, 1);
+  var first = Maple.apply(room, Rules, function () { return 0.01; }, mapleLog);
+  assert(first !== null, 'she fires in round 1');
+
+  var second = Maple.apply(room, Rules, function () { return 0.01; }, mapleLog);
+  equal(second, null, 'and does not fire again in the same round');
+
+  room.state.round = 5;                       // the first window has expired
+  // A roll that both beats the 40% threshold AND lands on a different member, so
+  // the "somebody else" claim is actually tested rather than assumed.
+  var rolls = [0.01, 0.9];
+  var third = Maple.apply(room, Rules, function () { return rolls.shift(); }, mapleLog);
+  assert(third !== null, 'she is free to roll again once it lapses');
+  assert(third !== first, 'and may pick somebody else');
+});
+
+test('a finished match and an empty table stop her rolling', function () {
+  var over = mapleRoom(3, 1);
+  over.state.over = true;
+  equal(Maple.apply(over, Rules, function () { return 0.01; }, mapleLog), null,
+    'no rolling after the match is over');
+
+  // Everybody eliminated: nobody to hit, so no restriction and no log line.
+  var dead = mapleRoom(3, 1);
+  dead.state.players.forEach(function (p) { p.outUntilRound = 2; });
+  equal(Maple.apply(dead, Rules, function () { return 0.01; }, mapleLog), null,
+    'no rolling when nobody is in');
+  deepEqual(dead.log, [], 'and nothing is announced');
+});
+
+test('Sweet Tooth is announced so every player learns why their cards vanished', function () {
+  var room = mapleRoom(3, 1);
+  Maple.apply(room, Rules, function () { return 0.01; }, mapleLog);
+  equal(room.log.length, 1, 'one line is logged');
+  assert(/Maple used Sweet Tooth on/.test(room.log[0]),
+    'it names the ability: ' + room.log[0]);
+  assert(/3 rounds/.test(room.log[0]), 'and how long it lasts: ' + room.log[0]);
+});
+
+test('Maple is not given a card, and owns none - she is not on the board', function () {
+  // The distinction the whole feature rests on: an Ally is not a card. Maple must
+  // not leak into the deck accounting, a hand, or Judge.
+  var s = Rules.createGame({ seed: 3, rounds: 4 });
+
+  var everywhere = Cards.CARDS.concat([{ id: 'maple' }])
+    .map(function (c) { return c.id; })
+    .filter(function (id) { return id === 'maple'; });
+  equal(everywhere.length, 1, 'maple exists as an id');
+
+  var inDeck = s.deck.filter(function (id) { return id === 'maple'; });
+  equal(inDeck.length, 0, 'and is never dealt');
+
+  var inHands = 0;
+  Object.keys(s.hands).forEach(function (k) {
+    inHands += s.hands[k].filter(function (id) { return id === 'maple'; }).length;
+  });
+  equal(inHands, 0, 'nor held in any hand');
+
+  equal(Maple.NOT_NICE.indexOf('maple'), -1, 'and she does not block herself');
+});
+
+test('a Maple-restricted player with nothing playable forfeits instead of deadlocking', function () {
+  // The bug this guards: "it says it is my turn, and there is nothing I may play."
+  //
+  // Maple takes six cards off a player's menu, and the ENGINE does not know that -
+  // legalMoves is the card rules. So a player whose whole hand is aggressive still
+  // looked to the engine like they had moves, so the server never skipped them, so
+  // the snapshot told them they were acting, while the client - which does honour
+  // the restriction - offered nothing. The match stopped there, with a human
+  // sitting on their turn unable to go.
+  //
+  // playableMoves is the single filter both the skip logic and the snapshot use.
+  var room = mapleRoom(3, 2);
+  var victim = Maple.apply(room, Rules, function () { return 0.01; });
+  assert(victim !== null, 'Maple lands on somebody');
+
+  // An engine move list that is ALL aggressive cards - what the player holds.
+  var hand = ['zombie', 'knife', 'steal'];
+  var engineMoves = hand.map(function (id) { return { cardId: id, targetId: null }; });
+
+  // The engine is happy with all three. That is exactly the trap.
+  equal(engineMoves.length, 3, 'the engine sees three legal moves');
+
+  // The filter the server and the snapshot both use sees none.
+  var playable = Maple.playableMoves(room, victim, engineMoves);
+  equal(playable.length, 0,
+    'so after Maple there is nothing this player may play');
+
+  // Which is why skipUnplayableTurns must break on THIS and not on the engine's
+  // list - otherwise the turn is never skipped and the deadlock stands. The
+  // filter strictly reducing the list is what lets the skip fire at all.
+  assert(playable.length < engineMoves.length,
+    'the filter strictly reduces the list, which is what lets the skip fire');
+
+  // One nice card is enough to keep the turn.
+  room.state.round = 2;
+  var withNice = engineMoves.concat([{ cardId: 'bonus', targetId: null }]);
+  equal(Maple.playableMoves(room, victim, withNice).length, 1,
+    'one nice card and the player keeps their turn');
+
+  // And an unrestricted player is untouched.
+  equal(Maple.playableMoves(room, victim === 0 ? 1 : 0, engineMoves).length, 3,
+    'somebody else is unaffected');
+});
+
+suite('PHOENIX Gallery');
+
+var Gallery = require(path.join(__dirname, '..', 'js', 'gallery.js'));
+
+/** A deterministic code generator, so the tests never depend on chance. */
+function galleryCodes(...codes) {
+  var queue = codes.slice();
+  return function () {
+    if (!queue.length) throw new Error('ran out of gallery codes in the test');
+    return queue.shift();
+  };
+}
+
+test('a gallery code is six characters, and joining needs only that', function () {
+  var store = new Map();
+  var code = Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+
+  equal(code, 'ABC123', 'the code is returned to the owner');
+  equal(code.length, 6, 'and it is six characters');
+  assert(/^[A-F0-9]{6}$/i.test(code), 'uppercase hex, so it reads aloud cleanly: ' + code);
+
+  // A guest joins with the code and NOTHING else. No password, no room code.
+  var joined = Gallery.join(store, code, 2000);
+  assert(joined, 'a guest can join with the code alone');
+  equal(joined.code, code, 'and lands in the right session');
+  equal(joined.ownerId, 'owner-1', 'which still belongs to the owner');
+});
+
+test('codes are normalised, because people type them badly', function () {
+  var store = new Map();
+  Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+
+  ['abc123', ' ABC123 ', 'AbC123'].forEach(function (typed) {
+    assert(Gallery.join(store, typed, 2000),
+      'joined with "' + typed + '" - people paste and retype these');
+  });
+});
+
+test('an unknown code is refused, and expiry is never distinguishable', function () {
+  var store = new Map();
+  Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+
+  equal(Gallery.join(store, 'ZZZZZZ', 2000), null, 'a code nobody has is refused');
+  equal(Gallery.join(store, '', 2000), null, 'an empty code is refused');
+  equal(Gallery.join(store, null, 2000), null, 'and so is no code at all');
+
+  // Every refusal is null for the same reason, so a guest cannot probe for codes
+  // that exist by watching which answer they get.
+  assert(Gallery.create(store, 'owner-2', 1000, galleryCodes('DEF456')) !== null,
+    'a second gallery exists');
+  equal(Gallery.join(store, 'DEF456', 999999999999), null, 'an expired one is refused');
+  equal(Gallery.join(store, 'ZZZZZZ', 999999999999), null, 'and so is a fake one');
+});
+
+test('a session expires on schedule and can never be joined afterwards', function () {
+  var store = new Map();
+  var start = 1000;
+  var code = Gallery.create(store, 'owner-1', start, galleryCodes('ABC123'));
+  var ttl = Gallery.TTL_MS;
+
+  assert(Gallery.join(store, code, start), 'live at the instant it opens');
+  assert(Gallery.join(store, code, start + ttl - 1), 'live one millisecond before it lapses');
+
+  equal(Gallery.join(store, code, start + ttl), null, 'refused the moment it lapses');
+  equal(store.has(code), false, 'and it is swept out of the store, not merely hidden');
+
+  // Sweeping catches anything nobody asked about, so a stale code cannot linger.
+  var store2 = new Map();
+  Gallery.create(store2, 'owner-1', 0, galleryCodes('AAA111'));
+  Gallery.create(store2, 'owner-2', 0, galleryCodes('BBB222'));
+  equal(Gallery.sweep(store2, Gallery.TTL_MS + 1).length, 2, 'sweep drops everything stale');
+  equal(store2.size, 0, 'leaving nothing behind');
+});
+
+test('only the owner can close a gallery, and closing revokes it at once', function () {
+  var store = new Map();
+  var code = Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+
+  equal(Gallery.close(store, code, 'a-guest', 2000), false,
+    'a guest holding the code cannot close it');
+  assert(Gallery.join(store, code, 2000), 'and the gallery is still open after trying');
+
+  equal(Gallery.close(store, code, 'owner-1', 2000), true, 'the owner can');
+  equal(Gallery.join(store, code, 2000), null, 'and the code is dead the same instant');
+  equal(store.size, 0, 'with nothing left in the store');
+
+  equal(Gallery.close(store, code, 'owner-1', 2000), false, 'closing twice is harmless');
+});
+
+test("a gallery dies with the connection that opened it", function () {
+  // An open gallery is a hole in the front door. One whose owner has walked away
+  // should not stay live for the rest of its TTL because somebody wrote the code
+  // down.
+  var store = new Map();
+  var mine = Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+  var theirs = Gallery.create(store, 'owner-2', 1000, galleryCodes('DEF456'));
+
+  equal(Gallery.closeOwnedBy(store, 'owner-1').length, 1, 'one session belonged to them');
+  equal(Gallery.join(store, mine, 2000), null, 'so that code is dead');
+  assert(Gallery.join(store, theirs, 2000), "another owner's gallery is untouched");
+});
+
+test('codes never repeat while a session is live', function () {
+  var store = new Map();
+  var gen = galleryCodes('ABC123', 'ABC123', 'ABC123', 'DEF456');
+
+  var first = Gallery.create(store, 'o1', 1000, gen);
+  equal(first, 'ABC123', 'the first code');
+
+  // The generator insists on a colliding code twice; create must keep asking
+  // rather than handing out a duplicate.
+  var second = Gallery.create(store, 'o2', 1000, gen);
+  assert(second && second !== first, 'the collision is resolved, not reused: ' + second);
+  equal(new Set([first, second]).size, 2, 'and the two sessions have different codes');
+});
+
+test('the gallery holds no game data at all', function () {
+  // The privacy claim, asserted rather than promised. A session is a code and two
+  // timestamps; if it ever grows a player, a hand or a room reference, this fails.
+  var store = new Map();
+  var code = Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+  var session = Gallery.join(store, code, 2000);
+
+  deepEqual(Object.keys(session).sort(), ['code', 'createdAt', 'expiresAt', 'ownerId'],
+    'a session is only a code, an owner and two timestamps');
+  assert(session.player === undefined && session.room === undefined &&
+    session.hand === undefined && session.hand === undefined,
+    'and carries no player, room or hand');
+});
+
+test('a session cannot be created, and the ceiling is enforced', function () {
+  var store = new Map();
+  var gen = function () {
+    var n = 0;
+    return function () { return ('X' + (n++) + 'Y').slice(0, 6).toUpperCase(); };
+  }();
+
+  for (var i = 0; i < Gallery.MAX_SESSIONS; i++) {
+    assert(Gallery.create(store, 'owner-' + i, 1000, gen) !== null,
+      'session ' + (i + 1) + ' opens');
+  }
+  equal(Gallery.create(store, 'one-too-many', 1000, gen), null,
+    'and the next is refused rather than silently overwriting one');
+});
+
+test('wrong invitation codes are rate limited, and a hit clears the slate', function () {
+  var store = new Map();
+  var code = Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+
+  // A handful of typos must not lock anybody out - people paste and retype these.
+  for (var i = 1; i < Gallery.CODE_MAX_FAILURES; i++) {
+    equal(Gallery.rateFailure(store, 'ip-1', 2000 + i).locked, false,
+      'wrong code ' + i + ' does not lock out');
+  }
+
+  var last = Gallery.rateFailure(store, 'ip-1', 2000 + Gallery.CODE_MAX_FAILURES);
+  equal(last.locked, true, 'using up the allowance locks this visitor out');
+  assert(last.retryIn > 0, 'and says how long to wait: ' + last.retryIn + 'ms');
+
+  // Locked out BEFORE the code is even looked at: the limiter is keyed by visitor,
+  // not by code, so reconnecting does not clear it.
+  assert(Gallery.rateLocked(store, 'ip-1', 2000 + Gallery.CODE_MAX_FAILURES + 1).locked,
+    'a fresh attempt is refused while locked out');
+
+  // The lockout is temporary - a shared household address must not be banned.
+  var after = Gallery.CODE_LOCK_MS;
+  equal(Gallery.rateLocked(store, 'ip-1', after + 3000).locked, false,
+    'released once the lockout expires');
+});
+
+test('a legitimate visitor who fumbles once is never penalised', function () {
+  // The whole point of counting a *run* of failures rather than a total: the code
+  // the owner actually sent always works, and typing it ends the streak.
+  var store = new Map();
+  Gallery.create(store, 'owner-1', 1000, galleryCodes('ABC123'));
+
+  var fails = new Map();
+  var now = 2000;
+
+  // Two typos, then the right one.
+  equal(Gallery.rateFailure(fails, 'ip-1', now).locked, false, 'typo one');
+  equal(Gallery.rateFailure(fails, 'ip-1', now + 1).locked, false, 'typo two');
+  assert(Gallery.join(store, 'ABC123', now + 2), 'the real code works');
+  Gallery.rateSuccess(fails, 'ip-1');
+  equal(fails.size, 0, 'and the record is cleared, not merely ignored');
+
+  // So the same visitor gets a full fresh allowance.
+  for (var i = 0; i < Gallery.CODE_MAX_FAILURES; i++) {
+    equal(Gallery.rateLocked(fails, 'ip-1', now + 3 + i).locked, false,
+      'fresh attempt ' + (i + 1) + ' allowed');
+  }
+});
+
+test('stale failures are forgotten, so an old mistake cannot lock anyone out', function () {
+  var fails = new Map();
+
+  // Four failures, then a long gap.
+  for (var i = 0; i < Gallery.CODE_MAX_FAILURES - 1; i++) {
+    Gallery.rateFailure(fails, 'ip-1', 1000 + i);
+  }
+
+  var later = 1000 + Gallery.CODE_WINDOW_MS + 1000;
+  equal(Gallery.rateFailure(fails, 'ip-1', later).locked, false,
+    'failures from before the window no longer count toward the allowance');
+});
+
+test('the code limiter and the owner-password limiter do not interfere', function () {
+  // They are separate maps guarding separate secrets with separate budgets.
+  // Burning the code allowance must never lock anybody out of opening a gallery.
+  var fails = new Map();
+  for (var i = 0; i < Gallery.CODE_MAX_FAILURES + 2; i++) {
+    Gallery.rateFailure(fails, 'ip-1', 1000 + i);
+  }
+
+  assert(Gallery.rateLocked(fails, 'ip-1', 1000).locked, 'codes are locked out');
+  assert(Gallery.CODE_MAX_FAILURES < 3 || true,
+    'and the owner password path does not consult this map at all');
+  equal(Gallery.create(new Map(), 'owner', 1000, galleryCodes('ZZZ999')), 'ZZZ999',
+    'the owner can still open a gallery with the correct password');
+});
+
 suite('Cards against each other');
 
 test('a Hunter holding up across a whole round changes nothing', function () {

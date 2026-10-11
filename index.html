@@ -7,6 +7,12 @@
 <link rel="stylesheet" href="css/styles.css" />
 <link rel="stylesheet" href="css/menu-v2.css" />
 <link rel="stylesheet" href="css/online.css" />
+<link rel="stylesheet" href="css/gallery.css" />
+<link rel="stylesheet" href="css/settings.css" />
+<link rel="stylesheet" href="css/effects.css" />
+<link rel="stylesheet" href="css/phoenix-scene.css" />
+<link rel="stylesheet" href="css/victory-scene.css" />
+<link rel="stylesheet" href="css/card-cinematic-scene.css" />
 <link rel="stylesheet" href="css/allies.css" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128293;</text></svg>" />
 <title>Phoenix</title>
@@ -23,8 +29,10 @@
         <button type="button" id="menu-single" class="menu-primary"><span class="menu-symbol">▶</span> SINGLE PLAYER <small>CREATOR ONLY</small></button>
         <button type="button" id="menu-test"><span class="menu-symbol">⚗</span> MULTIPLAYER TESTING <small>LOCAL · CONTROL ALL PLAYERS</small></button>
         <button type="button" id="menu-multi"><span class="menu-symbol">♟</span> MULTIPLAYER <small>PRIVATE ROOMS · INVITE CODE</small></button>
+        <button type="button" id="menu-gallery"><span class="menu-symbol">▦</span> GALLERY <small>PRIVATE · INVITE CODE</small></button>
         <button type="button" id="menu-cards"><span class="menu-symbol">▣</span> CARD COLLECTION <small>COMING SOON</small></button>
-        <button type="button" id="menu-settings"><span class="menu-symbol">⚙</span> SETTINGS <small>COMING SOON</small></button>
+        <button type="button" id="menu-cinematics"><span class="menu-symbol">✦</span> CARD CINEMATICS <small>WATCH ALL 14 · SILENT PREVIEW GALLERY</small></button>
+        <button type="button" id="menu-settings"><span class="menu-symbol">⚙</span> SETTINGS <small>MUSIC, SOUND &amp; EFFECTS</small></button>
       </nav>
       <p id="menu-feedback" aria-live="polite"></p>
       <p class="menu-footer">PHOENIX · PROTOTYPE BUILD · RESTRICTED ACCESS</p>
@@ -67,6 +75,7 @@
         </select>
       </label>
       <button class="btn btn-primary" id="btn-new" type="button">New Game</button>
+      <button class="btn" id="match-settings" type="button">Settings</button>
     </div>
   </header>
 
@@ -208,9 +217,144 @@
   </div>
 </div>
 
+<!-- ========================= PHOENIX GALLERY =========================
+     Two screens. The gate is the doorway (owner creates with the same password
+     used for multiplayer rooms; guests enter an invitation code). The gallery
+     itself is read-only browsing, and is entirely per-visitor: nothing a visitor
+     clicks is ever sent to the server, so two visitors cannot affect each other.
+     Neither screen touches ws.member, so a guest cannot reach any game state. -->
+  <section id="gallery-gate" class="gallery-gate" hidden aria-label="PHOENIX Gallery access">
+    <div class="gallery-gate-card">
+      <header class="gallery-gate-head">
+        <p class="gallery-eyebrow">THE CARD GAME</p>
+        <h2>PHOENIX &#183; GALLERY</h2>
+        <p>A private, read-only look at every ally and every card in the game. Nothing here can change a match.</p>
+      </header>
+
+      <div class="gallery-panel" id="gallery-create-panel">
+        <h3>Open a gallery</h3>
+        <p>Use the same owner password you use to create multiplayer rooms. You will get a six-character invitation code to share.</p>
+        <div class="gallery-form">
+          <input id="gallery-owner-password" type="password" autocomplete="off" maxlength="256" placeholder="Owner password" aria-label="Owner password">
+          <button class="gallery-primary" id="gallery-create" type="button">OPEN GALLERY</button>
+        </div>
+      </div>
+
+      <hr>
+
+      <div class="gallery-panel" id="gallery-join-panel">
+        <h3>Join with an invitation code</h3>
+        <p>No password needed &#8212; just the code the owner gave you.</p>
+        <div class="gallery-form">
+          <input id="gallery-code-input" maxlength="6" placeholder="6-character code" aria-label="Gallery invitation code">
+          <button class="gallery-primary" id="gallery-join" type="button">ENTER</button>
+        </div>
+      </div>
+
+      <p id="gallery-gate-feedback" aria-live="polite"></p>
+      <button class="gallery-back" id="gallery-gate-back" type="button">&#8592; MAIN MENU</button>
+    </div>
+  </section>
+
+  <section id="gallery" class="gallery" hidden aria-label="PHOENIX Gallery">
+    <header class="gallery-top">
+      <div class="gallery-title">
+        <h1>PHOENIX &#183; GALLERY</h1>
+        <p id="gallery-code-line"></p>
+      </div>
+      <div class="gallery-top-actions">
+        <button class="gallery-back" id="gallery-leave" type="button">&#8592; MAIN MENU</button>
+        <button class="gallery-close" id="gallery-close" type="button" hidden>CLOSE GALLERY</button>
+      </div>
+    </header>
+
+    <nav class="gallery-tabs" aria-label="Gallery sections">
+      <button type="button" data-gallery-tab="allies" class="is-active">ALLIES</button>
+      <button type="button" data-gallery-tab="cards">CARDS</button>
+    </nav>
+
+    <div id="gallery-view"></div>
+  </section>
+
+<!-- ========================= PHOENIX SETTINGS =========================
+     Background music only. The track list is built at runtime from
+     js/music.js so there is exactly one place that knows what exists.
+
+     Nothing here talks to the server. Music is stored in each player's own
+     browser, which is why it needs no owner password and why every guest in a
+     multiplayer room gets their own choice and their own volume. -->
+  <section id="settings" class="settings-screen" hidden role="dialog" aria-modal="true" aria-label="Settings">
+    <div class="settings-card">
+      <header class="settings-head">
+        <p class="settings-eyebrow">PHOENIX</p>
+        <h2>SETTINGS</h2>
+      </header>
+
+      <div class="settings-section">
+        <h3>Background Music</h3>
+        <p class="settings-note">Yours alone. Your choice and volume are remembered in this browser, and nobody else in a match can see or hear them.</p>
+
+        <div id="settings-tracks" class="settings-tracks" role="radiogroup" aria-label="Background music"></div>
+
+        <div class="settings-volume">
+          <label for="settings-volume-slider">VOLUME <span id="settings-volume-value">25%</span></label>
+          <input type="range" id="settings-volume-slider" min="0" max="100" step="1" value="25" aria-label="Music volume">
+        </div>
+
+        <p id="settings-music-status" class="settings-status" aria-live="polite"></p>
+      </div>
+
+      <div class="settings-section effects-controls">
+        <h3>Cinematic Effects</h3>
+        <label><input id="settings-sound-enabled" type="checkbox" checked> Enable sound effects</label>
+        <div class="settings-volume">
+          <label for="settings-sound-volume">SOUND VOLUME <span id="settings-sound-value">35%</span></label>
+          <input id="settings-sound-volume" type="range" min="0" max="100" value="35" aria-label="Sound effects volume">
+        </div>
+        <label for="settings-visual-effects">Visual effects</label>
+        <select id="settings-visual-effects">
+          <option value="full">Full cinematics</option>
+          <option value="reduced">Reduced motion</option>
+          <option value="off">Disabled</option>
+        </select>
+        <p class="settings-note">System reduced-motion preferences always take priority. Sounds and visuals are yours alone, separate from music.</p>
+        <h3>Sound Effects Preview</h3>
+        <p class="settings-note">Audition every implemented card and ally effect, or the victory fanfare. No match is needed. Uses your saved SFX volume and mute setting.</p>
+        <label for="settings-effects-choice">Choose a sound</label>
+        <select id="settings-effects-choice" aria-label="Sound effects preview"></select>
+        <div class="effects-preview-actions">
+          <button id="settings-effects-preview" type="button">Play preview</button>
+          <button id="settings-effects-stop" type="button">Stop preview</button>
+        </div>
+        <p id="settings-preview-status" class="settings-status" aria-live="polite"></p>
+        <button id="settings-phoenix-cinematic" type="button">Experience Phoenix cinematic</button>
+        <p class="settings-note">Phoenix-only quality experiment: a full-screen fire sequence, with no match or gameplay changes.</p>
+        <p id="settings-effects-status" class="settings-status" aria-live="polite"></p>
+      </div>
+      <button class="settings-back" id="settings-back" type="button">&#8592; MAIN MENU</button>
+    </div>
+  </section>
+
+<button id="music-enable-button" class="music-enable-button" type="button" hidden>Click to enable music</button>
 <div class="toast" id="toast" hidden role="status" aria-live="polite"></div>
 
 <script src="js/cards.js"></script>
+<!-- maple.js is pure rules data (what Sweet Tooth forbids, how long it lasts).
+     The gallery reads it to describe the restriction accurately instead of
+     restating it in prose that could drift away from the rule. -->
+<script src="js/maple.js"></script>
+<script src="js/music.js"></script>
+<script src="js/sound-design.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/phoenix-scene.js"></script>
+<script src="assets/victory/vendor/gsap.min.js"></script>
+<script src="assets/victory/vendor/effekseer.min.js"></script>
+<script src="js/particle-runtime.js"></script>
+<script src="js/card-cinematic-catalog.js"></script>
+<script src="js/card-cinematic-art.js"></script>
+<script src="js/card-cinematic-scene.js"></script>
+<script src="js/victory-scene.js"></script>
+<script src="js/effects-client.js"></script>
 <script src="js/rules.js"></script>
 <script src="js/parser.js"></script>
 <script src="js/prompt.js"></script>
@@ -218,6 +362,12 @@
 <script src="js/ui.js"></script>
 <script src="js/prototype.js"></script>
 <script src="js/allies.js"></script>
-<script src="js/online.js"></script>
+<!-- The browser half of multiplayer. This used to point at js/online.js, which
+     is the NODE SERVER (require/http/ws) and threw "require is not defined" in
+     the browser; npm start runs the root server.js instead. -->
+<script src="js/online-client.js"></script>
+<script src="js/gallery-net.js"></script>
+<script src="js/gallery-client.js"></script>
+<script src="js/opening-cinematic.js"></script>
 </body>
 </html>

@@ -1,0 +1,48 @@
+/* Scoped adaptation of the approved victory.css. Same typography, colours,
+ * layout and GSAP-driven animation; only prototype controls become dismissal. */
+.phoenix-winning-screen { position:fixed;inset:0;z-index:106;width:100%;height:100svh;min-height:540px;overflow:hidden;isolation:isolate;animation:none;background:#07070b;color:#f8e8c5;font:14px system-ui,sans-serif; }
+.phoenix-winning-screen * { box-sizing:border-box; }
+.phoenix-winning-screen button { font:inherit;cursor:pointer;pointer-events:auto; }
+.phoenix-winning-screen .pv-backdrop { position:absolute;inset:0;background:radial-gradient(ellipse at 50% 47%,#252020 0%,#12121b 39%,#06080e 85%); }
+.phoenix-winning-screen .pv-halo { position:absolute;inset:-10%;background:radial-gradient(ellipse at 50% 44%,#e8ae4c38 0%,#cb74341a 23%,transparent 54%);opacity:0;pointer-events:none; }
+.phoenix-winning-screen .pv-rays { position:absolute;left:50%;top:46%;width:100vmax;height:100vmax;transform:translate(-50%,-50%);opacity:0;background:repeating-conic-gradient(from 0deg,#fbc67b0a 0deg 4deg,transparent 4deg 28deg);mask-image:radial-gradient(circle,transparent 8%,#000 25%,transparent 65%); }
+.phoenix-winning-screen .pv-canvas-mount,.phoenix-winning-screen .pv-effects { position:absolute;inset:0;width:100%;height:100%;pointer-events:none; }
+.phoenix-winning-screen .pv-vignette { position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 44%,transparent 34%,#03060c75 90%); }
+.phoenix-winning-screen .pv-header { position:absolute;top:28px;left:34px;right:34px;display:flex;justify-content:space-between;align-items:center;gap:16px;z-index:3; }
+.phoenix-winning-screen .pv-brand { font-size:13px;font-weight:700;letter-spacing:.2em;color:#b9b0a3; }
+.phoenix-winning-screen .pv-opening { position:absolute;top:44%;left:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:18px;opacity:0;white-space:nowrap; }
+.phoenix-winning-screen .pv-opening-text { font-size:11px;letter-spacing:.45em;color:#c7a774; }
+.phoenix-winning-screen .pv-opening-line { height:1px;width:65px;background:linear-gradient(90deg,transparent,#b79361,transparent); }
+.phoenix-winning-screen .pv-announcement { position:absolute;left:50%;top:47%;transform:translate(-50%,-50%);width:min(1100px,96vw);text-align:center;pointer-events:none; }
+.phoenix-winning-screen .pv-crest { font-size:38px;color:#f0c66a;line-height:1;margin-bottom:17px;opacity:0; }
+.phoenix-winning-screen .pv-eyebrow { font-size:10px;letter-spacing:.48em;color:#c9ac75;margin:0 0 13px;opacity:0; }
+.phoenix-winning-screen .pv-victory { font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:clamp(46px,10vw,135px);letter-spacing:.105em;line-height:1.15;margin:0;text-shadow:0 0 34px #e8aa3c22;color:#ffe9af;white-space:nowrap; }
+.phoenix-winning-screen .pv-letter { display:inline-block;opacity:0; }
+.phoenix-winning-screen .pv-rule { height:1px;width:min(330px,50vw);margin:17px auto 23px;background:linear-gradient(90deg,transparent,#e7bc76,transparent);transform:scaleX(0); }
+.phoenix-winning-screen .pv-winner { font-size:clamp(16px,2.4vw,27px);letter-spacing:.34em;font-weight:400;margin:0 0 15px;color:#f7f3ec;opacity:0;overflow-wrap:anywhere; }
+.phoenix-winning-screen .pv-tagline { font-size:10px;letter-spacing:.27em;color:#aaa59e;margin:0;opacity:0; }
+.phoenix-winning-screen .pv-finish { display:flex;flex-direction:column;align-items:center;gap:15px;margin-top:38px;opacity:0;visibility:hidden; }
+.phoenix-winning-screen .pv-crowned { font-size:8px;letter-spacing:.27em;color:#6d7b89; }
+.phoenix-winning-screen .pv-results { display:flex;align-items:center;gap:28px;padding:13px 23px;border:1px solid #a68958;border-radius:3px;background:#141519bd;color:#ead5ab;font-size:11px;letter-spacing:.1em; }
+.phoenix-winning-screen .pv-footer { position:absolute;bottom:max(26px,env(safe-area-inset-bottom));left:34px;right:34px;display:flex;justify-content:space-between;align-items:flex-end;gap:20px;z-index:4; }
+.phoenix-winning-screen .pv-phase { font-size:9px;font-weight:600;letter-spacing:.16em;color:#bcab85; }
+.phoenix-winning-screen .pv-skip { border:1px solid #373b46;border-radius:4px;background:#0b0f17b3;color:#a7b3c4;padding:9px 14px;font-size:11px; }
+.phoenix-winning-screen .pv-skip:hover { border-color:#b39a6c;color:#f2dba9; }
+.phoenix-winning-screen .pv-progress { position:absolute;bottom:0;left:0;right:0;height:2px;background:#242735; }
+.phoenix-winning-screen .pv-progress-fill { height:100%;width:100%;transform-origin:left;background:#d8af66;transform:scaleX(0); }
+.phoenix-winning-screen .pv-live-status { position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden; }
+.phoenix-winning-screen button:focus-visible { outline:2px solid #eed092;outline-offset:4px; }
+.phoenix-winning-screen.pv-fallback .pv-letter,.phoenix-winning-screen.pv-fallback .pv-crest,.phoenix-winning-screen.pv-fallback .pv-eyebrow,.phoenix-winning-screen.pv-fallback .pv-winner,.phoenix-winning-screen.pv-fallback .pv-tagline { opacity:1!important;transform:none!important; }
+.phoenix-winning-screen.pv-fallback .pv-rule { transform:scaleX(1)!important; }
+@media(max-width:700px) {
+  .phoenix-winning-screen .pv-header { top:20px;left:20px;right:20px; }
+  .phoenix-winning-screen .pv-footer { bottom:max(22px,env(safe-area-inset-bottom));left:20px;right:20px;align-items:center; }
+  .phoenix-winning-screen .pv-announcement { top:45%; }
+  .phoenix-winning-screen .pv-eyebrow { font-size:8px;letter-spacing:.26em; }
+  .phoenix-winning-screen .pv-tagline { font-size:8px;letter-spacing:.15em; }
+  .phoenix-winning-screen .pv-finish { margin-top:28px; }
+  .phoenix-winning-screen .pv-victory { letter-spacing:.04em;font-size:clamp(40px,10.8vw,72px); }
+  .phoenix-winning-screen .pv-opening-line { width:30px; }
+  .phoenix-winning-screen .pv-opening-text { font-size:8px;letter-spacing:.3em; }
+}
+@media(max-height:540px) { .phoenix-winning-screen { min-height:0; }.phoenix-winning-screen .pv-crest{margin-bottom:7px;font-size:26px}.phoenix-winning-screen .pv-rule{margin:8px auto}.phoenix-winning-screen .pv-finish{margin-top:12px;gap:8px} }

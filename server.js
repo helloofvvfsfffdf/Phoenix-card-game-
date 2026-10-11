@@ -7,6 +7,9 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer, WebSocket } = require('ws');
 const Rules = require('./js/rules.js');
+const Maple = require('./js/maple.js');
+const Effects = require('./js/effects.js');
+const Gallery = require('./js/gallery.js');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
@@ -85,6 +88,187 @@ function validOwnerPassword(input) {
 
 const rooms = new Map();
 
+/**
+ * Open PHOENIX Gallery sessions, keyed by invitation code.
+ *
+ * Kept separate from `rooms` on purpose. A room holds a live match - hands,
+ * scores, the deck - and a gallery session must never be able to reach one, so
+ * they are two maps that do not know about each other. A code typed into the
+ * wrong box simply misses, and neither side can tell the other it exists.
+ *
+ * A session is a code and two timestamps. Nothing else: no catalogue (that is
+ * already public page script), no player, no room.
+ */
+const galleries = new Map();
+
+/**
+ * Failed gallery-code attempts, keyed by IP.
+ *
+ * Separate from `authFailures` on purpose - see the gallery_join branch for why
+ * a code guess and a password guess want different budgets and different
+ * lockouts. Records are tiny (a few timestamps) and only exist for IPs that have
+ * actually mistyped something.
+ */
+const galleryFails = new Map();
+
+/**
+ * A gallery invitation code: six characters from the CSPRNG.
+ *
+ * crypto.randomBytes(3) is 24 bits drawn from the operating system's entropy
+ * pool - the same generator the room codes use - and never Math.random. Guests
+ * type these by hand, so the alphabet is uppercase hex and nothing else.
+ */
+function galleryCode() {
+  let c;
+
+  do {
+    c = crypto.randomBytes(3).toString('hex').toUpperCase();
+  } while (galleries.has(c));
+
+  return c;
+}
+
+/**
+ * PHOENIX Gallery over the WebSocket.
+ *
+ * Three messages, and nothing here ever sends game state:
+ *   gallery_create  owner password required, same secret and same IP lockout as
+ *                   creating a room. Returns the invitation code.
+ *   gallery_join    invitation code only. Never the password.
+ *   gallery_close   the creating connection only. Revokes the code at once.
+ *
+ * @returns {boolean} true if the message was a gallery message and is handled
+ */
+function handleGallery(ws, data) {
+  if (!String(data.type || '').startsWith('gallery_')) {
+    return false;
+  }
+
+  if (data.type === 'gallery_create') {
+    // The SAME owner secret, compared the SAME way, with the SAME per-IP failure
+    // tracking. Reusing it is the point: one password, one lockout, no second
+    // thing to get wrong.
+    const now = Date.now();
+    const ip = clientIp(ws);
+    const auth = authRecord(ip, now);
+
+    if (auth.lockedUntil > now) {
+      return error(ws, 'Too many incorrect attempts. Try again later.'), true;
+    }
+
+    if (!validOwnerPassword(data.ownerPassword)) {
+      auth.failures.push(now);
+
+      if (auth.failures.length >= AUTH_MAX_FAILURES) {
+        auth.lockedUntil = now + AUTH_LOCK_MS;
+      }
+
+      return error(
+        ws,
+        'Incorrect owner password or too many attempts.'
+      ), true;
+    }
+
+    auth.failures = [];
+
+    // One session per connection. Creating again replaces the old code rather than
+    // leaving a second one lying around that only the owner knows is dead.
+    Gallery.closeOwnedBy(galleries, ws);
+
+    const code = Gallery.create(galleries, ws, now, galleryCode);
+
+    if (!code) {
+      return error(ws, 'The server has reached its gallery limit. Try later.'), true;
+    }
+
+    ws.gallery = { code: code, owner: true };
+
+    return send(ws, {
+      type: 'gallery_open',
+      code: code,
+      expiresIn: Gallery.remainingMs(galleries.get(code), now),
+      ttl: Gallery.TTL_MS
+    }), true;
+  }
+
+  if (data.type === 'gallery_join') {
+    const now = Date.now();
+    const ip = clientIp(ws);
+
+    // Rate limiting, BEFORE the code is even looked at.
+    //
+    // This is deliberately separate from the owner-password limiter in
+    // authRecord, which is left exactly as it was: that one guards a secret that
+    // must never be guessed, this one guards a 24-bit code that people mistype.
+    // They have different budgets (three long failures versus five short ones),
+    // different lockouts, and neither touches the other.
+    //
+    // Keyed by IP so a guest cannot simply reconnect and start again.
+    const held = Gallery.rateLocked(galleryFails, ip, now);
+
+    if (held.locked) {
+      const seconds = Math.ceil(held.retryIn / 1000);
+      return error(
+        ws,
+        `Too many wrong codes. Try again in ${seconds} second${seconds === 1 ? '' : 's'}.`
+      ), true;
+    }
+
+    // Validated here, on the server. Anything the page decides for itself is a
+    // suggestion, and this is the only check that matters.
+    const session = Gallery.join(galleries, data.code, now);
+
+    // One message for "no such code", "closed" and "expired": a guest must not be
+    // able to learn which codes exist by watching the replies differ.
+    if (!session) {
+      const state = Gallery.rateFailure(galleryFails, ip, now);
+
+      // Once the allowance runs out, say so plainly. Telling a held-off visitor
+      // only "invalid" would be both untrue and confusing; it leaks nothing about
+      // codes, because the lockout is about THEM and not about any code.
+      if (state.locked) {
+        const seconds = Math.ceil(state.retryIn / 1000);
+        return error(
+          ws,
+          `Too many wrong codes. Try again in ${seconds} second${seconds === 1 ? '' : 's'}.`
+        ), true;
+      }
+
+      return error(ws, 'That gallery code is not valid, or has expired.'), true;
+    }
+
+    // A hit ends the run of failures, so one fumbled paste costs a visitor
+    // nothing: the limiter counts a streak, not a lifetime total.
+    Gallery.rateSuccess(galleryFails, ip);
+
+    // Deliberately NOT ws.member. A guest is not in a room, so every gameplay
+    // branch below refuses them on its own - read-only by construction.
+    ws.gallery = { code: session.code, owner: false };
+
+    return send(ws, {
+      type: 'gallery_open',
+      code: session.code,
+      expiresIn: Gallery.remainingMs(session, Date.now()),
+      ttl: Gallery.TTL_MS
+    }), true;
+  }
+
+  if (data.type === 'gallery_close') {
+    const code = ws.gallery && ws.gallery.code;
+
+    if (!code || !ws.gallery.owner) {
+      return error(ws, 'Only the owner can close a gallery.'), true;
+    }
+
+    Gallery.close(galleries, code, ws, Date.now());
+    ws.gallery = null;
+
+    return send(ws, { type: 'gallery_closed', code: code }), true;
+  }
+
+  return true;
+}
+
 const ALLIES = [
   'phoenix',
   'tilly',
@@ -97,12 +281,34 @@ const ALLIES = [
 const rollDie = () => crypto.randomInt(1, 7);
 const chance = percent => crypto.randomInt(100) < percent;
 
-function addLog(room, message) {
-  room.log.push(message);
+function addLog(room, message, privateSeat, privateText) {
+  room.log.push(privateText ? { publicText: message, privateSeat, privateText } : message);
 
   if (room.log.length > 150) {
     room.log.splice(0, room.log.length - 150);
   }
+}
+
+function effectJournal(room) {
+  if (!room.effects) room.effects = { stream: crypto.randomBytes(16).toString('hex'), sequence: 0, events: [] };
+  return room.effects;
+}
+
+function emitEffect(room, key, actor, target) {
+  Effects.append(effectJournal(room), Effects.publicEvent(key, actor, target));
+}
+
+function recordEvents(room, events) {
+  Effects.fromRules(events).forEach(event => Effects.append(effectJournal(room), event));
+  (events || []).forEach(event => {
+    const text = Effects.publicLog(event);
+    if (!text) return;
+    if (text !== event.text) {
+      const played = (events || []).find(e => e.type === 'card');
+      const privateSeat = event.type === 'result' && played ? played.seat : event.seat;
+      addLog(room, text, privateSeat, event.text);
+    } else addLog(room, text);
+  });
 }
 
 function beginRollStage(room, phase) {
@@ -244,6 +450,7 @@ function applyPhoenix(room) {
   }[target.ally] || 0;
 
   if (chance(defence)) {
+    emitEffect(room, 'block-' + target.ally, target.seat, target.seat);
     addLog(
       room,
       target.ally === 'ted'
@@ -264,6 +471,7 @@ function applyPhoenix(room) {
   );
 
   s.hands[Rules.SEATS[owner.seat].id].push(card);
+  emitEffect(room, 'ally-phoenix', owner.seat, target.seat);
 
   addLog(
     room,
@@ -296,6 +504,7 @@ function applyTed(room) {
   room.tedHiddenUntil = {
     [victim.seat]: s.round + 2
   };
+  emitEffect(room, 'ally-ted', owner.seat, victim.seat);
 
   addLog(
     room,
@@ -303,6 +512,21 @@ function applyTed(room) {
     victim.name +
     '! Their cards are hidden for 3 rounds.'
   );
+}
+
+/**
+ * Maple's Sweet Tooth.
+ *
+ * The only Ally with no owner: she is deliberately not in ALLIES, so nobody can
+ * draft her, and - unlike applyPhoenix and applyTed, which both begin by looking
+ * for whoever holds the Ally - she has nobody to look for. She simply rolls once
+ * a round. That is what "Independent" means, and it is why her rules live in
+ * js/maple.js rather than inline here: while they sat in this file they had no
+ * way to be tested at all, because requiring this file starts a server.
+ */
+function applyMaple(room) {
+  const victim = Maple.apply(room, Rules, null, addLog);
+  if (victim !== null) emitEffect(room, 'ally-maple', -1, victim);
 }
 
 function startGame(room) {
@@ -343,6 +567,7 @@ function startGame(room) {
 
   applyPhoenix(room);
   applyTed(room);
+  applyMaple(room);
 }
 
 const INSTANCE_ID = crypto.randomBytes(4).toString('hex');
@@ -359,7 +584,12 @@ const mime = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
   '.svg': 'image/svg+xml',
-  '.json': 'application/json'
+  '.json': 'application/json',
+  '.mp3': 'audio/mpeg',
+  '.mp4': 'video/mp4',
+  '.wasm': 'application/wasm',
+  '.efk': 'application/octet-stream',
+  '.efkefc': 'application/octet-stream'
 };
 
 const httpServer = http.createServer((req, res) => {
@@ -481,11 +711,15 @@ function snapshot(room, member) {
   const moves = acting
     ? (
         pending
-          ? pending.options
-          : Rules.legalMoves(s, s.turnInRound).map(m => ({
-              cardId: m.cardId,
-              targetId: m.targetId
-            }))
+          ? Maple.playableMoves(room,member.seat,pending.options,pending)
+          : Maple.playableMoves(
+            room,
+            member.seat,
+            Rules.legalMoves(s, s.turnInRound)
+          ).map(m => ({
+            cardId: m.cardId,
+            targetId: m.targetId
+          }))
       )
     : [];
 
@@ -553,7 +787,18 @@ function snapshot(room, member) {
       room.tedHiddenUntil[member.seat] >= s.round
     ),
 
-    log: room.log.slice(-35)
+    // Which cards Maple has taken off THIS player's menu. The server still
+    // refuses them whatever a client sends; this is so the board can say why
+    // instead of a card silently going missing.
+    mapleBlocked: Maple.blockedForAction(room,member.seat,acting ? pending : null),
+
+    effects: effectJournal(room),
+
+    log: room.log.slice(-35).map(entry => {
+      if (typeof entry === 'string') return entry;
+      const obscured = s && room.tedHiddenUntil && room.tedHiddenUntil[member.seat] >= s.round;
+      return entry.privateSeat === member.seat && !obscured ? entry.privateText : entry.publicText;
+    })
   };
 }
 
@@ -576,7 +821,16 @@ function skipUnplayableTurns(room) {
 
     const current = s.players[s.turnInRound];
 
-    if (Rules.legalMoves(s, s.turnInRound).length) {
+    // Maple's Sweet Tooth counts here. The engine's legalMoves knows nothing about
+  // it, so without this a restricted player holding only aggressive cards looks
+  // to the engine like they can play - so they are never skipped, so the server
+  // tells them it is their turn, so the client offers nothing they may play, and
+  // the match stops. Filtered through Maple here AND in the snapshot below, so the
+  // skip logic and the board cannot disagree.
+  if (
+  Maple.playableMoves(room, s.turnInRound, Rules.legalMoves(s, s.turnInRound))
+  .length
+  ) {
       break;
     }
 
@@ -601,19 +855,16 @@ function skipUnplayableTurns(room) {
 
     const events = Rules.advanceTurn(s);
 
-    for (const event of events) {
-      if (event.text) {
-        addLog(room, event.text);
-      }
-    }
+    recordEvents(room, events);
 
     if (s.round !== room.lastPhoenixRound && !s.over) {
       room.lastPhoenixRound = s.round;
       applyPhoenix(room);
-      applyTed(room);
+        applyTed(room);
+        applyMaple(room);
+      }
     }
   }
-}
 
 function broadcast(room) {
   skipUnplayableTurns(room);
@@ -632,6 +883,15 @@ function error(ws, message) {
 
 function handle(ws, data) {
   if (!data || typeof data !== 'object') {
+    return;
+  }
+
+  // Gallery sessions, BEFORE anything else and before `ws.member` is consulted.
+  //
+  // They deliberately do not touch ws.member: a gallery visitor is not in a room,
+  // so every gameplay branch below keeps refusing them on its own. Read-only is
+  // therefore structural, not a list of things a guest is not allowed to do.
+  if (handleGallery(ws, data)) {
     return;
   }
 
@@ -896,6 +1156,23 @@ function handle(ws, data) {
       return error(ws, 'That move is not legal.');
     }
 
+    // Maple's Sweet Tooth is enforced HERE, on the server, not merely by leaving
+    // the card out of the snapshot's moves. Hiding it client-side would be a
+    // suggestion: anyone with a devtools console could send the move anyway, and a
+    // restriction the player can walk around is not a restriction. This is the
+    // same reason the move is checked against `options` above.
+    const mapleBlocked = Maple.blockedForAction(room,m.seat,pending);
+    if (mapleBlocked.length && mapleBlocked.indexOf(cardId) !== -1) {
+      // This rejection is private feedback, not a public claim of a card play.
+      send(ws, { type: 'effect', effect: Effects.publicEvent('maple-restriction', m.seat, m.seat) });
+      return error(
+        ws,
+        'Maple will not let you play that - nice cards only for ' +
+          Maple.ROUNDS +
+          ' rounds.'
+      );
+    }
+
     const result = pending
       ? Rules.resolvePendingChoice(
           s,
@@ -916,9 +1193,7 @@ function handle(ws, data) {
       );
     }
 
-    (result.events || []).forEach(event => {
-      addLog(room, event.text);
-    });
+    recordEvents(room, result.events);
 
     if (
       s.round !== room.lastPhoenixRound &&
@@ -926,8 +1201,9 @@ function handle(ws, data) {
     ) {
       room.lastPhoenixRound = s.round;
       applyPhoenix(room);
-      applyTed(room);
-    }
+        applyTed(room);
+        applyMaple(room);
+      }
 
     broadcast(room);
     return;
@@ -961,6 +1237,18 @@ wss.on('connection', ws => {
   });
 
   ws.on('close', () => {
+    // A gallery dies with the connection that opened it, BEFORE the room check
+    // below - a gallery visitor is never in a room, so `!m` would have returned
+    // first and left the code live for the rest of its TTL.
+    //
+    // A gallery is a hole in the front door. One whose owner has walked away
+    // should not stay open because somebody wrote the code down.
+    if (ws.gallery && ws.gallery.owner) {
+      Gallery.close(galleries, ws.gallery.code, ws, Date.now());
+    }
+
+    ws.gallery = null;
+
     const m = ws.member;
 
     if (!m) return;

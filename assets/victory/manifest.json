@@ -1,0 +1,56 @@
+{
+  "effekseer": "1.80.7",
+  "gsap": "3.15.0",
+  "files": [
+    {
+      "file": "effects/boss-death/boss_death.efk",
+      "bytes": 5816,
+      "sha256": "e609e2a55c420057279e03de143bb7f7782264aff33da1e533f37e98d2148313"
+    },
+    {
+      "file": "effects/boss-death/Texture/actionlines.png",
+      "bytes": 9623,
+      "sha256": "7baf6d8c42cf2c8d9851e064cd9e3de37649c0f30aa25ed3268feba5dedc140f"
+    },
+    {
+      "file": "effects/boss-death/Texture/LaserMain02.png",
+      "bytes": 2192,
+      "sha256": "e24c27453e96396cbda9fb6fb39b38ef8b55f4d60949732d2431e7b6bfe3c4f2"
+    },
+    {
+      "file": "effects/boss-death/Texture/Particle01.png",
+      "bytes": 7082,
+      "sha256": "b1346d2bfafa6e783661453680b282edc6bc0e0b85711414b9914aac03a3a881"
+    },
+    {
+      "file": "effects/fireworks/Simple_Turbulence_Fireworks.efkefc",
+      "bytes": 4036,
+      "sha256": "355e506e0fe440da81a4373436608517d1cb2c16dc24c4b28b2f22ad422ae64a"
+    },
+    {
+      "file": "effects/fireworks/Texture/Particle01.png",
+      "bytes": 7082,
+      "sha256": "b1346d2bfafa6e783661453680b282edc6bc0e0b85711414b9914aac03a3a881"
+    },
+    {
+      "file": "effects/fireworks/Texture/Particle02.png",
+      "bytes": 7230,
+      "sha256": "3734dfdba425f96ce5aca1f6682b572a85f73c799a6a615cd5978e16fc3c6e07"
+    },
+    {
+      "file": "vendor/effekseer.min.js",
+      "bytes": 168668,
+      "sha256": "703f106d2d72b83158c361a3ed58e231a8e3aacf57a58a6a7bd985786e8cf3da"
+    },
+    {
+      "file": "vendor/effekseer.wasm",
+      "bytes": 1379206,
+      "sha256": "4aaf76783de0a8cfd0b4f045c7bbeec76a8a4fde407bef5f30ab9da558dea89f"
+    },
+    {
+      "file": "vendor/gsap.min.js",
+      "bytes": 72927,
+      "sha256": "92bb9a96476f983d212a2bc4f54c889039c1696dd4461d40a736860938570fbb"
+    }
+  ]
+}

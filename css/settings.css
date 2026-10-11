@@ -1,0 +1,191 @@
+/*
+ * Phoenix - css/settings.css
+ * ---------------------------------------------------------------------------
+ * The Settings screen. Sized from its container rather than the viewport, so it
+ * behaves correctly at 380px and 760px without depending on a media query that
+ * the test browser cannot trigger.
+ *
+ * Colours are borrowed from the gallery and lobby so Settings does not look like
+ * a different game bolted on.
+ */
+
+.settings-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 58;
+  overflow-y: auto;
+  background: radial-gradient(circle at top, #263452, #090f1c 75%);
+  color: #f7e5c0;
+  font-family: system-ui, sans-serif;
+}
+
+.settings-screen[hidden] {
+  display: none !important;
+}
+
+.settings-card {
+  width: min(100% - 32px, 560px);
+  margin: clamp(12px, 5vh, 56px) auto;
+  padding: clamp(16px, 4vw, 26px);
+  border: 1px solid #75572e;
+  border-radius: 18px;
+  background: #151b2d;
+}
+
+.settings-eyebrow {
+  margin: 0;
+  color: #ffd16b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2.4px;
+}
+
+.settings-head h2 {
+  margin: 4px 0 0;
+  color: #ffd16b;
+  font-size: clamp(22px, 5vw, 30px);
+  letter-spacing: 1px;
+}
+
+.settings-section {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, .12);
+}
+
+.settings-section h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.settings-note {
+  margin: 0 0 14px;
+  color: #b6c7dd;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Track list: one column on a phone, two when there is room. Driven by the
+   container's own width, so it is correct without a media query. */
+.settings-tracks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.settings-track {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid #34435c;
+  border-radius: 12px;
+  background: #0c1426;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.settings-track:hover,
+.settings-track:focus-visible {
+  border-color: #a68142;
+  background: #131f36;
+}
+
+.settings-track strong {
+  color: #f7e5c0;
+  font-size: 14px;
+  letter-spacing: .6px;
+}
+
+.settings-track em {
+  color: #8fa5c0;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.4;
+}
+
+/* Selection is marked by a border and a gold name, not by colour alone. */
+.settings-track.is-selected {
+  border-color: #ffd16b;
+  box-shadow: inset 0 0 0 1px #ffd16b;
+}
+
+.settings-track.is-selected strong {
+  color: #ffd16b;
+}
+
+.settings-track.is-selected strong::before {
+  content: '▶ ';
+  font-size: 10px;
+}
+
+.settings-volume {
+  margin-top: 18px;
+}
+
+.settings-volume label {
+  display: block;
+  margin-bottom: 8px;
+  color: #ffd16b;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+}
+
+.settings-volume input[type="range"] {
+  width: 100%;
+  height: 26px;      /* a real touch target, not a hairline */
+  accent-color: #d49b36;
+  cursor: pointer;
+}
+
+.settings-status {
+  min-height: 18px;
+  margin: 12px 0 0;
+  color: #b6c7dd;
+  font-size: 12.5px;
+}
+
+.music-enable-button {
+  position: fixed;
+  z-index: 100;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  max-width: calc(100vw - 32px);
+  padding: 13px 18px;
+  border: 1px solid #f8d67e;
+  border-radius: 10px;
+  background: #d49b36;
+  color: #16110b;
+  font-weight: 800;
+  line-height: 1.3;
+  cursor: pointer;
+  box-shadow: 0 8px 26px #0008;
+}
+
+.music-enable-button:hover,
+.music-enable-button:focus-visible {
+  background: #f0bd54;
+  outline: 2px solid #fff1c2;
+  outline-offset: 2px;
+}
+
+.settings-back {
+  margin-top: 20px;
+  padding: 12px 18px;
+  border: 1px solid #75572e;
+  border-radius: 10px;
+  background: transparent;
+  color: #f7e5c0;
+  cursor: pointer;
+}
+
+@media (max-width: 620px) {
+  .settings-card {
+    margin-top: 12px;
+  }
+}
