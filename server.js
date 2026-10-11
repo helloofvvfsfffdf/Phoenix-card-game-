@@ -213,7 +213,7 @@ function lobbySnapshot() {
       .filter(r => r.visibility === 'public')
       .map(r => ({
         code: r.code,
-        host: r.host ? r.host.name : '',
+        host: (r.members[0] && r.members[0].name) || '',
         players: r.members.length,
         max: 5,
         rounds: r.requestedRounds || 10,
@@ -928,7 +928,7 @@ function snapshot(room, member) {
 
     code: room.code,
     visibility: room.visibility || 'private',
-    host: room.host === member,
+    host: room.members[0] === member,
     seat: member.seat,
     started: !!s,
     players,
@@ -1064,6 +1064,106 @@ function error(ws, message) {
   });
 }
 
+function closeRoom(room, reason) {
+  const members = room.members.slice();
+  rooms.delete(room.code);
+  for (const member of members) {
+    member.room = null;
+    member.ws.member = null;
+    if (member.ws.readyState === WebSocket.OPEN) {
+      send(member.ws, { type: 'roomClosed', message: reason });
+      member.ws.close();
+    }
+  }
+  console.log(`[PHOENIX diagnostic] DELETE instance=${INSTANCE_ID} room=${room.code} reason=closed`);
+  broadcastLobby();
+}
+
+function handleAdmin(ws, data) {
+  if (data.type === 'admin_auth') {
+    const now = Date.now();
+    const ip = clientIp(ws);
+    const auth = authRecord(ip, now);
+    if (auth.lockedUntil > now) {
+      return error(ws, 'Too many incorrect attempts. Try again later.');
+    }
+    if (!validOwnerPassword(data.password)) {
+      auth.failures.push(now);
+      if (auth.failures.length >= AUTH_MAX_FAILURES) {
+        auth.lockedUntil = now + AUTH_LOCK_MS;
+      }
+      return error(ws, 'Incorrect owner password.');
+    }
+    auth.failures = [];
+    ws.admin = true;
+    send(ws, adminStateMessage(ws));
+    return;
+  }
+
+  if (!ws.admin) {
+    return error(ws, 'Administrator access required.');
+  }
+
+  if (data.type === 'admin_rooms') {
+    send(ws, {
+      type: 'admin_rooms',
+      rooms: [...rooms.values()].map(r => ({
+        code: r.code,
+        visibility: r.visibility,
+        host: r.members[0] ? r.members[0].name : '',
+        players: r.members.map(p => p.name),
+        count: r.members.length,
+        max: 5,
+        phase: r.phase || 'lobby',
+        rounds: r.requestedRounds || 10
+      })),
+      multiplayerOpen: serverState.multiplayerOpen,
+      creationLocked: serverState.creationLocked
+    });
+    return;
+  }
+
+  if (data.type === 'admin_shutdown_room') {
+    const target = rooms.get(String(data.code || '').trim().toUpperCase());
+    if (!target) return error(ws, 'Room not found.');
+    closeRoom(target, 'This lobby was shut down by the owner.');
+    send(ws, adminStateMessage(ws));
+    return;
+  }
+
+  if (data.type === 'admin_shutdown_all') {
+    serverState.multiplayerOpen = false;
+    saveServerState();
+    const all = [...rooms.values()];
+    for (const r of all) closeRoom(r, 'PHOENIX multiplayer was closed by the owner.');
+    send(ws, adminStateMessage(ws));
+    return;
+  }
+
+  if (data.type === 'admin_reopen') {
+    serverState.multiplayerOpen = true;
+    saveServerState();
+    send(ws, adminStateMessage(ws));
+    broadcastLobby();
+    return;
+  }
+
+  if (data.type === 'admin_lock_creation') {
+    serverState.creationLocked = true;
+    saveServerState();
+    send(ws, adminStateMessage(ws));
+    return;
+  }
+
+  if (data.type === 'admin_unlock_creation') {
+    serverState.creationLocked = false;
+    saveServerState();
+    send(ws, adminStateMessage(ws));
+    return;
+  }
+  return error(ws, 'Unknown admin command.');
+}
+
 function handle(ws, data) {
   if (!data || typeof data !== 'object') {
     return;
@@ -1128,7 +1228,6 @@ function handle(ws, data) {
       members: [],
       state: null,
       phase: 'lobby',
-      host: null,
       requestedRounds: 10,
       log: [
         visibility === 'public'
@@ -1150,6 +1249,7 @@ function handle(ws, data) {
     room.members.push(m);
     ws.member = m;
 
+    broadcastLobby();
     broadcast(room);
     return;
   }
@@ -1157,6 +1257,10 @@ function handle(ws, data) {
   if (data.type === 'join') {
     if (ws.member) {
       return error(ws, 'Already in a room.');
+    }
+
+    if (!serverState.multiplayerOpen) {
+      return error(ws, 'Multiplayer is currently closed by the owner. Try again later.');
     }
 
     const requestedCode = String(data.code || '')
@@ -1200,6 +1304,7 @@ function handle(ws, data) {
 
     room.log.push(m.name + ' joined.');
 
+    broadcastLobby();
     broadcast(room);
     return;
   }
@@ -1240,6 +1345,56 @@ function handle(ws, data) {
     beginRollStage(room, 'turnDice');
     broadcast(room);
     return;
+  }
+
+  if (data.type === 'kick') {
+    if (room.phase !== 'lobby') {
+      return error(ws, 'Kicking is only available in the lobby.');
+    }
+    const seat = Number(data.seat);
+    const target = Number.isInteger(seat) && seat >= 0 ? room.members[seat] : null;
+    if (!target || !target.ws) {
+      return error(ws, 'No player at that seat.');
+    }
+    const isHost = m === room.members[0];
+    const isAdmin = !!ws.admin;
+    if (!isHost && !isAdmin) {
+      return error(ws, 'Only the host or the owner can kick players.');
+    }
+    if (!isAdmin && target === room.members[0]) {
+      return error(ws, 'The host cannot kick themselves.');
+    }
+    const name = target.name;
+    room.members.splice(target.seat, 1);
+    room.members.forEach((p, i) => { p.seat = i; });
+    target.room = null;
+    target.ws.member = null;
+    const who = isAdmin ? 'the owner' : 'the host';
+    if (target.ws.readyState === WebSocket.OPEN) {
+      send(target.ws, { type: 'kicked', message: 'You were removed from the lobby by ' + who + '.' });
+      target.ws.close();
+    }
+    room.log.push(name + ' was removed from the lobby.');
+    broadcast(room);
+    broadcastLobby();
+    return;
+  }
+
+  if (data.type === 'close_room') {
+    if (room.phase !== 'lobby') {
+      return error(ws, 'Closing is only available in the lobby.');
+    }
+    const isAdmin = !!ws.admin;
+    const isHost = m === room.members[0];
+    if (!isHost && !isAdmin) {
+      return error(ws, 'Only the host can close this lobby.');
+    }
+    closeRoom(room, 'The lobby was closed by ' + (isAdmin ? 'the owner' : 'the host') + '.');
+    return;
+  }
+
+  if (String(data.type).startsWith('admin_')) {
+    return handleAdmin(ws, data);
   }
 
   if (data.type === 'roll') {
@@ -1419,6 +1574,7 @@ function ally(id) {
 }
 
 wss.on('connection', ws => {
+  send(ws, lobbySnapshot());
   ws.on('message', raw => {
     try {
       handle(
@@ -1470,6 +1626,7 @@ wss.on('connection', ws => {
       );
     }
 
+    broadcastLobby();
     broadcast(room);
   });
 });
