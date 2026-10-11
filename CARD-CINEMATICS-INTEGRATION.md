@@ -7,6 +7,16 @@ divergent main edits/conflicts required manual resolution. The branch includes
 the earlier victory integration and lifecycle/forced-choice fixes, preserving
 that complete feature history rather than cherry-picking only preview files.
 
+The initial checkout of old `main` was refused on Windows because that historical
+tree also tracked `assets/allies/ted.jpg.` (trailing dot), which Windows aliases
+to `ted.jpg`. The feature ancestry had already removed the obsolete dotted file.
+The valid current portrait's Git blob was verified unchanged against both tips:
+`47bade4062375de6bc35b2c18934c43c21cd8d88`. To avoid overwriting it or reviving the
+invalid path, the merge commit uses the tested feature tree with both branch tips
+as parents, then advances local `main` using a compare-and-swap ref update before
+switching to that identical tree. All historical commits/blobs remain preserved;
+no force checkout, reset, deletion of user assets or conflict-side replacement.
+
 ## Runtime integration
 
 `js/card-cinematic-scene.js` adapts the exact approved effect binaries, colours,
