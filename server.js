@@ -30,7 +30,14 @@ const authFailures = new Map();
 const AUTH_WINDOW_MS = 15 * 60 * 1000;
 const AUTH_LOCK_MS = 30 * 60 * 1000;
 const AUTH_MAX_FAILURES = 3;
-const MAX_ROOMS = 30;
+
+// Room creation is now open to every visitor (the owner password no longer
+// unlocks it), so it gets its own per-IP budget and a hard ceiling. Both can be
+// overridden for testing; production keeps the defaults.
+const MAX_ROOMS = Number(process.env.PHOENIX_MAX_ROOMS) || 30;
+const MAX_CREATES_PER_IP = Number(process.env.PHOENIX_CREATE_LIMIT) || 8;
+const CREATE_WINDOW_MS = 10 * 60 * 1000;
+const creationTimes = new Map();
 
 function clientIp(ws) {
   return ws._socket?.remoteAddress || 'unknown';
@@ -67,6 +74,64 @@ const authCleanup = setInterval(() => {
 }, 60 * 60 * 1000);
 
 authCleanup.unref();
+
+/**
+ * Owner-controlled server switches, kept durable across process restarts so a
+ * manual close or a creation lock survives a restart (a fresh Render deploy
+ * wipes the throwaway filesystem, which is fine - it resets to the safe
+ * defaults).
+ *
+ *   multiplayerOpen - false after the owner shuts down all games. New creates
+ *                     and joins are refused until the owner reopens.
+ *   creationLocked  - true after the owner locks creation. Nobody can create a
+ *                     new lobby; existing lobbies keep running and players can
+ *                     still join them.
+ *
+ * The file is gitignored. Its path can be pointed elsewhere with
+ * PHOENIX_STATE_FILE so test servers stay isolated from each other.
+ */
+const STATE_FILE = process.env.PHOENIX_STATE_FILE || path.join(ROOT, '.phoenix-server-state.json');
+const serverState = { multiplayerOpen: true, creationLocked: false };
+
+function loadServerState() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    if (typeof parsed.multiplayerOpen === 'boolean') serverState.multiplayerOpen = parsed.multiplayerOpen;
+    if (typeof parsed.creationLocked === 'boolean') serverState.creationLocked = parsed.creationLocked;
+    console.log(`[PHOENIX diagnostic] State loaded: open=${serverState.multiplayerOpen} locked=${serverState.creationLocked}`);
+  } catch (e) {
+    /* No state file yet (or unreadable): defaults are safe. */
+  }
+}
+
+function saveServerState() {
+  try {
+    const tmp = STATE_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(serverState, null, 2));
+    fs.renameSync(tmp, STATE_FILE);
+  } catch (e) {
+    console.log(`[PHOENIX diagnostic] Could not persist server state: ${e.message}`);
+  }
+}
+
+function adminStateMessage(ws) {
+  return {
+    type: 'admin_state',
+    admin: !!ws.admin,
+    multiplayerOpen: serverState.multiplayerOpen,
+    creationLocked: serverState.creationLocked
+  };
+}
+
+const creationCleanup = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, stamps] of creationTimes) {
+    if (!stamps.some(t => now - t < CREATE_WINDOW_MS)) creationTimes.delete(ip);
+  }
+}, 60 * 60 * 1000);
+creationCleanup.unref();
+
+loadServerState();
 
 /**
  * Multiplayer Testing is gated by the same private access code the server was
@@ -135,6 +200,35 @@ function validOwnerPassword(input) {
 }
 
 const rooms = new Map();
+
+/**
+ * Public lobby browser contents: ONLY public lobbies, and only the few fields
+ * a visitor needs to decide whether to join. Private lobbies and their invite
+ * codes never appear here, so the public list cannot leak them.
+ */
+function lobbySnapshot() {
+  return {
+    type: 'lobby',
+    rooms: [...rooms.values()]
+      .filter(r => r.visibility === 'public')
+      .map(r => ({
+        code: r.code,
+        host: r.host ? r.host.name : '',
+        players: r.members.length,
+        max: 5,
+        rounds: r.requestedRounds || 10,
+        phase: r.phase || 'lobby'
+      }))
+  };
+}
+
+function broadcastLobby() {
+  const payload = JSON.stringify(lobbySnapshot());
+  for (const client of wss.clients) {
+    if (client.readyState === WebSocket.OPEN) client.send(payload);
+  }
+}
+
 
 /**
  * Open PHOENIX Gallery sessions, keyed by invitation code.
@@ -833,7 +927,8 @@ function snapshot(room, member) {
     ),
 
     code: room.code,
-    host: member.seat === 0,
+    visibility: room.visibility || 'private',
+    host: room.host === member,
     seat: member.seat,
     started: !!s,
     players,
@@ -988,31 +1083,34 @@ function handle(ws, data) {
       return error(ws, 'Already in a room.');
     }
 
+    if (!serverState.multiplayerOpen) {
+      return error(
+        ws,
+        'Multiplayer is currently closed by the owner. Try again later.'
+      );
+    }
+
+    if (serverState.creationLocked) {
+      return error(
+        ws,
+        'Lobby creation is locked by the owner. Join an existing lobby instead.'
+      );
+    }
+
+    // Creation is open to every visitor, so it gets a per-IP budget instead of
+    // the owner password. This stops one address from filling the room table.
     const now = Date.now();
     const ip = clientIp(ws);
-    const auth = authRecord(ip, now);
-
-    if (auth.lockedUntil > now) {
+    let stamps = creationTimes.get(ip) || [];
+    stamps = stamps.filter(t => now - t < CREATE_WINDOW_MS);
+    if (stamps.length >= MAX_CREATES_PER_IP) {
       return error(
         ws,
-        'Too many incorrect attempts. Try again later.'
+        'You have created too many lobbies recently. Try again later.'
       );
     }
-
-    if (!validOwnerPassword(data.ownerPassword)) {
-      auth.failures.push(now);
-
-      if (auth.failures.length >= AUTH_MAX_FAILURES) {
-        auth.lockedUntil = now + AUTH_LOCK_MS;
-      }
-
-      return error(
-        ws,
-        'Incorrect owner password or too many attempts.'
-      );
-    }
-
-    auth.failures = [];
+    stamps.push(now);
+    creationTimes.set(ip, stamps);
 
     if (rooms.size >= MAX_ROOMS) {
       return error(
@@ -1021,13 +1119,21 @@ function handle(ws, data) {
       );
     }
 
+    const visibility = data.visibility === 'public' ? 'public' : 'private';
+
     const room = {
       code: code(),
+      name: cleanName(data.name),
+      visibility,
       members: [],
       state: null,
       phase: 'lobby',
+      host: null,
+      requestedRounds: 10,
       log: [
-        'Room created. Invite at least one friend to start.'
+        visibility === 'public'
+          ? 'Public lobby created. Anyone on the site can join.'
+          : 'Private lobby created. Share the invite code with friends.'
       ]
     };
 
