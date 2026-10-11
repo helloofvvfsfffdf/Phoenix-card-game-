@@ -106,8 +106,20 @@
    * @param seat the seat's index, matching the keys of room.mapleUntil
    * @param moves legal moves from the engine
    */
-  function playableMoves(room, seat, moves) {
-    var blockedList = blocked(room, seat);
+  function blockedForAction(room, seat, pending) {
+    // Alvin destroys a selected card; it does not play that card. Sweet Tooth
+    // must not disable a destruction choice based on the card being destroyed.
+    if (pending && pending.kind === 'burn') return [];
+    // Steal a Turn chooses a move from the target's hand on the target's turn.
+    // The target's restriction applies, not the chooser's unrelated restriction.
+    if (pending && pending.kind === 'move' && room && room.state && Array.isArray(room.state.players)) {
+      var target=room.state.players.find(function(p){return p.id===pending.targetId;});
+      if (target) seat=target.seat;
+    }
+    return blocked(room, seat);
+  }
+  function playableMoves(room, seat, moves, pending) {
+    var blockedList = blockedForAction(room, seat, pending);
     if (!blockedList.length) return moves;
     return moves.filter(function (move) {
       return blockedList.indexOf(move.cardId) === -1;
@@ -178,6 +190,7 @@
     untilRound: untilRound,
     isRestricted: isRestricted,
     blocked: blocked,
+    blockedForAction: blockedForAction,
     playableMoves: playableMoves,
     apply: apply
   };

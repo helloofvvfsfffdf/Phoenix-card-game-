@@ -14,6 +14,7 @@
   var warmup = null;
   var phoenix = null, pendingEnd = null, phoenixBuffer = null, phoenixLoad = null, phoenixContext = null;
   var localState = null, localArmed = false, localFinished = new WeakSet();
+  var deferredWin = null;
 
   function isAudioBlocked() { return prefs.sound && prefs.volume > 0 && audioBlocked; }
   function refreshButton() {
@@ -30,11 +31,13 @@
     document.getElementById('settings-sound-volume').value = Math.round(prefs.volume * 100);
     document.getElementById('settings-sound-value').textContent = Math.round(prefs.volume * 100) + '%';
     document.getElementById('settings-visual-effects').value = prefs.visuals;
+    var victory = window.PhoenixVictoryScene && window.PhoenixVictoryScene.diagnostics();
+    var lastVictory = victory && victory.stopReason ? ' Last victory: '+victory.stopReason+' at '+Number(victory.stoppedAt || 0).toFixed(2)+'s; on screen '+Number(victory.visibleSeconds || 0).toFixed(2)+'s ('+(victory.endPhase || 'unknown')+').' : '';
     document.getElementById('settings-effects-status').textContent =
       (!Context ? 'Sound synthesis is unavailable in this browser. ' : '') +
       (isAudioBlocked() ? 'Use the enable-audio button or tap a control to enable sounds. ' : '') +
       (media.matches ? 'Your system requests reduced motion. ' : '') +
-      (!saved ? 'This browser could not save these preferences.' : '');
+      (!saved ? 'This browser could not save these preferences.' : '') + lastVictory;
     refreshButton();
   }
   function disposeVoice(voice) {
@@ -92,7 +95,7 @@
     if (master && context) master.gain.setTargetAtTime(prefs.sound ? prefs.volume * 0.18 : 0, context.currentTime, 0.02);
     if (!prefs.sound || prefs.volume === 0) { audioBlocked = false; stopSounds(); }
     clearVisuals();
-    if (celebration && E.motion(prefs, media.matches) !== 'full') finishCelebration();
+    if (celebration && E.motion(prefs, media.matches) !== 'full') finishCelebration('preferences');
     if (phoenix && E.motion(prefs, media.matches) !== 'full') finishPhoenix(true);
     sync();
   }
@@ -232,10 +235,11 @@
       onFinish:function(){finishPhoenix(true);} });
     sound('phoenix',false);
   }
-  function finishCelebration() {
+  function finishCelebration(reason) {
     if (!celebration) return;
     var c = celebration, focused = document.activeElement === c.skip; celebration = null;
-    clearTimeout(c.timer); if (c.stop) c.stop(false); else c.node.remove(); stopSounds();
+    clearTimeout(c.timer); if (c.stop) c.stop(false,typeof reason==='string'?reason:'dismissed'); else c.node.remove(); stopSounds();
+    sync();
     // Never steal focus on entry; if the skip control held it on dismissal,
     // restore the existing match Settings control rather than losing it.
     if (focused) {
@@ -245,7 +249,7 @@
   }
   function celebrate(kind, winner) {
     finishCelebration(); clearVisuals(); stopSounds(); previewing = false;
-    if (document.hidden) return;
+    if (document.hidden) {if(kind==='victory' && window.PhoenixVictoryScene)deferredWin=winner || {};return;}
     sound(kind, false);
     var mode = E.motion(prefs, media.matches);
     if (mode === 'off') return;
@@ -335,10 +339,10 @@
     }); else afterUnlock();
     return true;
   }
-  function cleanup() { finishPhoenix(false); finishCelebration(); clearVisuals(); stopSounds(); previewSerial++; previewing = false; }
+  function cleanup(reason) { deferredWin=null;finishPhoenix(false); finishCelebration(reason || 'cleanup'); clearVisuals(); stopSounds(); previewSerial++; previewing = false; }
   window.PhoenixCinematics = {
     show: show, consume: consume, match: match, localMatch:localMatch, preview: preview, stopPreview: stopPreview, skipCelebration: finishCelebration,
-    resetNetwork: function () { network.reset(); endings.reset(); cleanup(); },
+    resetNetwork: function (reason) { network.reset(); endings.reset(); cleanup(reason || 'network-reset'); },
     rules: function (events) { displayBatch(E.fromRules(events), 'phoenix-game'); },
     unlock: unlock, isAudioBlocked: isAudioBlocked, update: update,
     prefs: function () { return Object.assign({}, prefs); }, cleanup: cleanup,
@@ -364,12 +368,23 @@
     sync();
   });
   document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape') { stopPreview(); if (document.getElementById('settings').hidden) { finishPhoenix(true); finishCelebration(); } }
+    if (event.key === 'Escape') { stopPreview(); if (document.getElementById('settings').hidden) { finishPhoenix(true); finishCelebration('escape'); } }
   }, true);
-  if (media.addEventListener) media.addEventListener('change', function () { clearVisuals(); finishPhoenix(true); finishCelebration(); sync(); });
-  document.addEventListener('visibilitychange', function () { if (document.hidden) cleanup(); });
+  if (media.addEventListener) media.addEventListener('change', function () { clearVisuals(); finishPhoenix(true); finishCelebration('motion-change'); sync(); });
+  document.addEventListener('visibilitychange', function () {
+    if(document.hidden){
+      if(celebration && celebration.pause){celebration.pause();clearVisuals();stopSounds();}
+      else {
+        // A confirmed win can be waiting behind the Phoenix-card takeover.
+        // Cancel that transient stage, but do not discard the queued result.
+        var waiting=deferredWin || (pendingEnd && pendingEnd.kind==='victory' ? pendingEnd.winner || {} : null);
+        cleanup('hidden');deferredWin=waiting;
+      }
+    }else if(celebration && celebration.resume)celebration.resume();
+    else if(deferredWin){var winner=deferredWin;deferredWin=null;celebrate('victory',winner);}
+  });
   window.addEventListener('pagehide', function () {
-    cleanup();
+    cleanup('page-exit');
     if (warmup !== null && window.cancelIdleCallback) window.cancelIdleCallback(warmup);
     warmup = null;
     if (context) { context.close().catch(function () {}); context = null; master = null; }

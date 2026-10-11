@@ -200,7 +200,7 @@
       feedback('Could not connect to the multiplayer server.');
 
     socket.onclose = () => {
-      if (window.PhoenixCinematics) window.PhoenixCinematics.resetNetwork();
+      if (window.PhoenixCinematics) window.PhoenixCinematics.resetNetwork('disconnect');
       state = null;
       feedback('Disconnected from the server. Reload to reconnect.');
       $('online-actions').replaceChildren();
@@ -240,7 +240,7 @@
   }
 
   function leave() {
-    if (window.PhoenixCinematics) window.PhoenixCinematics.resetNetwork();
+    if (window.PhoenixCinematics) window.PhoenixCinematics.resetNetwork('leave');
     if (socket) socket.close();
     socket = null;
     state = null;
@@ -532,14 +532,15 @@ function renderPlaying() {
     }
 
     if (!state.acting) {
-      actions.append(el('p', '', 'Waiting for your turn.'));
+      const chooser=state.pending && state.players.find(p=>p.id===state.pending.chooserId);
+      actions.append(el('p', '', chooser ? 'Waiting for '+chooser.name+' to make the required choice.' : 'Waiting for your turn.'));
       return;
     }
 
     actions.append(el(
       'h3',
       '',
-      state.pending ? 'Choose a card' : 'Your turn — choose a card'
+      state.pending && state.pending.kind==='burn' ? 'Choose a card to destroy — Alvin' : state.pending ? 'Choose the card for this stolen turn' : 'Your turn — choose a card'
     ));
 
     if (!state.moves.length) {
@@ -641,6 +642,8 @@ function renderPlaying() {
     $('online-room-code').textContent = s.code;
 
     const current = s.players.find(p => p.id === s.current);
+    const chooser=s.pending && s.players.find(p=>p.id===s.pending.chooserId);
+    const choosing=chooser ? (s.pending.kind==='burn' ? chooser.name+' must choose a card for Alvin to destroy' : chooser.name+' is choosing '+(current?current.name+"’s":'the')+' card for this stolen turn') : null;
 
     const phaseText = {
       lobby: `${s.players.length} / 5 players · Minimum 2 to start`,
@@ -649,7 +652,7 @@ function renderPlaying() {
       draft: 'Choosing allies',
       playing: s.over
         ? 'Match finished'
-        : `Round ${s.round} / ${s.rounds} · ${current ? current.name : 'Waiting'} is playing`
+        : `Round ${s.round} / ${s.rounds} · ${choosing || ((current ? current.name : 'Waiting')+' is playing')}`
     };
 
     $('online-phase').textContent = phaseText[s.phase] || s.phase;
@@ -679,7 +682,8 @@ function renderPlaying() {
     seats.replaceChildren();
 
     state.players.forEach((player, index) => {
-      const seat = el('div', 'online-seat' + (state.current === player.id ? ' online-current' : ''));
+      const actingId=state.pending ? state.pending.chooserId : state.current;
+      const seat = el('div', 'online-seat' + (actingId === player.id ? ' online-current' : ''));
       seat.dataset.effectSeat = index;
 
       // No ally until the draft assigns one, so the portrait waits for it. A

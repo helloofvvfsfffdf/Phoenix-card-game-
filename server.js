@@ -711,7 +711,7 @@ function snapshot(room, member) {
   const moves = acting
     ? (
         pending
-          ? pending.options
+          ? Maple.playableMoves(room,member.seat,pending.options,pending)
           : Maple.playableMoves(
             room,
             member.seat,
@@ -790,7 +790,7 @@ function snapshot(room, member) {
     // Which cards Maple has taken off THIS player's menu. The server still
     // refuses them whatever a client sends; this is so the board can say why
     // instead of a card silently going missing.
-    mapleBlocked: Maple.blocked(room, member.seat),
+    mapleBlocked: Maple.blockedForAction(room,member.seat,acting ? pending : null),
 
     effects: effectJournal(room),
 
@@ -1161,7 +1161,7 @@ function handle(ws, data) {
     // suggestion: anyone with a devtools console could send the move anyway, and a
     // restriction the player can walk around is not a restriction. This is the
     // same reason the move is checked against `options` above.
-    const mapleBlocked = Maple.blocked(room, m.seat);
+    const mapleBlocked = Maple.blockedForAction(room,m.seat,pending);
     if (mapleBlocked.length && mapleBlocked.indexOf(cardId) !== -1) {
       // This rejection is private feedback, not a public claim of a card play.
       send(ws, { type: 'effect', effect: Effects.publicEvent('maple-restriction', m.seat, m.seat) });

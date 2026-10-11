@@ -95,8 +95,8 @@ async function main() {
     while (!host.state.over && moves++ < 150) {
       const actor = clients.find(c => c.state.acting);
       assert(actor && actor.state.moves.length, 'an authoritative legal move is available');
-      // Pending choices expose options separately from the chooser's Maple
-      // restriction. The driver must honour both, just like the live UI.
+      // The server now filters a pending action against the correct player:
+      // burn choices are exempt; stolen moves use the target's restriction.
       const move = actor.state.moves.find(option => !(actor.state.mapleBlocked || []).includes(option.cardId));
       assert(move, 'a Maple-permitted authoritative option is available');
       await action(actor, { type: 'move', cardId: move.cardId, targetId: move.targetId });

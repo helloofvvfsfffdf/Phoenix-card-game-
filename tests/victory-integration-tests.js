@@ -4,14 +4,16 @@ function runtime() {
   var b=require('./music-player-tests').browser({track:'off',volume:.25}),calls=[];
   b.context.PhoenixEffects=E;b.context.matchMedia=function(){return {matches:true,addEventListener:function(){}};};
   b.context.gsap={set:function(){},ticker:{add:function(){},remove:function(){}},timeline:function(options){
-    var labels={},steps=[],ids=[],time=0,end=0,killed=false;
+    var labels={},steps=[],ids=[],time=0,end=0,killed=false,paused=true,began=0;
+    function cancel(){ids.forEach(b.context.clearTimeout);ids=[];}
+    function schedule(){paused=false;began=b.context.Date.now()-time*1000;steps.forEach(function(s){if(!s.done)ids.push(b.context.setTimeout(function(){if(!killed&&!paused){s.done=true;s.fn();}},Math.max(0,s.at-time)*1000));});ids.push(b.context.setTimeout(function(){if(!killed&&!paused)options.onComplete();},Math.max(0,end-time)*1000));}
     function at(position){return typeof position==='string'?labels[position]:position||0;}
     var t={addLabel:function(name,p){labels[name]=p;return t;},
       call:function(fn,args,p){steps.push({fn:fn,at:at(p)});return t;},
       to:function(target,props,p){calls.push({target:target,props:props,at:at(p)});end=Math.max(end,at(p)+(props.duration||0));return t;},
       fromTo:function(target,from,to,p){calls.push({target:target,from:from,props:to,at:at(p)});end=Math.max(end,at(p)+(to.duration||0));return t;},
-      time:function(){return time;},kill:function(){killed=true;ids.forEach(b.context.clearTimeout);},
-      play:function(){steps.forEach(function(s){ids.push(b.context.setTimeout(function(){if(!killed){time=s.at;s.fn();}},s.at*1000));});ids.push(b.context.setTimeout(function(){if(!killed){time=end;options.onComplete();}},end*1000));return t;}};
+      time:function(){return paused?time:(b.context.Date.now()-began)/1000;},kill:function(){killed=true;cancel();},
+      pause:function(){time=t.time();paused=true;cancel();return t;},resume:function(){schedule();return t;},play:function(){schedule();return t;}};
     return t;
   }};
   b.loadScript('victory-scene.js');b.loadScript('effects-client.js');b.fx=b.context.PhoenixCinematics;b.fx.update({sound:false});b.calls=calls;
@@ -73,5 +75,26 @@ module.exports=function(test,equal,deepEqual,assert){
   test('page exit and preference changes dispose winning scene without late announcements',function(){
     var b=runtime();b.fx.match(snapshot(false,null));b.fx.match(snapshot(true,'human'));b.fx.update({visuals:'off'});b.advance(10000);equal(overlay(b),undefined);equal(b.timers.size,0);
     b.fx.update({visuals:'reduced'});b.fx.match(snapshot(false,null,'exit'));b.fx.match(snapshot(true,'human','exit'));b.windowListeners.pagehide();b.advance(10000);equal(overlay(b),undefined);equal(b.timers.size,0);
+  });
+  test('an in-progress winning sequence pauses in a hidden player tab and resumes without replay',function(){
+    var b=runtime();b.fx.match(snapshot(false,null));b.fx.match(snapshot(true,'human'));b.advance(650);var n=overlay(b);
+    b.document.hidden=true;b.dispatch('visibilitychange');equal(b.context.PhoenixVictoryScene.diagnostics().paused,true);b.advance(15000);equal(overlay(b),n);
+    b.document.hidden=false;b.dispatch('visibilitychange');equal(b.context.PhoenixVictoryScene.diagnostics().paused,false);b.advance(9050);equal(overlay(b),undefined);
+    equal(b.context.PhoenixVictoryScene.diagnostics().stopReason,'complete');equal(b.timers.size,0);b.fx.match(snapshot(true,'human'));equal(overlay(b),undefined);
+    equal(b.context.PhoenixVictoryScene.diagnostics().visibleSeconds,9.7);
+    assert(b.nodes['settings-effects-status'].textContent.includes('Last victory: complete at 9.70s; on screen 9.70s'));
+  });
+  test('a newly confirmed win in a hidden tab waits for visibility, but finished baselines do not',function(){
+    var b=runtime();b.fx.match(snapshot(false,null));b.document.hidden=true;b.fx.match(snapshot(true,'human'));equal(overlay(b),undefined);b.advance(12000);
+    b.document.hidden=false;b.dispatch('visibilitychange');assert(overlay(b));equal(child(overlay(b),'pv-winner').textContent,'JOSHUA & TED');b.advance(9700);equal(overlay(b),undefined);
+    b.document.hidden=true;b.fx.match(snapshot(true,'human','finished-baseline'));b.document.hidden=false;b.dispatch('visibilitychange');equal(overlay(b),undefined);
+  });
+  test('leaving while a hidden-tab win waits cancels it permanently',function(){
+    var b=runtime();b.fx.match(snapshot(false,null));b.document.hidden=true;b.fx.match(snapshot(true,'human'));b.fx.resetNetwork('leave');b.document.hidden=false;b.dispatch('visibilitychange');equal(overlay(b),undefined);equal(b.timers.size,0);
+  });
+  test('hiding during a Phoenix-card takeover preserves its queued confirmed winning result',function(){
+    var b=runtime();b.loadScript('phoenix-scene.js');b.fx.match(snapshot(false,null));b.fx.show(E.publicEvent('phoenix',0));b.fx.match(snapshot(true,'human'));
+    equal(overlay(b),undefined);b.document.hidden=true;b.dispatch('visibilitychange');equal(b.fx.diagnostics().phoenix,null);
+    b.document.hidden=false;b.dispatch('visibilitychange');assert(overlay(b));equal(child(overlay(b),'pv-winner').textContent,'JOSHUA & TED');b.advance(9700);equal(b.timers.size,0);
   });
 };

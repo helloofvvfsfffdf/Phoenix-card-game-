@@ -70,7 +70,7 @@
     return preparation;
   }
   function release() {
-    if (active) active.stop(false);
+    if (active) active.stop(false,'page-exit');
     generation++;
     if (renderer) {
       // Resource callbacks can reload native data: defer native destruction
@@ -84,7 +84,7 @@
   function start(options) {
     options=options || {};
     if (!root.document || root.document.hidden) return null;
-    if (active) active.stop(false);
+    if (active) active.stop(false,'replaced');
     var document=root.document, winner=identity(options.winner), reduced=!!options.reduced;
     var node=document.createElement('section');
     node.className='match-celebration celebration-victory phoenix-winning-screen'+(reduced?' celebration-reduced':'');
@@ -114,11 +114,17 @@
     var skip=make('button','skip','Skip celebration',footer);skip.type='button';
     var progress=make('div','progress');make('div','progress-fill',undefined,progress);
     document.body.appendChild(node);
-    var timeline=null,timer=null,watchdog=null,stopped=false,lastTime=0,ticking=false;
+    var timeline=null,timer=null,watchdog=null,stopped=false,lastTime=0,ticking=false,paused=false;
+    var remaining=DURATION*1000,timerStarted=0;
+    var shownAt=Date.now(),pausedAt=null,pauseDuration=0;
     last={phase:'loading',sequence:[],frames:0,error:null,winner:winner};
     function phase(name,label) { last.phase=name; node.dataset.phase=name;phaseLabel.textContent=label; }
-    function stop(notify) {
+    function stop(notify,reason) {
       if (stopped) return;stopped=true;clearTimeout(timer);clearTimeout(watchdog);
+      last.stopReason=reason || 'dismissed';last.stoppedAt=reason==='fallback-complete'?DURATION:timeline?timeline.time():lastTime;
+      last.endPhase=last.phase;last.hiddenAtStop=!!document.hidden;
+      last.visibleSeconds=Math.max(0,(Date.now()-shownAt-pauseDuration-(pausedAt!==null?Date.now()-pausedAt:0))/1000);
+      if(root.console && root.console.info)root.console.info('[PHOENIX victory ended]',{reason:last.stopReason,time:last.stoppedAt,visibleSeconds:last.visibleSeconds,phase:last.endPhase,frames:last.frames,hidden:last.hiddenAtStop,error:last.error});
       if (timeline) timeline.kill();if (ticking) root.gsap.ticker.remove(render);
       if (renderer) { renderer.context.stopAll(); renderer.canvas.remove(); }
       var focused=document.activeElement===skip || document.activeElement===results;
@@ -126,15 +132,30 @@
       if (focused && options.restoreFocus && options.restoreFocus.focus) options.restoreFocus.focus();
       if (notify!==false && options.onFinish) options.onFinish();
     }
+    function scheduleEnd() {
+      clearTimeout(timer);if(paused)return;
+      timerStarted=Date.now();timer=setTimeout(function(){stop(true,'fallback-complete');},remaining);
+    }
+    function pause() {
+      if(stopped || paused)return;paused=true;pausedAt=Date.now();
+      if(timeline)timeline.pause();
+      if(ticking){root.gsap.ticker.remove(render);ticking=false;}
+      if(timer!==null){remaining=Math.max(0,remaining-(Date.now()-timerStarted));clearTimeout(timer);timer=null;}
+    }
+    function resume() {
+      if(stopped || !paused)return;paused=false;pauseDuration+=Date.now()-pausedAt;pausedAt=null;
+      if(timeline){lastTime=timeline.time();if(!reduced){root.gsap.ticker.add(render);ticking=true;}timeline.resume();}
+      else if(last.phase==='fallback')scheduleEnd();
+    }
     function fallback(error) {
       if (stopped) return;
-      last.error=String(error);if (timeline) timeline.kill();if (ticking) {root.gsap.ticker.remove(render);ticking=false;}
+      last.error=String(error);if (timeline) timeline.kill();timeline=null;if (ticking) {root.gsap.ticker.remove(render);ticking=false;}
       if (renderer) {renderer.context.stopAll();renderer.canvas.remove();}
       node.classList.add('pv-fallback');phase('fallback','VICTORY');status.textContent=winner.name+' wins'+(winner.ally?' with '+winner.ally.toUpperCase():'')+'.';
-      clearTimeout(watchdog);clearTimeout(timer);timer=setTimeout(function(){stop(true);},DURATION*1000);
+      clearTimeout(watchdog);remaining=DURATION*1000;scheduleEnd();
     }
-    var controller={node:node,skip:skip,stop:stop,fallback:fallback,time:function(){return timeline?timeline.time():0;}};active=controller;
-    skip.addEventListener('click',function(){stop(true);});results.addEventListener('click',function(){stop(true);});
+    var controller={node:node,skip:skip,stop:stop,fallback:fallback,pause:pause,resume:resume,time:function(){return timeline?timeline.time():0;},paused:function(){return paused;}};active=controller;
+    skip.addEventListener('click',function(){stop(true,'skip');});results.addEventListener('click',function(){stop(true,'results');});
     function spawn(launch) {
       if (reduced) return;
       var handle=renderer.context.play(renderer.effects[launch.name],launch.x,launch.y,0);
@@ -162,7 +183,7 @@
       gsap.set([elements.crest,elements.eyebrow,elements.winner,elements.tagline,opening],{opacity:0});
       gsap.set(letters,{opacity:0,y:reduced?0:36,rotateX:reduced?0:-55,scale:reduced?1:.91});
       gsap.set(elements.rule,{scaleX:0});gsap.set(finish,{autoAlpha:0,y:reduced?0:12});gsap.set(elements['progress-fill'],{scaleX:0});gsap.set(elements.halo,{opacity:0,scale:1});gsap.set(elements.rays,{opacity:0,rotation:0});
-      timeline=gsap.timeline({paused:true,onComplete:function(){stop(true);}});
+      timeline=gsap.timeline({paused:true,onComplete:function(){stop(true,'complete');}});
       timeline.addLabel('opening',0).call(function(){phase('opening','THE FINAL MOMENT');status.textContent='The final moment.';spawn(LAUNCHES[0]);},null,0);
       timeline.to(opening,{opacity:1,duration:.45,ease:'power2.out'},.12).to(opening,{opacity:0,duration:.45},1.35);
       timeline.to(elements.halo,{opacity:.6,duration:.22,ease:'power1.out'},.32).to(elements.halo,{opacity:.16,duration:1.3,ease:'power2.out'},.6);
@@ -180,8 +201,8 @@
       timeline.to(finish,{autoAlpha:1,y:0,duration:.8,ease:'power2.out'},7.0);
       timeline.to(elements.halo,{opacity:.42,duration:1.4},7.7);
       timeline.to(elements['progress-fill'],{scaleX:1,duration:DURATION,ease:'none'},0);
-      if (!reduced) {gsap.ticker.add(render);ticking=true;}
-      timeline.play(0);
+      if (!reduced && !paused) {gsap.ticker.add(render);ticking=true;}
+      if(!paused)timeline.play(0);
     }
     watchdog=setTimeout(function(){fallback('Victory initialization timed out');},10500);
     if (reduced) {try{build();}catch(error){fallback(error.message);}}
@@ -194,7 +215,8 @@
   }
   function diagnostics() {
     return {phase:last.phase,sequence:last.sequence.slice(),frames:last.frames,error:last.error,winner:last.winner,
-      active:!!active,ready:!!(renderer&&renderer.ready),time:active?active.time():0};
+      active:!!active,ready:!!(renderer&&renderer.ready),time:active?active.time():0,paused:active?active.paused():false,
+      stopReason:last.stopReason||null,stoppedAt:last.stoppedAt,visibleSeconds:last.visibleSeconds,endPhase:last.endPhase,hiddenAtStop:last.hiddenAtStop};
   }
   return {DURATION:DURATION,LAUNCHES:LAUNCHES,identity:identity,prepare:prepare,start:start,release:release,diagnostics:diagnostics};
 }));
