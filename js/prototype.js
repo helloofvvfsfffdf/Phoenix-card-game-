@@ -117,6 +117,9 @@
     $('menu-settings').addEventListener('click', function () {
       window.PhoenixMusicSettings.open();
     });
+    $('menu-cinematics').addEventListener('click', function () {
+      window.location.href = 'card-effects.html';
+    });
 
     ['menu-cards'].forEach(function (id) {
       $(id).addEventListener('click', function () {

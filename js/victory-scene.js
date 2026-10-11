@@ -39,7 +39,7 @@
       if (!root.effekseer || !root.document) { reject(new Error('Effekseer unavailable')); return; }
       var timeout = setTimeout(function () { reject(new Error('Victory media loading timed out')); },10000);
       function failed(error) { clearTimeout(timeout); reject(error instanceof Error ? error : new Error(String(error))); }
-      root.effekseer.initRuntime('assets/victory/vendor/effekseer.wasm',function () {
+      function initialized() {
         if (epoch !== generation) { failed('Victory preparation cancelled'); return; }
         try {
           var canvas = root.document.createElement('canvas');
@@ -65,7 +65,9 @@
             instance.ready=true; clearTimeout(timeout); resolve(instance);
           },failed);
         } catch (error) { failed(error); }
-      },function () { failed('Effekseer runtime initialization failed'); });
+      }
+      if(root.PhoenixParticleRuntime)root.PhoenixParticleRuntime.prepare().then(initialized,failed);
+      else root.effekseer.initRuntime('assets/victory/vendor/effekseer.wasm',initialized,function () { failed('Effekseer runtime initialization failed'); });
     });
     return preparation;
   }

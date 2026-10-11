@@ -1,10 +1,13 @@
 # PHOENIX card cinematic atelier
 
-Preview: **http://localhost:3000/card-effects.html**. All 14 cards are available
+Preview: **http://localhost:3000/card-effects.html**, also available from the main
+menu's **Card Cinematics** button. All 14 cards are available
 individually, with replay, pause, a sequential tour, outcome selection, rendering
 quality and reduced-motion controls. This is an isolated fictional demonstration,
 not a game mode: no match state, auth, sockets, live hands, rules mutations, sound
-or music. The main game does not load the new card gallery/controller/effects.
+or music. The main game never loads the gallery controller or fictional table.
+Following approval, it now uses a separate public-event renderer for these same
+effect binaries and emblems; see `CARD-CINEMATICS-INTEGRATION.md`.
 
 ## Authoring and semantics
 
@@ -50,9 +53,9 @@ Phoenix's demonstration includes fictional extra opponents contributing 60,000.
   and resume without catch-up. Escape stops playback/tour.
 - Reduced motion uses a short static card explanation with no particle draws,
   card flights, camera shake or spinning. WebGL failure retains the explanation.
-- Current effects are preview-only; future integration must anchor them to
-  confirmed public events, preserve private reveals and keep pointer input live.
-  Long hero presentations are for inspection, not a proposed input-blocking wait.
+- The gallery itself remains inspection-only. The approved gameplay adapter uses
+  confirmed public events, preserves private reveals and keeps pointer input live.
+  Long hero presentations are never an input-blocking wait.
 
 ## Requested website opening
 
@@ -85,7 +88,7 @@ Screenshots/measurement JSON are saved under `%LOCALAPPDATA%/Temp/opencode/`.
 
 Physical phones, Safari/iOS, low-end GPU performance and subjective quality
 approval are not established by desktop Edge/viewport emulation. The owner should
-review each study before any new card effects are integrated into the main game.
+review each study; approval was subsequently given for all fourteen.
 
 Validation on 2026-10-11: **481 headless + 9 live multiplayer tests passed**;
 native Edge gallery and website-opening checks passed. The existing real-game

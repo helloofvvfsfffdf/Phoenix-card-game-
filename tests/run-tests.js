@@ -562,6 +562,9 @@ require('./forced-choice-regression-tests')(test,equal,deepEqual,assert);
 suite('Original card cinematic preview catalogue');
 require('./card-cinematic-catalog-tests')(test,equal,deepEqual,assert);
 
+suite('Approved card cinematics in gameplay');
+require('./card-cinematic-integration-tests')(test,equal,deepEqual,assert);
+
 /* ===================================================================== */
 /* The deck                                                               */
 /* ===================================================================== */

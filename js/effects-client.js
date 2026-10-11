@@ -88,7 +88,7 @@
     record.node.remove();
     active = active.filter(function (item) { return item !== record; });
   }
-  function clearVisuals() { active.slice().forEach(cleanupVisual); }
+  function clearVisuals() { active.slice().forEach(cleanupVisual);if(!phoenix && window.PhoenixCardScene)window.PhoenixCardScene.stop(); }
   function update(next) {
     prefs = E.normalise(Object.assign({}, prefs, next));
     saved = E.save(store, prefs);
@@ -165,6 +165,21 @@
     if (celebration) return; // End fanfare has priority; consume still advances IDs.
     if (previewing && scope !== 'settings') stopPreview();
     if (phoenix) return; // All public IDs still advance, but avoid SFX pile-up.
+    if (window.PhoenixCardScene && window.PhoenixCardScene.supports(safe.key)) {
+      // Approved particle artwork replaces only card presentation, not rules,
+      // hand UI or audio. Existing SFX stay exactly as configured; no new sounds.
+      sound(safe.key,safe.outcome === 'inert');
+      var cardSettings=document.getElementById('settings');
+      if(scope !== 'settings' && cardSettings && !cardSettings.hidden)return;
+      var cardMotion=E.motion(prefs,media.matches);if(cardMotion==='off')return;
+      var legendary=safe.key==='phoenix' && safe.outcome!=='inert';
+      if(legendary)clearVisuals();
+      var cardScene=window.PhoenixCardScene.start(safe,{motion:cardMotion,scope:scope || 'online-screen',
+        source:anchor(safe.actor,scope || 'online-screen'),
+        onFinish:legendary?function(){finishPhoenix(true);}:null});
+      if(legendary)phoenix=cardScene;
+      return;
+    }
     if (safe.key === 'phoenix' && safe.outcome !== 'inert' && window.PhoenixFireScene) {
       var modal = document.getElementById('settings');
       if (scope !== 'settings' && modal && !modal.hidden) { sound('phoenix',false); return; }
@@ -297,6 +312,7 @@
     celebration = { node: node, skip: skip, timer: setTimeout(finishCelebration, kind === 'victory' ? 5000 : 2400) };
   }
   function prepareVictory() {
+    if(window.PhoenixCardScene && E.motion(prefs,media.matches)==='full')window.PhoenixCardScene.prepare().catch(function(){ /* Card fallback keeps input available. */ });
     if (window.PhoenixVictoryScene && E.motion(prefs,media.matches) === 'full') window.PhoenixVictoryScene.prepare().catch(function(){ /* Result fallback is handled by the scene. */ });
   }
   function result(kind,winner) { if (phoenix) pendingEnd={kind:kind,winner:winner}; else celebrate(kind,winner); }
@@ -346,7 +362,7 @@
     rules: function (events) { displayBatch(E.fromRules(events), 'phoenix-game'); },
     unlock: unlock, isAudioBlocked: isAudioBlocked, update: update,
     prefs: function () { return Object.assign({}, prefs); }, cleanup: cleanup,
-    diagnostics: function () { return { visuals: active.length + (phoenix ? 1 : 0), voices: voices.length, phoenix:phoenix ? phoenix.node.dataset.phase : null,
+    diagnostics: function () { return { visuals: active.length + (phoenix ? 1 : 0) + (window.PhoenixCardScene && !phoenix && window.PhoenixCardScene.diagnostics().active ? 1 : 0), voices: voices.length, phoenix:phoenix ? phoenix.node.dataset.phase || 'card-cinematic' : null,
       phoenixAudio:phoenixBuffer ? 'recorded-mix' : 'procedural-fallback', celebration: celebration ? celebration.node.className : null,
       audio: context ? context.state : 'uninitialised', motion: E.motion(prefs, media.matches) }; }
   };
