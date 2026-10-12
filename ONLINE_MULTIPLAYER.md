@@ -1,9 +1,14 @@
-# PHOENIX — Real multiplayer (public/private lobbies)
+# PHOENIX — Real multiplayer (public + private lobbies)
 
 This version adds a **real WebSocket multiplayer server** with public and private
 lobbies, host controls, and an owner admin dashboard. It keeps the updated main
 menu, the approved animal portraits, single-player mode and the local multiplayer
 tester.
+
+The online game is the **public** version: allies appear as randomly generated
+animal names with random emojis that change every match, so the private portraits
+and real catalogue names never reach a public screen. The owner-gated modes
+(Single Player, Multiplayer Testing, gallery) keep the portraits and names.
 
 ## Run it
 
@@ -17,10 +22,10 @@ tester.
    - Use a unique password of **at least 24 characters**. Keep it private. You must set it again in each new terminal session.
 5. Run `npm start`.
 6. Open **http://localhost:3000** in a browser (do not open `index.html` directly).
-7. Choose **MULTIPLAYER**, type a name, pick **PUBLIC or PRIVATE**, and press **CREATE LOBBY**.
-   - A public lobby appears in the lobby browser for everyone.
-   - A private lobby is hidden; share its six-character invite code only with people you want to join.
-8. Other players open the same server URL and either pick a room from the **public lobby list** or join by invite code.
+7. Choose **MULTIPLAYER**, type a name, and press **CREATE LOBBY**.
+   - Leave the **optional invite code blank** to make the lobby **public** — it appears in the lobby browser for everyone and gets an automatic code.
+   - Type a **3–6 character code** to make the lobby **private** — it is hidden, and only people you give that code to can join.
+8. Other players open the same server URL and either pick a room from the **public lobby list** or join by typing the invite code.
 9. Once five players are connected, the host presses **START MATCH**.
 
 To play with people on your local Wi-Fi, they can open `http://YOUR-COMPUTER-LAN-IP:3000`. Your firewall may ask to allow Node.js on your private network. For friends outside your home network, deploy this Node server to a trusted HTTPS host that supports WebSockets; send them its HTTPS URL. **An invite code alone cannot connect devices without a reachable server.**
@@ -28,10 +33,28 @@ To play with people on your local Wi-Fi, they can open `http://YOUR-COMPUTER-LAN
 ## Lobbies
 
 - Any visitor can create a lobby — no owner password needed to play.
+- **Creating a lobby** asks for an **optional invite code**. Blank = **public** (listed for everyone, automatic 6-character code); a 3–6 character code = **private** (hidden, joinable only with that exact code). Invalid or already-used custom codes are refused.
 - **Public** lobbies are broadcast to every connected client in the lobby browser (host name, player count, phase only — no private data).
 - **Private** lobbies are invisible to everyone who does not have the invite code.
 - A maximum of **5 active lobbies** is enforced across public and private together (`PHOENIX_MAX_ROOMS` to override). When the limit is reached, new creations are refused with a clear message.
 - Empty lobbies are cleaned up when everyone leaves; abandoned started rooms are closed after a grace period.
+
+## Public allies (random names + emojis)
+
+The online game is the **public** version, so it never shows the private animal
+portraits or catalogue names:
+
+- At match creation the server gives every ally (the six draftable ones plus
+  Maple) a **random animal name and a random emoji** for that room.
+- The same map is sent in **every** state, so all players see identical creatures;
+  the names and emojis are **re-rolled for each new match**.
+- Abilities, titles and rules are unchanged — only the name and picture change. Any
+  ally named inside an ability ("…chance to block Phoenix") is shown using that
+  room's public name for the ally it refers to.
+- The draft, the seat list, the match log, the cinematic captions and the victory
+  screen all read from the public map; no portrait image is ever requested.
+- The **owner-gated modes** — Single Player, Multiplayer Testing and the gallery —
+  never receive this map and keep the real portraits and names exactly as before.
 
 ## Host controls (server-enforced)
 
@@ -54,7 +77,7 @@ The owner password (`PHOENIX_OWNER_PASSWORD`) is only needed by the operator, to
 ## Rules and features
 
 - Exactly five real people per match, one per device/browser.
-- Everyone chooses an ally independently; duplicate allies are allowed (the game's rules — the five dice order — resolve picks).
+- Everyone rolls dice for turn order and draft order, then each player drafts a **unique** ally (the server refuses an ally another player already holds; Ted needs at least three players).
 - Server controls the deck, deals hands privately, validates legal moves and resolves effects using the existing PHOENIX rules engine.
 - Players see only their own hand and their own legal move choices; other players' card counts and scores are public.
 - Steal a Turn / Alvin forced decisions are handled by the server.
@@ -64,9 +87,9 @@ The owner password (`PHOENIX_OWNER_PASSWORD`) is only needed by the operator, to
 
 `npm test` runs the full suite:
 
-- 523+ unit tests for the rules engine and UI helpers,
+- 525+ unit tests for the rules engine and UI helpers (including the public ally rendering path),
 - live network tests for create/join/start/play plus reconnection handling,
-- **29 multiplayer/admin integration tests** covering public/private lobbies, host kick/close permission spoofing, owner shutdowns, lockdown persistence across restarts, and a complete five-player match.
+- **41 multiplayer/admin integration tests** covering blank-code public lobbies, custom-code private lobbies, host kick/close permission spoofing, owner shutdowns, lockdown persistence across restarts, the public ally identity map (unique names and emojis, identical for every player, never leaking catalogue names or portrait paths) and a complete five-player match.
 
 ## Security notes
 

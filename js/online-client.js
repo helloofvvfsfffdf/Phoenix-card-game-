@@ -57,7 +57,13 @@
    * The server still owns WHICH allies are offered; this only describes the id it
    * sent, so it can never offer something the server would refuse.
    *
-   * @returns {?{name: string, title: string, desc: string, color: string, src: string}}
+   * In a PUBLIC online match the server also sends `state.publicAllies` - this
+   * room's randomised animal names and emojis. When it does, the public name and
+   * emoji REPLACE the catalogue name everywhere (abilities stay the catalogue's),
+   * and the portrait is never touched: the private portraits and real names must
+   * not reach a public screen.
+   *
+   * @returns {?{name: string, emoji: ?string, title: string, desc: string, color: string, src: string}}
    */
   function allyInfo(id) {
     var allies = window.PhoenixAllies;
@@ -72,10 +78,26 @@
     var found = all.filter(function (a) { return a.id === id; })[0];
     if (!found) return null;
 
+    var map = state && state.publicAllies;
+    var pub = map && map[id];
+
+    // The catalogue's ability wording names other allies (e.g. "40% chance to
+    // block Phoenix"). In a public match those names are swapped for this room's
+    // public names, so the ability reads identically while nobody's private name
+    // is revealed. Owner modes (no publicAllies) keep the raw catalogue text.
+    var desc = found.desc || '';
+    if (map) {
+      desc = desc.replace(/\b(Phoenix|Tilly|Ted|Louie|Simba|Elsie|Maple)\b/g, function (word) {
+        var pubId = word.toLowerCase();
+        return map[pubId] ? map[pubId].name : word;
+      });
+    }
+
     return {
-      name: found.name || id.toUpperCase(),
+      name: pub ? pub.name : (found.name || id.toUpperCase()),
+      emoji: pub ? pub.emoji : null,
       title: found.title || '',
-      desc: found.desc || '',
+      desc: desc,
       color: found.color || '',
       src: found.src || ('assets/allies/' + id + '.jpg')
     };
@@ -306,10 +328,11 @@
       request && typeof request === 'object' ? request : { type: request };
 
     if (action.type === 'create') {
-      const visSel = document.querySelector('input[name="online-visibility"]:checked');
-      const visibility = visSel ? visSel.value : 'private';
+      // Optional custom invite code: blank (or missing) creates a PUBLIC lobby,
+      // a 3-6 character code creates a PRIVATE lobby joinable with that code.
+      const code = $('online-create-code').value.trim();
       connect(() => {
-        send({ type: 'create', name, visibility });
+        send({ type: 'create', name, code });
       });
       return;
     }
@@ -409,9 +432,16 @@
 
         if (info && info.color) button.style.setProperty('--ally-color', info.color);
 
-        const picture = el('img', 'online-portrait');
-        picture.src = info ? info.src : ('assets/allies/' + id + '.jpg');
-        picture.alt = info ? info.name : id;
+        // Public matches have no animal portraits: the tile shows the room's
+        // randomised public emoji instead. Portraits only appear where the
+        // game is showing the real catalogue (owner modes send no publicAllies).
+        const picture = info && info.emoji
+          ? el('span', 'online-portrait online-ally-emoji', info.emoji)
+          : el('img', 'online-portrait');
+        if (!info || !info.emoji) {
+          picture.src = info ? info.src : ('assets/allies/' + id + '.jpg');
+          picture.alt = info ? info.name : id;
+        }
         button.append(picture);
 
         button.append(el('strong', '', info ? info.name : id.toUpperCase()));
@@ -555,8 +585,14 @@ function renderMapleNotice(actions) {
     })
     .join(', ');
 
+  // A public room uses Maple's randomised public name from the server; only the
+  // owner modes ever say the real name. The 🍁 stays - it is the Sweet Tooth
+  // glyph, part of the ability, not her name.
+  const pub = state.publicAllies && state.publicAllies.maple;
+  const mapleName = pub ? pub.name : 'Maple';
+
   actions.append(el('p', 'online-restricted',
-    '🍁 Maple’s Sweet Tooth: nice cards only for 3 rounds. Not for now: ' + names + '.'
+    '🍁 ' + mapleName + '’s Sweet Tooth: nice cards only for 3 rounds. Not for now: ' + names + '.'
   ));
 }
 
@@ -586,21 +622,28 @@ function renderPlaying() {
       if (winner) {
         const champion = el('div', 'phoenix-champion');
 
-        const photo = el('img', 'phoenix-victory-ally');
-        // Same path as everywhere else: assets/allies/<id>.jpg, from the id the
-        // server sent. No filename invented here.
-        photo.src = 'assets/allies/' + winner.ally + '.jpg';
-        photo.alt = winner.ally + ' the winning ally';
+        // Public matches show the room's randomised public emoji + name instead
+        // of the private portrait and catalogue name. The portrait path is only
+        // a fallback for modes that send no publicAllies.
+        const pub = state.publicAllies && winner.ally && state.publicAllies[winner.ally];
+        const photo = pub && pub.emoji
+          ? el('span', 'phoenix-victory-ally online-ally-emoji', pub.emoji)
+          : el('img', 'phoenix-victory-ally');
+        if (!pub || !pub.emoji) {
+          photo.src = 'assets/allies/' + winner.ally + '.jpg';
+          photo.alt = winner.ally + ' the winning ally';
+        }
 
         const trophy = el('div', 'phoenix-victory-trophy', '\u{1F3C6}');
         const display = el('div', 'phoenix-victory-display');
         display.append(photo, trophy);
         champion.append(display);
 
+        const winnerAllyName = pub ? pub.name : (winner.ally || '');
         champion.append(el(
           'h2',
           '',
-          winner.name + ' & ' + (winner.ally || '').toUpperCase() + ' WON!'
+          winner.name + ' & ' + winnerAllyName.toUpperCase() + ' WON!'
         ));
 
         champion.append(el(
@@ -620,12 +663,16 @@ function renderPlaying() {
         .forEach((player, index) => {
           const medal = ['\u{1F947}', '\u{1F948}', '\u{1F949}'][index] || '\u{1F3C5}';
 
+          const allyShown = state.publicAllies && player.ally && state.publicAllies[player.ally]
+            ? state.publicAllies[player.ally].name.toUpperCase()
+            : (player.ally || 'No ally').toUpperCase();
+
           standings.append(el(
             'p',
             '',
             medal + ' ' + player.name +
             ' & ' +
-            (player.ally || 'No ally').toUpperCase() +
+            allyShown +
             ' — ' +
             player.points.toLocaleString() +
             ' points'

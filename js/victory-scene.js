@@ -21,8 +21,12 @@
   var last = {phase:'idle',sequence:[],frames:0,error:null};
   function identity(value) {
     value = value || {};
-    return {name:typeof value.name === 'string' ? value.name.slice(0,100) : 'The champion',
+    var result = {name:typeof value.name === 'string' ? value.name.slice(0,100) : 'The champion',
       ally:['phoenix','tilly','ted','louie','simba','elsie'].indexOf(value.ally) >= 0 ? value.ally : null};
+    // Only public online matches carry a randomised public name, so the key is
+    // added only when present - the owner modes' snapshots stay byte-identical.
+    if (typeof value.allyName === 'string') result.allyName = value.allyName.slice(0,40);
+    return result;
   }
   function dispose(instance) {
     if (!instance || instance.disposed) return;
@@ -124,7 +128,7 @@
     var title=make('h2','victory',undefined,announcement), letters=[];
     'VICTORY'.split('').forEach(function (letter) { letters.push(make('span','letter',letter,title)); });
     make('div','rule',undefined,announcement);
-    make('p','winner',winner.name.toUpperCase()+(winner.ally?' & '+winner.ally.toUpperCase():''),announcement);
+    make('p','winner',winner.name.toUpperCase()+(winner.ally?' & '+(winner.allyName || winner.ally).toUpperCase():''),announcement);
     make('p','tagline','THE TABLE FALLS. THE PHOENIX RISES.',announcement);
     var finish=make('div','finish',undefined,announcement);
     make('span','crowned','THE WINNER HAS BEEN CROWNED',finish);
@@ -171,7 +175,7 @@
       if (stopped) return;
       last.error=String(error);if (timeline) timeline.kill();timeline=null;if (ticking) {root.gsap.ticker.remove(render);ticking=false;}
       if (renderer) {renderer.context.stopAll();renderer.canvas.remove();}
-      node.classList.add('pv-fallback');phase('fallback','VICTORY');status.textContent=winner.name+' wins'+(winner.ally?' with '+winner.ally.toUpperCase():'')+'.';
+      node.classList.add('pv-fallback');phase('fallback','VICTORY');status.textContent=winner.name+' wins'+(winner.ally?' with '+(winner.allyName || winner.ally).toUpperCase():'')+'.';
       clearTimeout(watchdog);remaining=DURATION*1000;scheduleEnd();
     }
     var controller={node:node,skip:skip,stop:stop,fallback:fallback,pause:pause,resume:resume,time:function(){return timeline?timeline.time():0;},paused:function(){return paused;}};active=controller;
@@ -211,7 +215,7 @@
       timeline.addLabel('opening',0).call(beginOpening,null,0);
       timeline.to(opening,{opacity:1,duration:.45,ease:'power2.out'},.12).to(opening,{opacity:0,duration:.45},1.35);
       timeline.to(elements.halo,{opacity:.6,duration:.22,ease:'power1.out'},.32).to(elements.halo,{opacity:.16,duration:1.3,ease:'power2.out'},.6);
-      timeline.addLabel('celebration',3.15).call(function(){if(!reduced)renderer.context.stopAll();phase('celebration','VICTORY');status.textContent=winner.name+' wins'+(winner.ally?' with '+winner.ally.toUpperCase():'')+'.';spawn(LAUNCHES[1]);},null,'celebration');
+      timeline.addLabel('celebration',3.15).call(function(){if(!reduced)renderer.context.stopAll();phase('celebration','VICTORY');status.textContent=winner.name+' wins'+(winner.ally?' with '+(winner.allyName || winner.ally).toUpperCase():'')+'.';spawn(LAUNCHES[1]);},null,'celebration');
       timeline.to(elements.halo,{opacity:.9,duration:1.7,ease:'power2.out'},'celebration');
       timeline.to(elements.rays,{opacity:reduced?0:.75,duration:2,ease:'power2.out'},'celebration').to(elements.rays,{rotation:reduced?0:12,duration:6.55,ease:'none'},'celebration');
       timeline.fromTo(elements.crest,{opacity:0,scale:reduced?1:.5,rotation:reduced?0:-65},{opacity:1,scale:1,rotation:0,duration:.95,ease:'power3.out'},3.28);

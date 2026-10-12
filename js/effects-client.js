@@ -16,6 +16,10 @@
   var localState = null, localArmed = false, localFinished = new WeakSet();
   var deferredWin = null;
   var victoryPreview = false, lastMatchDiagnostic = null;
+  // The last online snapshot's randomised public identities, when present. Only
+  // PUBLIC multiplayer states carry them; the owner modes never do, so their
+  // cinematic labels keep the real catalogue names.
+  var currentPublicAllies = null;
 
   function isAudioBlocked() { return prefs.sound && prefs.volume > 0 && audioBlocked; }
   function refreshButton() {
@@ -218,9 +222,17 @@
     seal.className = 'cinematic-seal';
     seal.textContent = definition[1];
     node.appendChild(seal);
+    var labelText = definition[0];
+    // Public multiplayer: ally effects are captioned with the room's randomised
+    // public name, never the catalogue name. The ability phrase stays unchanged.
+    var allyKey = /^(?:ally|block)-([a-z]+)$/.exec(safe.key);
+    if (allyKey && currentPublicAllies && currentPublicAllies[allyKey[1]]) {
+      var phrase = definition[0].split(' · ').slice(1).join(' · ');
+      labelText = currentPublicAllies[allyKey[1]].name + (phrase ? ' · ' + phrase : '');
+    }
     var label = document.createElement('span');
     label.className = 'cinematic-label';
-    label.textContent = definition[0] + (safe.outcome === 'inert' ? ' · No change' : '');
+    label.textContent = labelText + (safe.outcome === 'inert' ? ' · No change' : '');
     node.appendChild(label);
     if (mode === 'full' && safe.outcome !== 'inert') {
       var aura = document.createElement('span'); aura.className = 'cinematic-aura'; node.appendChild(aura);
@@ -339,9 +351,19 @@
   function result(kind,winner) { if (phoenix) pendingEnd={kind:kind,winner:winner}; else celebrate(kind,winner); }
   function match(snapshot) {
     if (snapshot && snapshot.started && !snapshot.over) prepareVictory();
+    currentPublicAllies = snapshot && snapshot.publicAllies ? snapshot.publicAllies : null;
     var kind = endings.consume(snapshot);
     if(snapshot)lastMatchDiagnostic={started:!!snapshot.started,over:!!snapshot.over,result:E.matchResult(snapshot),requested:kind || null};
-    if (kind) result(kind,(snapshot.players || []).find(function(p){return p.id === snapshot.winner;}));
+    if (kind) {
+      var winner=(snapshot.players || []).find(function(p){return p.id === snapshot.winner;});
+      // Public online matches: give the celebration scenes the room's randomised
+      // public ally name so they never print the private catalogue name.
+      if (winner && snapshot.publicAllies && winner.ally && snapshot.publicAllies[winner.ally]) {
+        var pub = snapshot.publicAllies[winner.ally];
+        winner = { id: winner.id, name: winner.name, ally: winner.ally, allyName: pub.name };
+      }
+      result(kind, winner);
+    }
   }
   function localMatch(state, ally) {
     if (!state || document.getElementById('phoenix-game').hidden) return;

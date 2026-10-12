@@ -449,6 +449,56 @@ const ALLIES = [
   'ted'
 ];
 
+/**
+ * Public online identities.
+ *
+ * The online multiplayer is the PUBLIC version: it must never show the private
+ * animal portraits or the catalogue names (Phoenix, Tilly, ...). Instead, every
+ * room gets its own randomly generated identity map at creation time - one
+ * animal name and one emoji per ally (the six draftable ones plus Maple) - and
+ * that map is broadcast with every state, so every player in the room reads the
+ * same creatures and the names change from match to match. `room.publicAllies`
+ * is the only copy a public screen may draw from.
+ *
+ * The owner modes (single-player, Multiplayer Testing, gallery) never receive
+ * publicAllies and keep the real catalogue untouched.
+ */
+const PUBLIC_ALLY_NAMES = [
+  'Falcon', 'Harrier', 'Wolf', 'Jaguar', 'Viper', 'Otter', 'Raven',
+  'Bison', 'Lynx', 'Husky', 'Panther', 'Ferret', 'Skua', 'Cobra'
+];
+const PUBLIC_ALLY_EMOJI = [
+  '🦊', '🦉', '🐺', '🐆', '🐍', '🦦', '🦅',
+  '🐢', '🐻', '🐕', '🐯', '🦜', '🐸', '🦋'
+];
+
+function shuffled(list) {
+  const out = list.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/** One fresh, room-private identity per ally: unique names and unique emojis. */
+function publicAllies() {
+  const ids = ALLIES.concat('maple');
+  const names = shuffled(PUBLIC_ALLY_NAMES).slice(0, ids.length);
+  const emojis = shuffled(PUBLIC_ALLY_EMOJI).slice(0, ids.length);
+  const map = {};
+  ids.forEach((id, i) => {
+    map[id] = { name: names[i], emoji: emojis[i] };
+  });
+  return map;
+}
+
+/** The public name a room shows in shared text for one ally id. */
+function allyShown(room, id) {
+  const pub = room && room.publicAllies && room.publicAllies[id];
+  return pub ? pub.name : String(id).toUpperCase();
+}
+
 const rollDie = () => crypto.randomInt(1, 7);
 const chance = percent => crypto.randomInt(100) < percent;
 
@@ -610,7 +660,7 @@ function applyPhoenix(room) {
   );
 
   if (!victims.length) {
-    addLog(room, 'Phoenix found no opponent with cards to steal.');
+    addLog(room, allyShown(room, 'phoenix') + ' found no opponent with cards to steal.');
     return;
   }
 
@@ -629,11 +679,12 @@ function applyPhoenix(room) {
     addLog(
       room,
       target.ally === 'ted'
-        ? '🐶 Ted howled and scared Phoenix away from ' +
+        ? '🐶 ' + allyShown(room, 'ted') + ' howled and scared ' +
+          allyShown(room, 'phoenix') + ' away from ' +
           target.name + '!'
         : target.name + "'s " +
-          target.ally.toUpperCase() +
-          ' blocked Phoenix’s theft!'
+          allyShown(room, target.ally) +
+          ' blocked ' + allyShown(room, 'phoenix') + '’s theft!'
     );
 
     return;
@@ -650,7 +701,7 @@ function applyPhoenix(room) {
 
   addLog(
     room,
-    'Phoenix stole a random card from ' + target.name + '!'
+    allyShown(room, 'phoenix') + ' stole a random card from ' + target.name + '!'
   );
 }
 
@@ -700,7 +751,15 @@ function applyTed(room) {
  * way to be tested at all, because requiring this file starts a server.
  */
 function applyMaple(room) {
-  const victim = Maple.apply(room, Rules, null, addLog);
+  const victim = Maple.apply(room, Rules, null, (message, privateSeat, privateText) => {
+    // The public multiplayer never says "Maple": the log uses this room's
+    // random public name so the private catalogue name is not revealed.
+    const publicName = allyShown(room, 'maple');
+    const text = typeof message === 'string'
+      ? message.replace('Maple', publicName)
+      : message;
+    addLog(room, text, privateSeat, privateText);
+  });
   if (victim !== null) emitEffect(room, 'ally-maple', -1, victim);
 }
 
@@ -936,6 +995,9 @@ function snapshot(room, member) {
   return {
     type: 'state',
     phase: room.phase || 'lobby',
+    // This room's randomised public identities, identical for every player in
+    // the room. The PUBLIC screens must render ally names/emojis ONLY from here.
+    publicAllies: room.publicAllies,
 
     dice: room.dice
       ? {
@@ -1254,12 +1316,32 @@ function handle(ws, data) {
       );
     }
 
-    const visibility = data.visibility === 'public' ? 'public' : 'private';
+    // Optional custom invite code: blank (or missing) means a PUBLIC lobby -
+    // listed in the shared lobby browser, joinable by anyone - and non-blank
+    // means a PRIVATE lobby that only players with that exact code can find.
+    const requestedCode = typeof data.code === 'string'
+      ? data.code.trim().toUpperCase()
+      : '';
+
+    let visibility = 'public';
+    let roomCode = code();
+
+    if (requestedCode) {
+      if (!/^[A-Z0-9]{3,6}$/.test(requestedCode)) {
+        return error(ws, 'Invite codes must be 3-6 letters or numbers.');
+      }
+      if (rooms.has(requestedCode)) {
+        return error(ws, 'That invite code is already in use. Try another.');
+      }
+      visibility = 'private';
+      roomCode = requestedCode;
+    }
 
     const room = {
-      code: code(),
+      code: roomCode,
       name: cleanName(data.name),
       visibility,
+      publicAllies: publicAllies(),
       createdAt: Date.now(),
       members: [],
       state: null,
@@ -1480,7 +1562,7 @@ function handle(ws, data) {
 
     addLog(
       room,
-      m.name + ' chose ' + data.ally.toUpperCase() + '.'
+      m.name + ' chose ' + allyShown(room, data.ally) + '.'
     );
 
     room.draftIndex++;
@@ -1548,7 +1630,7 @@ function handle(ws, data) {
       send(ws, { type: 'effect', effect: Effects.publicEvent('maple-restriction', m.seat, m.seat) });
       return error(
         ws,
-        'Maple will not let you play that - nice cards only for ' +
+        allyShown(room, 'maple') + ' will not let you play that - nice cards only for ' +
           Maple.ROUNDS +
           ' rounds.'
       );

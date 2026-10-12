@@ -313,3 +313,34 @@
 .card.online-blocked:hover {
   transform: none;
 }
+
+/* The hint beside the optional invite-code field on the create form. */
+.online-code-hint {
+  color: #b6c7dd;
+  font-size: 13px;
+}
+
+/* Public online matches have NO animal portraits: the draft tile and the victory
+   champion show the room's randomised public emoji instead of the private
+   catalogue photo. Both selectors outrank the plain portrait rules, so the photo
+   sizing (a round 65px / 160px tile) is kept and only the face changes. */
+.online-draft-choice .online-portrait.online-ally-emoji {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 8px;
+  border-radius: 50%;
+  background: #0b1221;
+  border: 2px solid var(--ally-color, #a68142);
+  font-size: 34px;
+  line-height: 1;
+}
+
+.phoenix-victory-ally.online-ally-emoji {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0b1221;
+  font-size: 84px;
+  line-height: 1;
+}

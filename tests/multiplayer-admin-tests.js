@@ -35,7 +35,10 @@ function startServer(stateFile) {
         PHOENIX_OWNER_PASSWORD: password,
         PHOENIX_MODE_ACCESS_CODE: crypto.randomBytes(16).toString('hex'),
         PHOENIX_STATE_FILE: stateFile,
-        PHOENIX_MAX_ROOMS: '5'
+        // Raised so the suite can hold several rooms open at once; the cap and
+        // the per-IP create budget are still exercised by the server itself.
+        PHOENIX_MAX_ROOMS: '50',
+        PHOENIX_CREATE_LIMIT: '50'
       },
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -101,8 +104,8 @@ function waitFor(client, type, timeoutMs = 12000) {
   });
 }
 
-function create(client, name, visibility) {
-  client.ws.send(JSON.stringify({ type: 'create', name, visibility }));
+function create(client, name, code) {
+  client.ws.send(JSON.stringify({ type: 'create', name, code }));
   return waitFor(client, 'state');
 }
 
@@ -127,7 +130,7 @@ async function main() {
     console.log('\nPublic/private lobbies, host controls and owner administration');
 
     const publicHost = await connect(port);
-    const publicState = await create(publicHost, 'Alice', 'public');
+    const publicState = await create(publicHost, 'Alice', '');
     const pubCode = publicState.code;
     check('a public lobby is created without any owner password', () =>
       assert.strictEqual(typeof pubCode, 'string'));
@@ -143,7 +146,7 @@ async function main() {
     });
 
     const privateHost = await connect(port);
-    const privateState = await create(privateHost, 'Bob', 'private');
+    const privateState = await create(privateHost, 'Bob', 'BOBBY');
     const privCode = privateState.code;
 
     const visitor2 = await connect(port);
@@ -203,11 +206,11 @@ async function main() {
       assert.strictEqual(adminState.admin, true));
 
     const privateHost2 = await connect(port);
-    const p2 = await create(privateHost2, 'Nadia', 'private');
+    const p2 = await create(privateHost2, 'Nadia', 'NADIA');
     const p2Code = p2.code;
 
     const extraHost = await connect(port);
-    const extraState = await create(extraHost, 'Omar', 'public');
+    const extraState = await create(extraHost, 'Omar', '');
     const extraCode = extraState.code;
     const extraGuest = await connect(port);
     await joinRoom(extraGuest, 'Zed', extraCode);
@@ -236,7 +239,7 @@ async function main() {
       assert.strictEqual(shutAll.multiplayerOpen, false));
 
     const blockedCreate = await connect(port);
-    blockedCreate.ws.send(JSON.stringify({ type: 'create', name: 'X', visibility: 'public' }));
+    blockedCreate.ws.send(JSON.stringify({ type: 'create', name: 'X', code: '' }));
     const createBlocked = await waitFor(blockedCreate, 'error');
     check('create is refused while multiplayer is shut down', () =>
       assert(createBlocked.message.includes('closed')));
@@ -253,7 +256,7 @@ async function main() {
       assert.strictEqual(reopened.multiplayerOpen, true));
 
     const keepHost = await connect(port);
-    const keepState = await create(keepHost, 'Pia', 'public');
+    const keepState = await create(keepHost, 'Pia', '');
     const keepCode = keepState.code;
 
     admin.ws.send(JSON.stringify({ type: 'admin_lock_creation' }));
@@ -262,7 +265,7 @@ async function main() {
       assert.strictEqual(locked.creationLocked, true));
 
     const lockedCreate = await connect(port);
-    lockedCreate.ws.send(JSON.stringify({ type: 'create', name: 'Q', visibility: 'public' }));
+    lockedCreate.ws.send(JSON.stringify({ type: 'create', name: 'Q', code: '' }));
     const lockedMsg = await waitFor(lockedCreate, 'error');
     check('create is refused while creation is locked', () =>
       assert(lockedMsg.message.includes('locked')));
@@ -277,7 +280,7 @@ async function main() {
     bundle = await startServer(stateFile);
     const p2port = bundle.port;
     const afterRestart = await connect(p2port);
-    afterRestart.ws.send(JSON.stringify({ type: 'create', name: 'S', visibility: 'public' }));
+    afterRestart.ws.send(JSON.stringify({ type: 'create', name: 'S', code: '' }));
     const stillLocked = await waitFor(afterRestart, 'error');
     check('creationLocked survives a server restart', () =>
       assert(stillLocked.message.includes('locked')));
@@ -295,7 +298,7 @@ async function main() {
     bundle = await startServer(stateFile);
     const p3port = bundle.port;
     const afterAll = await connect(p3port);
-    afterAll.ws.send(JSON.stringify({ type: 'create', name: 'T', visibility: 'public' }));
+    afterAll.ws.send(JSON.stringify({ type: 'create', name: 'T', code: '' }));
     const closedCreate = await waitFor(afterAll, 'error');
     check('multiplayerOpen=false survives a server restart', () =>
       assert(closedCreate.message.includes('closed')));
@@ -316,7 +319,7 @@ async function main() {
     const five = [];
     for (let i = 0; i < 5; i++) five.push(await connect(fport));
     const fiveHost = five[0];
-    await create(fiveHost, 'First', 'public');
+    await create(fiveHost, 'First', '');
     for (let i = 1; i < 5; i++) await joinRoom(five[i], 'P' + i, fiveHost.state.code);
     check('a public lobby holds five players', () =>
       assert.strictEqual(fiveHost.state.players.length, 5));
@@ -359,6 +362,125 @@ async function main() {
     }
     check('a full five-player match plays to completion', () =>
       assert(fiveHost.state.over, 'match did not finish'));
+
+    // ---- Optional invite codes (blank = public, custom = private) ----
+    console.log('Optional invite codes');
+    const soloHost = await connect(fport);
+    const soloState = await create(soloHost, 'Ivy', '');
+    const soloVisitor = await connect(fport);
+    const soloLobby = await waitFor(soloVisitor, 'lobby');
+    check('a blank code creates a public lobby with an auto code, listed for visitors', () => {
+      assert.strictEqual(soloState.visibility, 'public');
+      assert(/^[A-F0-9]{6}$/.test(soloState.code), 'unexpected auto code: ' + soloState.code);
+      assert(soloLobby.rooms.some(r => r.code === soloState.code), 'public lobby not listed');
+    });
+
+    const customHost = await connect(fport);
+    const customState = await create(customHost, 'Jax', 'LUCKY');
+    check('a custom code creates a private lobby under that exact code', () => {
+      assert.strictEqual(customState.code, 'LUCKY');
+      assert.strictEqual(customState.visibility, 'private');
+    });
+
+    const codeVisitor = await connect(fport);
+    const codeLobby = await waitFor(codeVisitor, 'lobby');
+    check('a custom-code lobby is hidden from the shared lobby browser', () =>
+      assert(!codeLobby.rooms.some(r => r.code === 'LUCKY'), 'private code leaked'));
+
+    const customJoiner = await connect(fport);
+    await joinRoom(customJoiner, 'Kai', 'LUCKY');
+    check('a custom-code lobby is joinable with that code', () =>
+      assert.strictEqual(customJoiner.state.code, 'LUCKY'));
+
+    const badCode = await connect(fport);
+    badCode.ws.send(JSON.stringify({ type: 'create', name: 'Bad', code: 'A!' }));
+    const badMsg = await waitFor(badCode, 'error');
+    check('an invalid invite code is refused', () =>
+      assert(badMsg.message.includes('3-6'), badMsg.message));
+
+    const dupeCode = await connect(fport);
+    dupeCode.ws.send(JSON.stringify({ type: 'create', name: 'Dupe', code: 'LUCKY' }));
+    const dupeMsg = await waitFor(dupeCode, 'error');
+    check('a duplicate invite code is refused', () =>
+      assert(dupeMsg.message.includes('already in use'), dupeMsg.message));
+
+    // ---- Public ally identities (the PUBLIC version) ----
+    console.log('Public ally identities');
+    const REAL_NAMES = ['PHOENIX', 'TILLY', 'TED', 'LOUIE', 'SIMBA', 'ELSIE', 'MAPLE'];
+    const ALLY_IDS = ['phoenix', 'tilly', 'ted', 'louie', 'simba', 'elsie', 'maple'];
+
+    const allyHost = await connect(fport);
+    const allyRoom = await create(allyHost, 'Nova', '');
+    const allyMap = allyRoom.publicAllies;
+
+    check('every online state carries a full public ally identity map', () => {
+      assert(allyMap, 'publicAllies missing from the state');
+      assert.strictEqual(Object.keys(allyMap).length, 7, 'expected six allies + maple');
+      ALLY_IDS.forEach(id => {
+        assert(allyMap[id], 'no public identity for ' + id);
+        assert(allyMap[id].name, 'no public name for ' + id);
+        assert(allyMap[id].emoji, 'no public emoji for ' + id);
+      });
+    });
+
+    check('public names and emojis are unique inside one room', () => {
+      const names = Object.values(allyMap).map(p => p.name.toUpperCase());
+      const emojis = Object.values(allyMap).map(p => p.emoji);
+      assert.strictEqual(new Set(names).size, names.length, 'duplicate public name');
+      assert.strictEqual(new Set(emojis).size, emojis.length, 'duplicate public emoji');
+    });
+
+    check('the public state never leaks catalogue names or portrait paths', () => {
+      const serialised = JSON.stringify(allyRoom);
+      assert(!serialised.includes('assets/allies'), 'portrait path leaked into the state');
+      Object.values(allyMap).forEach(p => {
+        assert(REAL_NAMES.indexOf(p.name.toUpperCase()) === -1, 'real name leaked: ' + p.name);
+      });
+    });
+
+    const allyGuest = await connect(fport);
+    await joinRoom(allyGuest, 'Pax', allyRoom.code);
+    check('every player in a room sees the exact same public identities', () =>
+      assert.deepStrictEqual(allyGuest.state.publicAllies, allyMap));
+
+    const otherHost = await connect(fport);
+    const otherRoom = await create(otherHost, 'Quill', '');
+    check('a different match gets a different set of animal names', () =>
+      assert.notDeepStrictEqual(otherRoom.publicAllies, allyMap));
+
+    // A fresh two-player draft, to prove the shared log reads publicly.
+    const logHost = await connect(fport);
+    const logState = await create(logHost, 'Rune', '');
+    const logGuest = await connect(fport);
+    await joinRoom(logGuest, 'Sage', logState.code);
+    logHost.ws.send(JSON.stringify({ type: 'start', rounds: 3 }));
+    await waitFor(logHost, 'state');
+    let dg = 0;
+    while (['turnDice', 'allyDice'].includes(logHost.state.phase)) {
+      assert(dg++ < 80, 'dice must finish');
+      const seat = logHost.state.dice.next;
+      [logHost, logGuest][seat].ws.send(JSON.stringify({ type: 'roll' }));
+      await waitFor(logHost, 'state');
+    }
+    const picks = ['phoenix', 'tilly'];
+    let dp = 0;
+    while (logHost.state.phase === 'draft') {
+      assert(dp++ < 5, 'draft must finish');
+      const seat = logHost.state.draftTurn;
+      [logHost, logGuest][seat].ws.send(JSON.stringify({ type: 'chooseAlly', ally: picks.shift() }));
+      await waitFor(logHost, 'state');
+    }
+    check('the draft log names allies by their public name, never the catalogue name', () => {
+      const lines = logHost.state.log.filter(l => /chose/.test(l));
+      assert.strictEqual(lines.length, 2, 'expected two draft lines, saw ' + lines.length);
+      lines.forEach(line => {
+        const isPublic = Object.values(logHost.state.publicAllies)
+          .some(p => line.indexOf(p.name) !== -1);
+        assert(isPublic, 'draft line is not public: ' + line);
+        REAL_NAMES.forEach(n =>
+          assert(line.indexOf(n + '.') === -1, 'real name in draft line: ' + line));
+      });
+    });
 
     console.log('ALL ' + passed + ' MULTIPLAYER/ADMIN TESTS PASSED (' + moves + ' moves)');
   } finally {

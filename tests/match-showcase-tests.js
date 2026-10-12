@@ -12,4 +12,27 @@ module.exports=function(test,equal,deepEqual,assert){
   test('match seats use ally text and actual catalog descriptions, not portrait images',function(){const b=require('./match-audio-tests').online();b.loadScript('allies.js');b.receive('playing',false,{players:[{id:'human',name:'Player 1',ally:'phoenix',points:20000,handCount:2}],current:'human',acting:false});const seat=b.nodes['online-seats'].children[0],meta=seat.children.find(n=>n.className==='online-seat-meta');assert(!seat.children.some(n=>n.className==='online-portrait'));assert(meta.children.some(n=>n.textContent==='Ally: Phoenix'));const ally=b.context.PhoenixAllies.roster.find(a=>a.id==='phoenix');assert(meta.children.some(n=>n.textContent===ally.desc));assert(meta.children.some(n=>n.textContent===ally.title));});
   test('ally drafting still presents pictures and descriptions for every selectable ally',function(){const b=require('./match-audio-tests').online();b.loadScript('allies.js');b.receive('draft',false,{draftTurn:0,availableAllies:['phoenix','tilly']});const grid=b.nodes['online-actions'].children.find(n=>n.className==='online-draft-grid');equal(grid.children.length,2);grid.children.forEach(n=>{assert(n.children.some(c=>c.className==='online-portrait'));assert(n.children.some(c=>c.className==='online-draft-desc'&&c.textContent.length>0));});});
   test('showcase rendering contains no sound, RNG, move sender or hidden hand inspection',function(){const source=fs.readFileSync(path.join(__dirname,'../js/match-showcase.js'),'utf8');assert(!/Math\.random|randomInt|new Audio|AudioContext|WebSocket|\.send\(|cursedCard|shownToMe/.test(source));assert(source.includes(".card[data-card]"));assert(source.includes('stopDie();killTransitions()'));});
+  test('PUBLIC online play drafts random emoji + animal names and never a portrait or real name',function(){
+    const b=require('./match-audio-tests').online();b.loadScript('allies.js');
+    const map={phoenix:{name:'Falcon',emoji:'\u{1F98A}'},tilly:{name:'Otter',emoji:'\u{1F9A6}'},maple:{name:'Wren',emoji:'\u{1F985}'}};
+    b.receive('draft',false,{draftTurn:0,availableAllies:['phoenix','tilly'],publicAllies:map});
+    const grid=b.nodes['online-actions'].children.find(n=>n.className==='online-draft-grid');
+    equal(grid.children.length,2);
+    grid.children.forEach(n=>{
+      assert(!n.children.some(c=>c.className==='online-portrait'),'no portrait image in a public draft');
+      assert(n.children.some(c=>c.className==='online-portrait online-ally-emoji'),'an emoji tile is shown');
+      assert(n.children.some(c=>c.className==='online-draft-desc'&&c.textContent.length>0),'the ability text is kept');
+      assert(!n.children.some(c=>/Phoenix|Tilly|\bTed\b|Louie|Simba|Elsie|Maple/.test(c.textContent||'')),'no catalogue ally name in a public tile');
+    });
+    assert(grid.children.some(n=>n.children.some(c=>c.textContent==='Falcon')),'the public name is shown');
+    assert(grid.children.some(n=>n.children.some(c=>c.textContent==='Otter')),'the public name is shown');
+  });
+  test('PUBLIC online seats show the randomised public name and never the catalogue names',function(){
+    const b=require('./match-audio-tests').online();b.loadScript('allies.js');
+    b.receive('playing',false,{players:[{id:'human',name:'Player 1',ally:'elsie',points:20000,handCount:2}],current:'human',acting:false,
+      publicAllies:{elsie:{name:'Cobra',emoji:'\u{1F40D}'},phoenix:{name:'Falcon',emoji:'\u{1F98A}'},tilly:{name:'Otter',emoji:'\u{1F9A6}'},louie:{name:'Jaguar',emoji:'\u{1F406}'},simba:{name:'Viper',emoji:'\u{1F40D}'},maple:{name:'Wren',emoji:'\u{1F985}'},ted:{name:'Raven',emoji:'\u{1F99C}'}}});
+    const seat=b.nodes['online-seats'].children[0],meta=seat.children.find(n=>n.className==='online-seat-meta');
+    assert(meta.children.some(c=>c.textContent==='Ally: Cobra'),'the public name is shown in the seat');
+    assert(!meta.children.some(c=>/Phoenix|Tilly|Louie|Simba|Elsie|Maple|\bTed\b/.test(c.textContent||'')),'no catalogue name in the public seat');
+  });
 };

@@ -69,7 +69,7 @@ async function main() {
     });
     console.log('\nLive multiplayer effects');
     const host = await connect();
-    await action(host, { type: 'create', name: 'Host', visibility: 'public' });
+    await action(host, { type: 'create', name: 'Host', code: '' });
     const code = host.state.code;
     const guest = await connect(); await action(guest, { type: 'join', name: 'Guest', code });
     const third = await connect(); await action(third, { type: 'join', name: 'Third', code });
