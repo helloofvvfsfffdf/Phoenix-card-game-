@@ -344,3 +344,53 @@
   font-size: 84px;
   line-height: 1;
 }
+
+/* The two modes on the ONLINE MULTIPLAYER screen: PUBLIC MULTIPLAYER and
+   OWNER & FRIENDS. A tab switch shows one setup panel at a time. */
+.online-mode-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.online-mode-tab {
+  padding: 10px 16px;
+  background: #0b1221;
+  border: 1px solid #a68142;
+  border-radius: 10px;
+  color: #b6c7dd;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.online-mode-tab:hover {
+  color: #f7e5c0;
+  border-color: #f8d67e;
+}
+
+.online-mode-tab-active,
+.online-mode-tab-active:hover {
+  background: #d49b36;
+  border-color: #f8d67e;
+  color: #16110b;
+}
+
+.online-mode-panel[hidden] {
+  display: none;
+}
+
+/* The mode badge in a room's heading (OWNER & FRIENDS / PUBLIC MULTIPLAYER). */
+.online-room-mode {
+  display: inline-block;
+  background: #263c5e;
+  border: 1px solid #6b91c2;
+  color: #f7e5c0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  vertical-align: middle;
+}

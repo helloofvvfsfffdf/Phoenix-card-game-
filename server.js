@@ -1019,6 +1019,7 @@ function snapshot(room, member) {
 
     code: room.code,
     visibility: room.visibility || 'private',
+    mode: room.mode || 'public',
     host: room.members[0] === member,
     seat: member.seat,
     started: !!s,
@@ -1245,6 +1246,7 @@ function handleAdmin(ws, data) {
       rooms: [...rooms.values()].map(r => ({
         code: r.code,
         visibility: r.visibility,
+        mode: r.mode || 'public',
         host: r.members[0] ? r.members[0].name : '',
         players: r.members.map(p => p.name),
         count: r.members.length,
@@ -1331,6 +1333,88 @@ function handle(ws, data) {
       );
     }
 
+    // OWNER & FRIENDS. A create that carries an owner password is the original
+    // private game: only someone who knows the password can open the room, it is
+    // never listed, and it deliberately receives NO `publicAllies`, so the real
+    // ally names, portraits and abilities stay exactly as the catalogue has them
+    // on every screen. A public create (no password) keeps its randomised
+    // animal identities and never touches the real ones.
+    const ownerRequested =
+      typeof data.ownerPassword === 'string' && data.ownerPassword.length > 0;
+
+    if (ownerRequested) {
+      const now = Date.now();
+      const ip = clientIp(ws);
+      const auth = authRecord(ip, now);
+
+      if (auth.lockedUntil > now) {
+        return error(
+          ws,
+          'Too many incorrect attempts. Try again later.'
+        );
+      }
+
+      if (!validOwnerPassword(data.ownerPassword)) {
+        auth.failures.push(now);
+
+        if (auth.failures.length >= AUTH_MAX_FAILURES) {
+          auth.lockedUntil = now + AUTH_LOCK_MS;
+        }
+
+        return error(
+          ws,
+          'Incorrect owner password or too many attempts.'
+        );
+      }
+
+      auth.failures = [];
+
+      if (serverState.creationLocked) {
+        return error(
+          ws,
+          'Lobby creation is locked by the owner. Join an existing lobby instead.'
+        );
+      }
+
+      if (rooms.size >= MAX_ROOMS) {
+        return error(
+          ws,
+          'The server has reached its room limit. Try later.'
+        );
+      }
+
+      const ownerRoom = {
+        code: code(),
+        name: cleanName(data.name),
+        visibility: 'private',
+        mode: 'owner',
+        createdAt: Date.now(),
+        members: [],
+        state: null,
+        phase: 'lobby',
+        requestedRounds: 10,
+        log: ['Private room created. Invite at least one friend to start.']
+      };
+
+      rooms.set(ownerRoom.code, ownerRoom);
+
+      const ownerMember = {
+        seat: 0,
+        name: cleanName(data.name),
+        ally: null,
+        ws,
+        room: ownerRoom
+      };
+
+      ownerRoom.members.push(ownerMember);
+      ws.member = ownerMember;
+
+      // Deliberately NOT broadcastLobby(): an owner room is private and must
+      // never appear in the public lobby browser.
+      broadcast(ownerRoom);
+      return;
+    }
+
     if (serverState.creationLocked) {
       return error(
         ws,
@@ -1385,6 +1469,7 @@ function handle(ws, data) {
       code: roomCode,
       name: cleanName(data.name),
       visibility,
+      mode: 'public',
       publicAllies: publicAllies(),
       createdAt: Date.now(),
       members: [],

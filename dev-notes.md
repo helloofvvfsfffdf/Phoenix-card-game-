@@ -16,8 +16,9 @@ Source of truth (decisions locked from user):
 - PUBLIC VERSION allies: emoji + randomly generated animal names, re-rolled EVERY match,
   decided by the SERVER so every player sees the same creatures; abilities unchanged. The
   public screens must never render a portrait or a catalogue name.
-- Owner & Friends / creator-only modes (Single Player, Multiplayer Testing, gallery) stay
-  UNTOUCHED and keep the real portraits + names (they never receive the public map).
+- Owner & Friends is ALSO an online mode again (Stage H): password-gated private rooms with
+  the real allies, never listed, never sent publicAllies. Single Player, Multiplayer Testing
+  and gallery keep the real portraits + names (they never receive the public map).
 - SECURITY: every control verified server-side; no client-side privilege flag; public list
   never includes private-room codes; owner credentials never leave the admin ws auth;
   destructive admin actions use a confirm step.
@@ -58,5 +59,31 @@ Source of truth (decisions locked from user):
       no name/portrait leak, and a real 2-player UI match showed emoji draft tiles (no img),
       seats "Ally: Viper"/"Ally: Raven", ability text "block Viper", and a log reading
       "chose Viper"/"Raven blocked Viper's theft" with no catalogue name on either client.
+- [x] Stage G: the "leaving a lobby" bug — on the live host the client's WebSocket close frame
+      was delayed ~10s by the proxy, so a lobby the player had already left stayed listed.
+      The browser now sends an explicit `{type:'leave'}` before closing (delivered instantly)
+      and the server removes the member through one shared `leaveRoom()` used by both the
+      leave message and the close handler (backstop). `lobbySnapshot()` lists only
+      `phase==='lobby'` rooms (a started match is no longer advertised as joinable), the
+      start handler refreshes the lobby, and the admin logout fixed an undeclared variable.
+      Added 7 tests incl. explicit leave, drop backstop, started-match hidden + kept for the
+      grace window (48 admin tests). Committed d1a291f + pushed; Render redeployed.
+- [x] Stage H: restore the original **Owner & Friends** online mode as a separate mode on the
+      ONLINE MULTIPLAYER screen (user request: the public feature had replaced it).
+      - server.create branches on a non-empty `ownerPassword`: password-validated create
+        makes a PRIVATE owner room (`mode:'owner'`, auto code, NO `publicAllies`, never
+        `broadcastLobby`ed, still gated by multiplayerOpen/creationLocked, owner-password
+        IP lockout shared with the admin dashboard). Empty/missing password = the public
+        path, unchanged. `snapshot()` and `admin_rooms` carry `mode`.
+      - client: `join('ownerCreate')`/`join('ownerJoin')` read the owner panel fields and
+        send the password; `setMode()` switches PUBLIC MULTIPLAYER / OWNER & FRIENDS tabs;
+        room heading shows an OWNER & FRIENDS / PUBLIC MULTIPLAYER badge. Existing public
+        IDs and behaviour untouched (all public tests unchanged).
+      - isolation is structural: owner rooms have no `publicAllies` (client renders real
+        portraits/names/abilities via the existing owner fallback) and `visibility:'private'`
+        keeps them out of `lobbySnapshot`.
+      - tests: 7 new Owner & Friends checks (wrong password refused, owner room private+no
+        publicAllies, hidden from browser, join by code + real ally ids, owner log uses real
+        names, no publicAllies mid-draft) → 55 admin tests. Full npm test green.
 
 Progress is checkpointed via frequent commits on `main` (Render auto-deploys on push).

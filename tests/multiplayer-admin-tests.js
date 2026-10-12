@@ -569,6 +569,77 @@ async function main() {
     check('a dropped socket still clears its public lobby (close backstop)', () =>
       assert(!dropSeen.lobby.rooms.some(r => r.code === dropState.code), 'lobby survived a dropped socket'));
 
+    // ---- Owner & Friends (the original private mode, restored) ----
+    console.log('Owner & Friends');
+    const wrongOwner = await connect(fport);
+    wrongOwner.ws.send(JSON.stringify({
+      type: 'create', name: 'Wrong', code: '', ownerPassword: 'not-the-password'
+    }));
+    const wrongMsg = await waitFor(wrongOwner, 'error');
+    check('an Owner & Friends create is refused without the owner password', () =>
+      assert(wrongMsg.message.toLowerCase().includes('password'), wrongMsg.message));
+
+    const ownerHost = await connect(fport);
+    ownerHost.ws.send(JSON.stringify({
+      type: 'create', name: 'Odin', code: '', ownerPassword: password
+    }));
+    const ownerRoom = await waitFor(ownerHost, 'state');
+    check('the owner password opens a private owner room', () => {
+      assert(ownerRoom.code, 'no room code');
+      assert.strictEqual(ownerRoom.visibility, 'private');
+      assert.strictEqual(ownerRoom.mode, 'owner');
+    });
+    check('an owner room is never sent public ally identities', () =>
+      assert.strictEqual(ownerRoom.publicAllies, undefined, 'publicAllies leaked into an owner room'));
+
+    const ownerSeen = await freshLobby(fport);
+    track(ownerSeen.client);
+    check('an owner room is hidden from the public lobby browser', () =>
+      assert(!ownerSeen.lobby.rooms.some(r => r.code === ownerRoom.code), 'owner room listed publicly'));
+
+    const ownerGuest = await connect(fport);
+    await joinRoom(ownerGuest, 'Aska', ownerRoom.code);
+    check('a friend joins an owner room by invite code and sees real allies', () => {
+      assert.strictEqual(ownerGuest.state.code, ownerRoom.code);
+      assert.strictEqual(ownerGuest.state.mode, 'owner');
+      assert.strictEqual(ownerGuest.state.publicAllies, undefined, 'joiner saw public identities');
+      // The draftable allies are the real catalogue ids (Ted needs 3+ players,
+      // so with two friends it is the other five); never a public stand-in.
+      const ids = ownerGuest.state.availableAllies;
+      assert(ids.length >= 5, 'expected the real ally catalogue');
+      ids.forEach(id => assert(ALLY_IDS.includes(id), 'non-catalogue ally id ' + id));
+    });
+
+    // Start, roll and draft in the owner room: the shared log must read with the
+    // REAL ally names, never the randomised animal names.
+    ownerHost.ws.send(JSON.stringify({ type: 'start', rounds: 3 }));
+    await waitFor(ownerHost, 'state');
+    let og = 0;
+    while (['turnDice', 'allyDice'].includes(ownerHost.state.phase)) {
+      assert(og++ < 80, 'owner dice must finish');
+      const seat = ownerHost.state.dice.next;
+      [ownerHost, ownerGuest][seat].ws.send(JSON.stringify({ type: 'roll' }));
+      await waitFor(ownerHost, 'state');
+    }
+    const ownerPicks = ['phoenix', 'tilly'];
+    let op = 0;
+    while (ownerHost.state.phase === 'draft') {
+      assert(op++ < 5, 'owner draft must finish');
+      const seat = ownerHost.state.draftTurn;
+      [ownerHost, ownerGuest][seat].ws.send(JSON.stringify({ type: 'chooseAlly', ally: ownerPicks.shift() }));
+      await waitFor(ownerHost, 'state');
+    }
+    check('an owner room log names allies by their real names, never animals', () => {
+      const lines = ownerHost.state.log.filter(l => /chose/.test(l));
+      assert.strictEqual(lines.length, 2, 'expected two draft lines, saw ' + lines.length);
+      lines.forEach(line => {
+        const real = REAL_NAMES.some(n => line.toUpperCase().includes(n));
+        assert(real, 'owner draft line has no real name: ' + line);
+      });
+    });
+    check('an owner room has no public identities even mid-draft', () =>
+      assert.strictEqual(ownerHost.state.publicAllies, undefined));
+
     console.log('ALL ' + passed + ' MULTIPLAYER/ADMIN TESTS PASSED (' + moves + ' moves)');
   } finally {
     clients.forEach(c => c.ws.terminate());

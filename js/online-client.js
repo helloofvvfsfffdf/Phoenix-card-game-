@@ -276,6 +276,35 @@
     };
   }
 
+  /**
+   * Shows one of the two multiplayer modes on the ONLINE MULTIPLAYER screen.
+   *
+   * PUBLIC MULTIPLAYER is the open lobby system (randomised animal identities,
+   * a shared lobby browser). OWNER & FRIENDS is the original private game:
+   * owner-password create, real ally names/portraits/abilities, invite-code
+   * join, and never listed.
+   */
+  function setMode(mode) {
+    const owner = mode === 'owner';
+
+    $('online-public-panel').hidden = owner;
+    $('online-owner-panel').hidden = !owner;
+
+    $('online-mode-public').classList.toggle('online-mode-tab-active', !owner);
+    $('online-mode-owner').classList.toggle('online-mode-tab-active', owner);
+    $('online-mode-public').setAttribute('aria-selected', String(!owner));
+    $('online-mode-owner').setAttribute('aria-selected', String(owner));
+
+    // Carry a typed name across so switching modes does not mean retyping it.
+    const from = owner ? $('online-name') : $('online-owner-name');
+    const to = owner ? $('online-owner-name') : $('online-name');
+    if (from && to && from.value && !to.value) to.value = from.value;
+
+    feedback(owner
+      ? 'Owner & Friends: create a private room with the owner password, or join with an invite code.'
+      : 'Create a lobby or join one with an invite code.');
+  }
+
   /** Opens the lobby. This is the only entry point the main menu needs. */
   function enter() {
     $('phoenix-menu').hidden = true;
@@ -283,9 +312,12 @@
     $('online-screen').hidden = false;
     $('online-setup').hidden = false;
     $('online-room').hidden = true;
-    $('online-name').value =
-      sessionStorage.getItem('phoenix-player-name') || '';
-    feedback('Create a room or join with an invite code.');
+
+    const rememberedName = sessionStorage.getItem('phoenix-player-name') || '';
+    $('online-name').value = rememberedName;
+    $('online-owner-name').value = rememberedName;
+
+    setMode('public');
 
     // Open the socket as soon as the lobby is entered, not only when a room is
     // created or joined: the server pushes a lobby snapshot on connect, and that
@@ -327,7 +359,18 @@
    * would be asking for a choice that is thrown away.
    */
   function join(request) {
-    const name = $('online-name').value.trim();
+    // Accept either a plain action string ('create' / 'join' typed by the main
+    // buttons) or a { type, code } object from a public-lobby row's JOIN button.
+    const action =
+      request && typeof request === 'object' ? request : { type: request };
+
+    // Owner & Friends has its own name field; every public action shares the
+    // original one, so the two modes never read each other's inputs.
+    const ownerAction =
+      action.type === 'ownerCreate' || action.type === 'ownerJoin';
+
+    const name =
+      (ownerAction ? $('online-owner-name') : $('online-name')).value.trim();
 
     if (!name) {
       feedback('Enter your player name.');
@@ -335,11 +378,6 @@
     }
 
     sessionStorage.setItem('phoenix-player-name', name);
-
-    // Accept either a plain action string ('create' / 'join' typed by the main
-    // buttons) or a { type, code } object from a public-lobby row's JOIN button.
-    const action =
-      request && typeof request === 'object' ? request : { type: request };
 
     if (action.type === 'create') {
       // Optional custom invite code: blank (or missing) creates a PUBLIC lobby,
@@ -351,10 +389,27 @@
       return;
     }
 
+    if (action.type === 'ownerCreate') {
+      // The owner password is what marks this as an Owner & Friends room on the
+      // server: it becomes a private room with the real allies and is never
+      // listed in the public lobby browser. Cleared as soon as it is used.
+      const ownerPassword = $('online-owner-password').value;
+      if (!ownerPassword) {
+        feedback('Enter the owner password to create a room.');
+        return;
+      }
+      connect(() => {
+        send({ type: 'create', name, code: '', ownerPassword });
+        $('online-owner-password').value = '';
+      });
+      return;
+    }
+
     const code =
       action.code != null
         ? String(action.code).trim()
-        : $('online-code-input').value.trim();
+        : $(ownerAction ? 'online-owner-code-input' : 'online-code-input')
+            .value.trim();
 
     connect(() => {
       send({ type: 'join', name, code });
@@ -813,6 +868,8 @@ function renderPlaying() {
     $('online-setup').hidden = true;
     $('online-room').hidden = false;
     $('online-room-code').textContent = s.code;
+    $('online-room-mode').textContent =
+      s.mode === 'owner' ? 'OWNER & FRIENDS' : 'PUBLIC MULTIPLAYER';
 
     const current = s.players.find(p => p.id === s.current);
     const chooser=s.pending && s.players.find(p=>p.id===s.pending.chooserId);
@@ -997,6 +1054,12 @@ function renderPlaying() {
     $('online-back').onclick = leave;
     $('online-create').onclick = () => join('create');
     $('online-join').onclick = () => join('join');
+
+    // Owner & Friends, kept separate from the public lobby system.
+    $('online-mode-public').onclick = () => setMode('public');
+    $('online-mode-owner').onclick = () => setMode('owner');
+    $('online-owner-create').onclick = () => join('ownerCreate');
+    $('online-owner-join').onclick = () => join('ownerJoin');
 
     // Admin button
     const adminBtn = $('online-admin');
