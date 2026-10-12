@@ -75,7 +75,12 @@ portraits or catalogue names:
 
 ## Owner admin dashboard
 
-The owner password (`PHOENIX_OWNER_PASSWORD`) is only needed by the operator, to open the **admin dashboard** from the SERVER screen:
+The owner password (`PHOENIX_OWNER_PASSWORD`) is only needed by the operator. The dashboard is reachable from two places, and both ask for the password:
+
+- **OWNER DASHBOARD** on the main menu — a visible option, so the operator can reach it without entering the multiplayer screen.
+- **SERVER** on the ONLINE MULTIPLAYER screen.
+
+The dashboard itself:
 
 - See **all public and private rooms** regardless of visibility, with their invite codes.
 - **Shut down any one room** while others keep running.
@@ -83,7 +88,7 @@ The owner password (`PHOENIX_OWNER_PASSWORD`) is only needed by the operator, to
 - **Reopen multiplayer** after a global shutdown.
 - **Lock / unlock lobby creation**: locks only creation; existing lobbies keep running and can still be joined.
 - Both `multiplayerOpen` and `creationLocked` are saved to a local state file (`.phoenix-server-state.json`, git-ignored) and survive a server restart.
-- Admin authentication is required before any admin command is accepted. A wrong password is rejected; repeated failures from one IP are temporarily locked out (3 failures within 15 minutes → 30-minute lockout).
+- Admin authentication is required before any admin command is accepted. Opening the dashboard from **either** entry point prompts for the owner password; the panel is only revealed once the server accepts the password, so the main-menu option gives no access without it. A wrong password is rejected; repeated failures from one IP are temporarily locked out (3 failures within 15 minutes → 30-minute lockout).
 
 ## Rules and features
 

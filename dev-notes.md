@@ -85,5 +85,16 @@ Source of truth (decisions locked from user):
       - tests: 7 new Owner & Friends checks (wrong password refused, owner room private+no
         publicAllies, hidden from browser, join by code + real ally ids, owner log uses real
         names, no publicAllies mid-draft) → 55 admin tests. Full npm test green.
+- [x] Stage I: an **OWNER DASHBOARD** option on the main menu (user request: the admin
+      dashboard existed but was only reachable from inside the multiplayer screen, and was
+      effectively invisible on the website). Added `#menu-owner` to the main menu; it and the
+      multiplayer SERVER button both call one `PhoenixOnline.openAdmin()` that prompts for the
+      password and sends `admin_auth`. The panel is STILL revealed only when the server answers
+      `admin_state` — so the menu option is password-gated at the server, not in the client (and
+      the existing per-IP lockout applies). Opening from the menu hides the menu and scrolls the
+      panel to the top; Logout restores the menu. Wrong-password/lockout errors are surfaced on
+      `#menu-feedback` (the multiplayer feedback line is hidden on the menu). No new CSS — the
+      user asked not to style it. Full npm test still green (525 unit + 9 live + 55 admin +
+      victory-recovery).
 
 Progress is checkpointed via frequent commits on `main` (Render auto-deploys on push).

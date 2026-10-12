@@ -254,7 +254,9 @@
         return;
       } else if (message.type === 'admin_state') {
         PhoenixOnline.adminState = message;
-        renderAdminPanel();
+        // A correct owner password is answered with admin_state. This is the
+        // only place the dashboard is revealed, so it stays password-gated.
+        revealAdminPanel();
         return;
       } else if (message.type === 'admin_rooms') {
         PhoenixOnline.adminRooms = message.rooms;
@@ -262,6 +264,11 @@
         return;
       } else if (message.type === 'error') {
         feedback(message.message);
+        // The multiplayer feedback line is hidden while on the main menu, so a
+        // wrong-password (or lockout) message there would otherwise be invisible.
+        if ($('menu-feedback') && $('phoenix-menu') && !$('phoenix-menu').hidden) {
+          $('menu-feedback').textContent = message.message;
+        }
       } else if (message.type === 'effect') {
         if (window.PhoenixCinematics) window.PhoenixCinematics.show(message.effect, 'online-screen');
       } else if (message.type === 'state') {
@@ -349,6 +356,53 @@
     $('online-screen').hidden = true;
     $('phoenix-menu').hidden = false;
     if (window.PhoenixMusicPlayer) window.PhoenixMusicPlayer.setMatchActive('online', false);
+  }
+
+  /**
+   * Opens the owner admin dashboard - the SERVER dashboard.
+   *
+   * It is reachable two ways: the OWNER DASHBOARD button on the main menu, and
+   * the SERVER button on the online-multiplayer screen. Both go through here.
+   *
+   * It ALWAYS requires the owner password. The client only asks for it and sends
+   * it; the server is the one that decides. The dashboard is revealed only when
+   * the server answers a correct `admin_auth` with an `admin_state` message, so
+   * the menu option gives no access to any admin command without the password
+   * (and the server locks out repeated wrong guesses by IP).
+   */
+  function openAdmin() {
+    // Was the dashboard opened from the main menu (rather than from inside the
+    // multiplayer screen)? If so, remember it so we can put the menu back on
+    // Logout, and so we can hide the menu while the dashboard is showing.
+    const fromMenu = !$('phoenix-menu').hidden;
+
+    // Already authenticated on this connection: just show it again.
+    if (PhoenixOnline.adminState) {
+      PhoenixOnline.adminFromMenu = fromMenu;
+      revealAdminPanel();
+      return;
+    }
+
+    connect(() => {
+      const pwd = prompt('Enter the owner password to open the owner dashboard:');
+      if (!pwd) return;
+      PhoenixOnline.adminFromMenu = fromMenu;
+      send({ type: 'admin_auth', password: pwd });
+    });
+  }
+
+  /** Reveals the admin dashboard (once authorised) and brings it into view. */
+  function revealAdminPanel() {
+    renderAdminPanel();
+    const panel = $('admin-panel');
+    // Opened from the main menu: tuck the menu away so the dashboard is the page.
+    if (PhoenixOnline.adminFromMenu && $('phoenix-menu')) {
+      $('phoenix-menu').hidden = true;
+    }
+    if (panel && panel.scrollIntoView) panel.scrollIntoView({ block: 'start' });
+    // Ask for the current room list. The server answers with admin_rooms, which
+    // renderAdminPanel() draws - without this the lobby list stayed empty.
+    send({ type: 'admin_rooms' });
   }
 
   /**
@@ -1061,14 +1115,12 @@ function renderPlaying() {
     $('online-owner-create').onclick = () => join('ownerCreate');
     $('online-owner-join').onclick = () => join('ownerJoin');
 
-    // Admin button
+    // Admin entry points: the SERVER button on the multiplayer screen and the
+    // OWNER DASHBOARD button on the main menu both open the same dashboard.
     const adminBtn = $('online-admin');
-    if (adminBtn) {
-      adminBtn.onclick = () => {
-        const pwd = prompt('Enter owner password for admin access:');
-        if (pwd) send({ type: 'admin_auth', password: pwd });
-      };
-    }
+    if (adminBtn) adminBtn.onclick = openAdmin;
+    const ownerMenuBtn = $('menu-owner');
+    if (ownerMenuBtn) ownerMenuBtn.onclick = openAdmin;
 
     $('online-copy').onclick = () => {
       if (!state) return;
@@ -1090,8 +1142,18 @@ function renderPlaying() {
     if (logoutBtn) logoutBtn.onclick = () => {
       const panel = $('admin-panel');
       if (panel) panel.hidden = true;
+      // If the dashboard was opened from the main menu, put the menu back so the
+      // owner is returned to the main website rather than left on a blank page.
+      if (PhoenixOnline.adminFromMenu) {
+        if ($('phoenix-menu')) $('phoenix-menu').hidden = false;
+        if (window.scrollTo) window.scrollTo(0, 0);
+      }
+      PhoenixOnline.adminFromMenu = false;
+      PhoenixOnline.adminState = null;
+      PhoenixOnline.adminRooms = null;
+      if ($('menu-feedback')) $('menu-feedback').textContent = '';
     };
   });
 
-  window.PhoenixOnline = { enter, leave, join };
+  window.PhoenixOnline = { enter, leave, join, openAdmin };
 })();
