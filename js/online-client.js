@@ -192,6 +192,18 @@
       return;
     }
 
+    // A connection already in flight: chain rather than open a second socket,
+    // so entering the lobby (which connects early to show the public browser)
+    // and then pressing CREATE/JOIN quickly still sends on ONE socket.
+    if (socket && socket.readyState === WebSocket.CONNECTING) {
+      const previous = socket.onopen;
+      socket.onopen = () => {
+        if (previous) previous();
+        callback();
+      };
+      return;
+    }
+
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     socket = new WebSocket(protocol + '//' + location.host);
 
@@ -252,6 +264,12 @@
     $('online-name').value =
       sessionStorage.getItem('phoenix-player-name') || '';
     feedback('Create a room or join with an invite code.');
+
+    // Open the socket as soon as the lobby is entered, not only when a room is
+    // created or joined: the server pushes a lobby snapshot on connect, and that
+    // is what fills the PUBLIC LOBBY BROWSER. Without this a visitor sees an
+    // empty list until they already try to create or join something.
+    connect(() => {});
   }
 
   function leave() {
@@ -272,7 +290,7 @@
    * dice, and it ignores anything sent now - so asking for one at this point
    * would be asking for a choice that is thrown away.
    */
-  function join(type) {
+  function join(request) {
     const name = $('online-name').value.trim();
 
     if (!name) {
@@ -282,7 +300,12 @@
 
     sessionStorage.setItem('phoenix-player-name', name);
 
-    if (type === 'create') {
+    // Accept either a plain action string ('create' / 'join' typed by the main
+    // buttons) or a { type, code } object from a public-lobby row's JOIN button.
+    const action =
+      request && typeof request === 'object' ? request : { type: request };
+
+    if (action.type === 'create') {
       const visSel = document.querySelector('input[name="online-visibility"]:checked');
       const visibility = visSel ? visSel.value : 'private';
       connect(() => {
@@ -291,8 +314,13 @@
       return;
     }
 
+    const code =
+      action.code != null
+        ? String(action.code).trim()
+        : $('online-code-input').value.trim();
+
     connect(() => {
-      send({ type: 'join', name, code: $('online-code-input').value.trim() });
+      send({ type: 'join', name, code });
     });
   }
 
@@ -941,5 +969,5 @@ function renderPlaying() {
     };
   });
 
-  window.PhoenixOnline = { enter, leave };
+  window.PhoenixOnline = { enter, leave, join };
 })();
