@@ -239,7 +239,7 @@ function lobbySnapshot() {
   return {
     type: 'lobby',
     rooms: [...rooms.values()]
-      .filter(r => r.visibility === 'public')
+      .filter(r => r.visibility === 'public' && r.phase === 'lobby')
       .map(r => ({
         code: r.code,
         host: (r.members[0] && r.members[0].name) || '',
@@ -1170,6 +1170,50 @@ function closeRoom(room, reason) {
   broadcastLobby();
 }
 
+/**
+ * Take a connection out of its room, whether it asked to leave or dropped.
+ *
+ * This is the SINGLE place a room loses a member, because the two ways it can
+ * happen must agree. A lobby loses the seat outright, and the room is deleted
+ * the moment it is empty, so a lobby can never be left behind in the public
+ * browser. A STARTED match keeps the seat (its socket cleared) so the player can
+ * come back inside the abandon grace window - the match pauses rather than
+ * collapsing for everyone still connected.
+ *
+ * `reason` only labels the diagnostic line; the behaviour is the same either way.
+ */
+function leaveRoom(ws, reason) {
+  const m = ws.member;
+
+  if (!m) return;
+
+  const room = m.room;
+
+  m.ws = null;
+  ws.member = null;
+
+  if (room.phase === 'lobby') {
+    room.members.splice(m.seat, 1);
+
+    room.members.forEach((p, i) => {
+      p.seat = i;
+    });
+
+    if (!room.members.length) {
+      rooms.delete(room.code);
+
+      console.log(
+        `[PHOENIX diagnostic] DELETE instance=${INSTANCE_ID} room=${room.code} reason=${reason}`
+      );
+    }
+  } else {
+    room.log.push(m.name + ' disconnected. Match paused.');
+  }
+
+  broadcastLobby();
+  broadcast(room);
+}
+
 function handleAdmin(ws, data) {
   if (data.type === 'admin_auth') {
     const now = Date.now();
@@ -1427,6 +1471,18 @@ function handle(ws, data) {
     return;
   }
 
+  // An EXPLICIT leave, sent by the browser just before it closes the socket.
+  //
+  // We do not rely on the close event alone: a host's proxy can sit on the
+  // client's close frame for many seconds, and in that window a lobby the player
+  // has already walked away from stays listed for everyone else. A data message
+  // is delivered at once, so the room is removed the instant the player leaves.
+  // The close handler below stays as the backstop for a dropped connection.
+  if (data.type === 'leave') {
+    leaveRoom(ws, 'left');
+    return;
+  }
+
   const m = ws.member;
 
   if (!m) {
@@ -1462,6 +1518,11 @@ function handle(ws, data) {
 
     beginRollStage(room, 'turnDice');
     broadcast(room);
+    // A started match is no longer a joinable lobby, so refresh the public
+    // browser: this room must disappear from "Open public lobbies" the moment
+    // the dice start, instead of sitting there with a JOIN button that only
+    // ever answers "This match has already started."
+    broadcastLobby();
     return;
   }
 
@@ -1713,35 +1774,7 @@ wss.on('connection', ws => {
 
     ws.gallery = null;
 
-    const m = ws.member;
-
-    if (!m) return;
-
-    const room = m.room;
-    m.ws = null;
-
-    if (room.phase === 'lobby') {
-      room.members.splice(m.seat, 1);
-
-      room.members.forEach((p, i) => {
-        p.seat = i;
-      });
-
-      if (!room.members.length) {
-        rooms.delete(room.code);
-
-        console.log(
-          `[PHOENIX diagnostic] DELETE instance=${INSTANCE_ID} room=${room.code} reason=host-disconnected`
-        );
-      }
-    } else {
-      room.log.push(
-        m.name + ' disconnected. Match paused.'
-      );
-    }
-
-    broadcastLobby();
-    broadcast(room);
+    leaveRoom(ws, 'host-disconnected');
   });
 });
 

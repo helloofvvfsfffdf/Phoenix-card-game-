@@ -297,6 +297,20 @@
   function leave() {
     if (window.PhoenixCinematics) window.PhoenixCinematics.resetNetwork('leave');
     if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.reset();
+
+    // Tell the server we are leaving BEFORE closing the socket.
+    //
+    // The close event alone is not enough: behind a host's proxy the client's
+    // close frame can take several seconds to arrive, and in that window the
+    // lobby we just walked away from is still listed for everyone else. A plain
+    // message is delivered immediately, so the room disappears at once. The
+    // server keeps its close handler as the backstop for a dropped connection.
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      try {
+        socket.send(JSON.stringify({ type: 'leave' }));
+      } catch (e) { /* the socket is going away regardless */ }
+    }
+
     if (socket) socket.close();
     socket = null;
     state = null;
@@ -1011,7 +1025,7 @@ function renderPlaying() {
     if (unlockBtn) unlockBtn.onclick = () => send({ type: 'admin_unlock_creation' });
     const logoutBtn = $('admin-logout');
     if (logoutBtn) logoutBtn.onclick = () => {
-      panel = $('admin-panel');
+      const panel = $('admin-panel');
       if (panel) panel.hidden = true;
     };
   });

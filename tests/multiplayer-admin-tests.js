@@ -114,6 +114,28 @@ function joinRoom(client, name, code) {
   return waitFor(client, 'state');
 }
 
+/** Poll until this client's latest snapshot matches a predicate. */
+function waitForState(client, predicate, timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+    const timer = setInterval(() => {
+      if (client.state && predicate(client.state)) {
+        clearInterval(timer);
+        resolve(client.state);
+      } else if (Date.now() > deadline) {
+        clearInterval(timer);
+        const last = client.state && { phase: client.state.phase, players: client.state.players.length };
+        reject(new Error('state condition not met; last=' + JSON.stringify(last)));
+      }
+    }, 25);
+  });
+}
+
+/** The very next lobby snapshot a fresh visitor sees on connect. */
+function freshLobby(port) {
+  return createClient(port).then(client => waitFor(client, 'lobby').then(lobby => ({ client, lobby })));
+}
+
 async function main() {
   let passed = 0;
   function check(name, fn) { fn(); passed++; console.log('  ✓ ' + name); }
@@ -481,6 +503,71 @@ async function main() {
           assert(line.indexOf(n + '.') === -1, 'real name in draft line: ' + line));
       });
     });
+
+    // ---- Leaving a lobby (regression: going back to the menu left it open) ----
+    console.log('Leaving lobbies');
+    const leaveHost = await connect(fport);
+    const leaveState = await create(leaveHost, 'Uma', '');
+    leaveHost.ws.send(JSON.stringify({ type: 'leave' }));
+    await new Promise(r => setTimeout(r, 250));
+    const leaveSeen = await freshLobby(fport);
+    track(leaveSeen.client);
+    check('an explicit leave deletes an empty public lobby from the browser', () =>
+      assert(!leaveSeen.lobby.rooms.some(r => r.code === leaveState.code), 'lobby lingered after leave'));
+
+    // The connection is free again the moment it has left.
+    leaveHost.ws.send(JSON.stringify({ type: 'create', name: 'Uma again', code: '' }));
+    const leaveRecreate = await waitFor(leaveHost, 'state');
+    check('a player who left can create a new lobby on the same connection', () =>
+      assert(leaveRecreate.code && leaveRecreate.code !== leaveState.code, 'leave did not clear membership'));
+
+    const shrinkHost = await connect(fport);
+    const shrinkState = await create(shrinkHost, 'Vic', '');
+    const shrinkGuest = await connect(fport);
+    await joinRoom(shrinkGuest, 'Wes', shrinkState.code);
+    shrinkGuest.ws.send(JSON.stringify({ type: 'leave' }));
+    const shrinkUpdate = await waitForState(shrinkHost, s => s.players.length === 1);
+    check('a guest leaving a lobby removes their seat but keeps the room', () =>
+      assert.strictEqual(shrinkUpdate.phase, 'lobby'));
+    const shrinkSeen = await freshLobby(fport);
+    track(shrinkSeen.client);
+    check('a lobby with a remaining player stays listed', () =>
+      assert(shrinkSeen.lobby.rooms.some(r => r.code === shrinkState.code)));
+
+    // A started match is not a lobby anymore, so it leaves the browser...
+    const startLeaveHost = await connect(fport);
+    const startLeaveState = await create(startLeaveHost, 'Ana', '');
+    const startLeaveGuest = await connect(fport);
+    await joinRoom(startLeaveGuest, 'Ben', startLeaveState.code);
+    startLeaveHost.ws.send(JSON.stringify({ type: 'start', rounds: 5 }));
+    await waitForState(startLeaveHost, s => s.phase !== 'lobby');
+    const startedSeen = await freshLobby(fport);
+    track(startedSeen.client);
+    check('a started match is no longer advertised as an open lobby', () =>
+      assert(!startedSeen.lobby.rooms.some(r => r.code === startLeaveState.code), 'started match still listed'));
+
+    // ...but it is kept (the abandon grace window), so a deliberate leave does
+    // not wipe a match other players are still sitting in.
+    startLeaveHost.ws.send(JSON.stringify({ type: 'leave' }));
+    await new Promise(r => setTimeout(r, 250));
+    const leaveAdmin = await connect(fport);
+    leaveAdmin.ws.send(JSON.stringify({ type: 'admin_auth', password }));
+    await waitFor(leaveAdmin, 'admin_state');
+    leaveAdmin.ws.send(JSON.stringify({ type: 'admin_rooms' }));
+    const leaveRooms = await waitFor(leaveAdmin, 'admin_rooms');
+    check('leaving a started match keeps it for the abandon grace window', () =>
+      assert(leaveRooms.rooms.some(r => r.code === startLeaveState.code), 'started match was deleted on leave'));
+
+    // A dropped socket must still clear a lobby: leave is the fast path, close
+    // stays the backstop.
+    const dropHost = await connect(fport);
+    const dropState = await create(dropHost, 'Zed', '');
+    dropHost.ws.terminate();
+    await new Promise(r => setTimeout(r, 400));
+    const dropSeen = await freshLobby(fport);
+    track(dropSeen.client);
+    check('a dropped socket still clears its public lobby (close backstop)', () =>
+      assert(!dropSeen.lobby.rooms.some(r => r.code === dropState.code), 'lobby survived a dropped socket'));
 
     console.log('ALL ' + passed + ' MULTIPLAYER/ADMIN TESTS PASSED (' + moves + ' moves)');
   } finally {
