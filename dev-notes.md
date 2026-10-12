@@ -51,6 +51,12 @@ Source of truth (decisions locked from user):
       effects-network-tests.js updated for the code protocol. ALL PASSING.
 - [x] Stage E: docs (ONLINE_MULTIPLAYER.md updated for optional codes + public allies);
       full npm test green (525 unit + 9 live + 41 admin + victory-recovery).
-- [ ] Stage F: commit, push, Render redeploy, live verify, report/rollback.
+- [x] Stage F: committed 0a1d1c6 + pushed origin/main; Render redeployed; live verified on
+      https://phoenix-card-game.onrender.com — new create form (0 radios, optional code +
+      hint), blank=public listed / custom=private hidden / invalid + duplicate refused /
+      join by custom code works, per-room publicAllies unique + identical for all players +
+      no name/portrait leak, and a real 2-player UI match showed emoji draft tiles (no img),
+      seats "Ally: Viper"/"Ally: Raven", ability text "block Viper", and a log reading
+      "chose Viper"/"Raven blocked Viper's theft" with no catalogue name on either client.
 
 Progress is checkpointed via frequent commits on `main` (Render auto-deploys on push).
