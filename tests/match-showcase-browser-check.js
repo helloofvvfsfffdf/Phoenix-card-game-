@@ -17,7 +17,7 @@ async function main(){try{
     window.WebSocket=class extends Native{constructor(...args){super(...args);track(this);window.showHost=this;}};
     window.showNext=ws=>new Promise((r,j)=>{const t=setTimeout(()=>j(Error('snapshot timeout')),8000);function h(e){const s=JSON.parse(e.data);if(!['state','error'].includes(s.type))return;clearTimeout(t);ws.removeEventListener('message',h);s.type==='error'?j(Error(s.message)):r(s);}ws.addEventListener('message',h);});
     window.showAction=async(ws,data)=>{const waits=showPeers.map(showNext);ws.send(JSON.stringify(data));await Promise.all(waits);};
-    PhoenixOnline.enter();document.getElementById('online-name').value='Player 1';document.getElementById('online-owner-password').value=${JSON.stringify(password)};document.getElementById('online-create').click();await showNext(showHost);
+    PhoenixOnline.enter();document.getElementById('online-name').value='Player 1';document.getElementById('online-create').click();await showNext(showHost);
     for(const name of ['Bob','Riley']){const ws=track(new Native('ws://'+location.host));await new Promise(r=>ws.addEventListener('open',r,{once:true}));await showAction(ws,{type:'join',name,code:showStates.get(showHost).code});}
     await showAction(showHost,{type:'start',rounds:10});return true;
   })()`);

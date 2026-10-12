@@ -19,7 +19,6 @@ function online() {
   b.loadScript('online-client.js');
   b.context.PhoenixOnline.enter();
   b.nodes['online-name'].value = 'Player';
-  b.document.getElementById('online-owner-password').value = 'test-only-password';
   b.nodes['online-create'].onclick(); sockets[0].onopen();
   b.receive = function (phase, over, extra) {
     sockets[0].onmessage({ data: JSON.stringify(Object.assign({ type: 'state', phase: phase, started: phase === 'playing', over: !!over,

@@ -19,15 +19,17 @@ Source of truth (decisions locked from user):
   destructive admin actions use a confirm step.
 
 ## Stages
-- [ ] Stage A: server.js (state + durability, open create w/ per-IP rate limit + visibility,
+- [x] Stage A: server.js (state + durability, open create w/ per-IP rate limit + visibility,
       lobby broadcast, join guard, host kick/close, admin auth + dashboard msgs, ws init +
-      throttle, close handler host-transfer).
-- [ ] Stage B: index.html + online-client.js + css (public/private create form, lobby
-      browser, host kick/close UI, admin panel overlay + confirmations).
-- [ ] Stage C: tests (update effects-network + browser checks for no-password create; add
-      multiplayer-admin-tests.js covering public/private, host controls, admin powers,
-      persistence, spoofing).
-- [ ] Stage D: docs (ONLINE_MULTIPLAYER.md).
-- [ ] Stage E: backup tag, commit, push, Render redeploy, live verify, report/rollback.
+      throttle, close handler host-transfer; admin dispatch moved BEFORE ws.member gate so
+      admin_auth works without being in a room).
+- [x] Stage B: index.html + online-client.js (public/private create form, lobby browser,
+      host kick/close UI, admin panel overlay + confirmations).
+- [x] Stage C: tests (effects-network + browser checks updated for no-password create;
+      multiplayer-admin-tests.js: 29 tests public/private, host controls, admin powers,
+      persistence, spoofing, full five-player match — ALL PASSING).
+- [x] Stage D: docs (ONLINE_MULTIPLAYER.md rewritten for new spec).
+- [ ] Stage E: full npm test, backup tag, commit, push, Render redeploy, live verify,
+      report/rollback.
 
 Progress is checkpointed via frequent commits on a feature branch `feat/public-multiplayer`.

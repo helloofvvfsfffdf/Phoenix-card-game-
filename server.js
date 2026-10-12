@@ -34,7 +34,7 @@ const AUTH_MAX_FAILURES = 3;
 // Room creation is now open to every visitor (the owner password no longer
 // unlocks it), so it gets its own per-IP budget and a hard ceiling. Both can be
 // overridden for testing; production keeps the defaults.
-const MAX_ROOMS = Number(process.env.PHOENIX_MAX_ROOMS) || 30;
+const MAX_ROOMS = Number(process.env.PHOENIX_MAX_ROOMS) || 5;
 const MAX_CREATES_PER_IP = Number(process.env.PHOENIX_CREATE_LIMIT) || 8;
 const CREATE_WINDOW_MS = 10 * 60 * 1000;
 const creationTimes = new Map();
@@ -130,6 +130,35 @@ const creationCleanup = setInterval(() => {
   }
 }, 60 * 60 * 1000);
 creationCleanup.unref();
+
+/**
+ * Abandoned-match cleanup.
+ *
+ * Lobby-phase rooms are already removed the moment their last connection drops
+ * (see the close handler). A STARTED match is different: its members stay in the
+ * room after disconnecting so a player who returns can rejoin the same table, so
+ * a room where every connection is gone could otherwise linger forever. This
+ * closes any started room that has had no live connection for the grace period;
+ * a room with even one live player is never touched.
+ */
+const ABANDON_GRACE_MS = 10 * 60 * 1000;
+const abandonedCleanup = setInterval(() => {
+  const now = Date.now();
+  for (const [code, room] of [...rooms]) {
+    if (room.phase === 'lobby') continue;
+    const live = room.members.some(
+      m => m.ws && m.ws.readyState === WebSocket.OPEN
+    );
+    if (live) continue;
+    if (now - (room.createdAt || now) < ABANDON_GRACE_MS) continue;
+    room.log.push('Closing abandoned match.');
+    closeRoom(
+      room,
+      'This match was closed because every player disconnected.'
+    );
+  }
+}, 60 * 1000);
+abandonedCleanup.unref();
 
 loadServerState();
 
@@ -1178,6 +1207,12 @@ function handle(ws, data) {
     return;
   }
 
+  // Owner administration, before `ws.member` is consulted: an admin must be able
+  // to authenticate and inspect the whole server without ever creating a room.
+  if (String(data.type).startsWith('admin_')) {
+    return handleAdmin(ws, data);
+  }
+
   if (data.type === 'create') {
     if (ws.member) {
       return error(ws, 'Already in a room.');
@@ -1225,6 +1260,7 @@ function handle(ws, data) {
       code: code(),
       name: cleanName(data.name),
       visibility,
+      createdAt: Date.now(),
       members: [],
       state: null,
       phase: 'lobby',
@@ -1391,10 +1427,6 @@ function handle(ws, data) {
     }
     closeRoom(room, 'The lobby was closed by ' + (isAdmin ? 'the owner' : 'the host') + '.');
     return;
-  }
-
-  if (String(data.type).startsWith('admin_')) {
-    return handleAdmin(ws, data);
   }
 
   if (data.type === 'roll') {

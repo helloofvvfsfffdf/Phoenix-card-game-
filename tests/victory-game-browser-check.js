@@ -47,7 +47,7 @@ async function main(){try{
     const action=async(ws,data)=>{const waits=winPeers.map(next);ws.send(JSON.stringify(data));return Promise.all(waits);};
     window.winMatch=async()=>{
     for(let attempt=0;attempt<20;attempt++){
-      winPeers=[];winStates=new Map();PhoenixOnline.enter();document.getElementById('online-name').value='Joshua';document.getElementById('online-owner-password').value=${JSON.stringify(process.env.PHOENIX_BROWSER_OWNER_PASSWORD)};document.getElementById('online-create').click();await next(winHost);
+      winPeers=[];winStates=new Map();PhoenixOnline.enter();document.getElementById('online-name').value='Joshua';document.getElementById('online-create').click();await next(winHost);
       for(const name of ['Alex','Riley']){const ws=track(new Native('ws://'+location.host));await new Promise(r=>ws.addEventListener('open',r,{once:true}));await action(ws,{type:'join',name,code:winStates.get(winHost).code});}
       await action(winHost,{type:'start',rounds:5});let guard=0;while(['turnDice','allyDice'].includes(winStates.get(winHost).phase)){if(guard++>150)throw Error('dice did not finish');await action(winPeers[winStates.get(winHost).dice.next],{type:'roll'});}
       const allies=['ted','phoenix','elsie'];while(winStates.get(winHost).phase==='draft')await action(winPeers[winStates.get(winHost).draftTurn],{type:'chooseAlly',ally:allies.shift()});

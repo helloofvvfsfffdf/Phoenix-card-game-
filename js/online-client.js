@@ -215,7 +215,18 @@
         return;
       }
 
-      if (message.type === 'error') {
+      if (message.type === 'lobby') {
+        renderLobbyList(message.rooms);
+        return;
+      } else if (message.type === 'admin_state') {
+        PhoenixOnline.adminState = message;
+        renderAdminPanel();
+        return;
+      } else if (message.type === 'admin_rooms') {
+        PhoenixOnline.adminRooms = message.rooms;
+        renderAdminPanel();
+        return;
+      } else if (message.type === 'error') {
         feedback(message.message);
       } else if (message.type === 'effect') {
         if (window.PhoenixCinematics) window.PhoenixCinematics.show(message.effect, 'online-screen');
@@ -271,23 +282,17 @@
 
     sessionStorage.setItem('phoenix-player-name', name);
 
-    const ownerPassword =
-      type === 'create' ? $('online-owner-password').value : undefined;
-
-    if (type === 'create' && !ownerPassword) {
-      feedback('Enter your owner password.');
+    if (type === 'create') {
+      const visSel = document.querySelector('input[name="online-visibility"]:checked');
+      const visibility = visSel ? visSel.value : 'private';
+      connect(() => {
+        send({ type: 'create', name, visibility });
+      });
       return;
     }
 
     connect(() => {
-      send({
-        type,
-        name,
-        code: $('online-code-input').value.trim(),
-        ...(type === 'create' ? { ownerPassword } : {})
-      });
-
-      if (type === 'create') $('online-owner-password').value = '';
+      send({ type: 'join', name, code: $('online-code-input').value.trim() });
     });
   }
 
@@ -413,13 +418,36 @@
     if (state.host) {
       const start = el('button', 'online-primary', 'START MATCH');
       start.type = 'button';
-      // The server decides whether the table is big enough, so the button is
-      // never disabled here - it says what is missing instead of going dead.
       start.onclick = () => send({
         type: 'start',
         rounds: Number($('online-rounds').value)
       });
       actions.append(start);
+
+      // Player list with kick buttons (host only)
+      const playerList = el('div', 'lobby-player-list');
+      state.players.forEach((p, idx) => {
+        const row = el('div', 'lobby-player-row');
+        row.append(el('span', 'lobby-player-name', p.name + (idx === 0 ? ' (host)' : '')));
+        if (idx !== 0) {
+          const kickBtn = el('button', 'online-secondary', 'KICK');
+          kickBtn.type = 'button';
+          kickBtn.onclick = () => send({ type: 'kick', seat: idx });
+          row.append(kickBtn);
+        }
+        playerList.append(row);
+      });
+      actions.append(playerList);
+
+      // Close lobby button (host only)
+      const closeBtn = el('button', 'online-secondary', 'CLOSE LOBBY');
+      closeBtn.type = 'button';
+      closeBtn.onclick = () => {
+        if (confirm('Close this lobby? All players will be disconnected.')) {
+          send({ type: 'close_room' });
+        }
+      };
+      actions.append(closeBtn);
 
       if (state.players.length < 2) {
         actions.append(el('p', '', 'Waiting for at least one more player.'));
@@ -440,6 +468,57 @@
  * The server refuses those moves whatever a client sends; this is the honest
  * version of that, not the thing enforcing it.
  */
+function renderLobbyList(rooms) {
+  const list = $('lobby-list');
+  if (!list) return;
+  list.replaceChildren();
+  if (!rooms || !rooms.length) {
+    list.append(el('p', '', 'No public lobbies.'));
+    return;
+  }
+  for (const r of rooms) {
+    const row = el('div', 'lobby-row');
+    row.append(el('span', 'lobby-code', r.code));
+    row.append(el('span', 'lobby-host', r.host || '?'));
+    row.append(el('span', 'lobby-players', r.players + '/' + r.max));
+    const btn = el('button', 'online-primary lobby-join', 'JOIN');
+    btn.type = 'button';
+    btn.onclick = () => PhoenixOnline.join({ type: 'join', code: r.code });
+    row.append(btn);
+    list.append(row);
+  }
+}
+
+// Admin dashboard rendering
+function renderAdminPanel() {
+  const panel = $('admin-panel');
+  if (!panel) return;
+  panel.hidden = false;
+  const stateDiv = $('admin-state');
+  if (stateDiv && PhoenixOnline.adminState) {
+    const s = PhoenixOnline.adminState;
+    stateDiv.textContent = `Multiplayer Open: ${s.multiplayerOpen}, Creation Locked: ${s.creationLocked}`;
+  }
+  const list = $('admin-room-list');
+  if (!list) return;
+  list.replaceChildren();
+  (PhoenixOnline.adminRooms || []).forEach(r => {
+    const row = el('div', 'admin-room-row');
+    row.append(el('span', '', r.code));
+    row.append(el('span', '', r.visibility));
+    row.append(el('span', '', r.host));
+    row.append(el('span', '', `${r.count}/${r.max}`));
+    const shut = el('button', 'online-secondary', 'SHUT DOWN');
+    shut.onclick = () => {
+      if (confirm('Shutdown room ' + r.code + '?')) {
+        send({ type: 'admin_shutdown_room', code: r.code });
+      }
+    };
+    row.append(shut);
+    list.append(row);
+  });
+}
+
 function renderMapleNotice(actions) {
   const names = state.mapleBlocked
     .map(id => {
@@ -830,11 +909,35 @@ function renderPlaying() {
     $('online-create').onclick = () => join('create');
     $('online-join').onclick = () => join('join');
 
+    // Admin button
+    const adminBtn = $('online-admin');
+    if (adminBtn) {
+      adminBtn.onclick = () => {
+        const pwd = prompt('Enter owner password for admin access:');
+        if (pwd) send({ type: 'admin_auth', password: pwd });
+      };
+    }
+
     $('online-copy').onclick = () => {
       if (!state) return;
       navigator.clipboard.writeText(state.code)
         .then(() => feedback('Invite code copied!'))
         .catch(() => feedback('Invite code: ' + state.code));
+    };
+
+    // Admin panel buttons
+    const closeAllBtn = $('admin-close-all');
+    if (closeAllBtn) closeAllBtn.onclick = () => send({ type: 'admin_shutdown_all' });
+    const reopenBtn = $('admin-reopen');
+    if (reopenBtn) reopenBtn.onclick = () => send({ type: 'admin_reopen' });
+    const lockBtn = $('admin-lock');
+    if (lockBtn) lockBtn.onclick = () => send({ type: 'admin_lock_creation' });
+    const unlockBtn = $('admin-unlock');
+    if (unlockBtn) unlockBtn.onclick = () => send({ type: 'admin_unlock_creation' });
+    const logoutBtn = $('admin-logout');
+    if (logoutBtn) logoutBtn.onclick = () => {
+      panel = $('admin-panel');
+      if (panel) panel.hidden = true;
     };
   });
 
