@@ -252,6 +252,12 @@
       if (message.type === 'lobby') {
         renderLobbyList(message.rooms);
         return;
+      } else if (message.type === 'account') {
+        // The server tells us who we are signed in as (set by the httpOnly
+        // session cookie). An OWNER account opens the dashboard with no
+        // separate owner password.
+        PhoenixOnline.account = message.account;
+        return;
       } else if (message.type === 'admin_state') {
         PhoenixOnline.adminState = message;
         // A correct owner password is answered with admin_state. This is the
@@ -314,23 +320,35 @@
 
   /** Opens the lobby. This is the only entry point the main menu needs. */
   function enter() {
-    $('phoenix-menu').hidden = true;
-    $('ally-picker').hidden = true;
-    $('online-screen').hidden = false;
-    $('online-setup').hidden = false;
-    $('online-room').hidden = true;
+    // Multiplayer is an authenticated feature: a signed-in session must exist
+    // before the lobby is shown at all. If the account module is not present
+    // (unit-test harnesses load this file on its own), fall back to opening
+    // the lobby directly so nothing is blocked.
+    const openLobby = function () {
+      $('phoenix-menu').hidden = true;
+      $('ally-picker').hidden = true;
+      $('online-screen').hidden = false;
+      $('online-setup').hidden = false;
+      $('online-room').hidden = true;
 
-    const rememberedName = sessionStorage.getItem('phoenix-player-name') || '';
-    $('online-name').value = rememberedName;
-    $('online-owner-name').value = rememberedName;
+      const rememberedName = sessionStorage.getItem('phoenix-player-name') || '';
+      $('online-name').value = rememberedName;
+      $('online-owner-name').value = rememberedName;
 
-    setMode('public');
+      setMode('public');
 
-    // Open the socket as soon as the lobby is entered, not only when a room is
-    // created or joined: the server pushes a lobby snapshot on connect, and that
-    // is what fills the PUBLIC LOBBY BROWSER. Without this a visitor sees an
-    // empty list until they already try to create or join something.
-    connect(() => {});
+      // Open the socket as soon as the lobby is entered, not only when a room is
+      // created or joined: the server pushes a lobby snapshot on connect, and
+      // that is what fills the PUBLIC LOBBY BROWSER. Without this a visitor sees
+      // an empty list until they already try to create or join something.
+      connect(() => {});
+    };
+
+    if (window.PhoenixAccount && window.PhoenixAccount.requireLogin) {
+      window.PhoenixAccount.requireLogin(openLobby);
+    } else {
+      openLobby();
+    }
   }
 
   function leave() {
@@ -370,7 +388,7 @@
    * the menu option gives no access to any admin command without the password
    * (and the server locks out repeated wrong guesses by IP).
    */
-  function openAdmin() {
+  async function openAdmin() {
     // Was the dashboard opened from the main menu (rather than from inside the
     // multiplayer screen)? If so, remember it so we can put the menu back on
     // Logout, and so we can hide the menu while the dashboard is showing.
@@ -383,7 +401,25 @@
       return;
     }
 
+    // Learn the signed-in role BEFORE opening the socket. /api/me reads the
+    // same httpOnly session cookie the WebSocket reads, so the two always
+    // agree - and asking here avoids racing the socket's `account` message.
+    // An owner account is then never shown a password prompt.
+    let role = null;
+    try {
+      const res = await fetch('/api/me', { cache: 'no-store' });
+      if (res.ok) {
+        const payload = await res.json();
+        role = payload.account && payload.account.role;
+      }
+    } catch (e) { /* offline or unauthenticated: fall back to the prompt */ }
+
     connect(() => {
+      if (role === 'owner') {
+        PhoenixOnline.adminFromMenu = fromMenu;
+        send({ type: 'admin_auth' });
+        return;
+      }
       const pwd = prompt('Enter the owner password to open the owner dashboard:');
       if (!pwd) return;
       PhoenixOnline.adminFromMenu = fromMenu;

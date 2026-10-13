@@ -10,6 +10,7 @@ const Rules = require('./js/rules.js');
 const Maple = require('./js/maple.js');
 const Effects = require('./js/effects.js');
 const Gallery = require('./js/gallery.js');
+const Auth = require('./js/auth.js');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
@@ -828,7 +829,7 @@ const mime = {
   '.efkefc': 'application/octet-stream'
 };
 
-const httpServer = http.createServer((req, res) => {
+const httpServer = http.createServer(async (req, res) => {
   let pathname;
 
   try {
@@ -873,6 +874,107 @@ const httpServer = http.createServer((req, res) => {
       respond({ ok: false, message: 'That code is not recognised.' });
     });
     return;
+  }
+
+  // ---- Phase 1: account auth (server-side, Supabase Postgres) -------------
+  const sendJson = (obj, status = 200) => {
+    res.writeHead(status, { 'Content-Type': 'application/json', 'X-Content-Type-Options': 'nosniff' });
+    res.end(JSON.stringify(obj));
+  };
+  const readJsonBody = () => new Promise((resolve) => {
+    let body = '';
+    req.on('data', chunk => { if (body.length < 8192) body += chunk; });
+    req.on('end', () => { try { resolve(JSON.parse(body || '{}')); } catch (e) { resolve({}); } });
+  });
+  const reqIp = ((req.socket.remoteAddress || '').replace(/^::ffff:/, '') || 'unknown');
+
+  // Account routes exist only when Supabase is configured. Without it they
+  // answer 503 rather than pretending to work (or silently letting anyone in).
+  if (
+    req.method === 'POST' &&
+    (pathname === '/api/register' || pathname === '/api/login' ||
+     pathname === '/api/claim-owner' || pathname === '/api/logout')
+  ) {
+    if (!Auth.isConfigured()) {
+      sendJson({ ok: false, message: 'Accounts are not available on this server.' }, 503);
+      return;
+    }
+  }
+
+  if (
+    req.method === 'POST' &&
+    (pathname === '/api/register' || pathname === '/api/login' || pathname === '/api/claim-owner')
+  ) {
+    // Brute-force protection: the same sliding-window per-IP counter the
+    // access code already uses. Login, register and owner-claim all count as
+    // one bucket, so hammering any of them locks all of them.
+    const now = Date.now();
+    const record = accessCodeRecord(reqIp, now);
+    if (record.failures.length >= ACCESS_CODE_MAX_FAILURES) {
+      sendJson({ ok: false, message: 'Too many attempts. Try again later.' }, 429);
+      return;
+    }
+
+    if (pathname === '/api/register') {
+      const { username, password } = await readJsonBody();
+      const result = await Auth.register(username, password);
+      if (!result.ok) {
+        record.failures.push(now);
+        sendJson({ ok: false, message: result.message }, 400);
+        return;
+      }
+      accessCodeFails.delete(reqIp);
+      res.setHeader('Set-Cookie', Auth.sessionCookie(result.token, Auth.SESSION_TTL_SEC, Auth.isSecure(req)));
+      sendJson({ ok: true, account: result.account });
+      return;
+    }
+
+    if (pathname === '/api/login') {
+      const { username, password } = await readJsonBody();
+      const result = await Auth.login(username, password);
+      if (!result.ok) {
+        record.failures.push(now);
+        sendJson({ ok: false, message: result.message }, 401);
+        return;
+      }
+      accessCodeFails.delete(reqIp);
+      res.setHeader('Set-Cookie', Auth.sessionCookie(result.token, Auth.SESSION_TTL_SEC, Auth.isSecure(req)));
+      sendJson({ ok: true, account: result.account });
+      return;
+    }
+
+    // /api/claim-owner
+    const claimant = await Auth.getSessionAccount(req);
+    if (!claimant) {
+      sendJson({ ok: false, message: 'You must be signed in.' }, 401);
+      return;
+    }
+    const { setupKey } = await readJsonBody();
+    const claimResult = await Auth.claimOwner(claimant.id, setupKey);
+    if (!claimResult.ok) {
+      record.failures.push(now);
+      sendJson({ ok: false, message: claimResult.message }, 400);
+      return;
+    }
+    accessCodeFails.delete(reqIp);
+    sendJson({ ok: true, account: { ...claimant, role: 'owner' } });
+    return;
+  }
+
+  if (req.method === 'POST' && pathname === '/api/logout') {
+    await Auth.destroySession(req);
+    res.setHeader('Set-Cookie', Auth.clearSessionCookie(Auth.isSecure(req)));
+    return sendJson({ ok: true });
+  }
+  if (req.method === 'GET' && pathname === '/api/me') {
+    if (!Auth.isConfigured()) {
+      // No account system here: tell the client it needs no sign-in screen.
+      sendJson({ ok: false, authenticated: false, available: false }, 200);
+      return;
+    }
+    const account = await Auth.getSessionAccount(req);
+    if (!account) return sendJson({ ok: false, authenticated: false, available: true }, 401);
+    return sendJson({ ok: true, authenticated: true, available: true, account });
   }
 
   const file = path.resolve(
@@ -1219,6 +1321,12 @@ function leaveRoom(ws, reason) {
 
 function handleAdmin(ws, data) {
   if (data.type === 'admin_auth') {
+    // A signed-in OWNER account is already authorised by its server-side
+    // session, so it opens the dashboard with NO separate owner password.
+    if (ws.admin && ws.account && ws.account.role === 'owner') {
+      send(ws, adminStateMessage(ws));
+      return;
+    }
     const now = Date.now();
     const ip = clientIp(ws);
     const auth = authRecord(ip, now);
@@ -1324,6 +1432,9 @@ function handle(ws, data) {
   }
 
   if (data.type === 'create') {
+    if (Auth.isConfigured() && !ws.account) {
+      return error(ws, 'Please sign in to play.');
+    }
     if (ws.member) {
       return error(ws, 'Already in a room.');
     }
@@ -1504,6 +1615,9 @@ function handle(ws, data) {
   }
 
   if (data.type === 'join') {
+    if (Auth.isConfigured() && !ws.account) {
+      return error(ws, 'Please sign in to play.');
+    }
     if (ws.member) {
       return error(ws, 'Already in a room.');
     }
@@ -1579,6 +1693,9 @@ function handle(ws, data) {
   const room = m.room;
 
   if (data.type === 'start') {
+    if (Auth.isConfigured() && !ws.account) {
+      return error(ws, 'Please sign in to play.');
+    }
     if (m.seat !== 0) {
       return error(ws, 'Only the host can start.');
     }
@@ -1660,6 +1777,9 @@ function handle(ws, data) {
   }
 
   if (data.type === 'roll') {
+    if (Auth.isConfigured() && !ws.account) {
+      return error(ws, 'Please sign in to play.');
+    }
     if (!['turnDice', 'allyDice'].includes(room.phase)) {
       return error(ws, 'Not rolling dice now.');
     }
@@ -1673,6 +1793,9 @@ function handle(ws, data) {
   }
 
   if (data.type === 'chooseAlly') {
+    if (Auth.isConfigured() && !ws.account) {
+      return error(ws, 'Please sign in to play.');
+    }
     if (room.phase !== 'draft') {
       return error(ws, 'Not choosing allies now.');
     }
@@ -1724,6 +1847,9 @@ function handle(ws, data) {
   }
 
   if (data.type === 'move') {
+    if (Auth.isConfigured() && !ws.account) {
+      return error(ws, 'Please sign in to play.');
+    }
     const s = room.state;
 
     if (!s || s.over) {
@@ -1835,18 +1961,48 @@ function ally(id) {
     : 'phoenix';
 }
 
-wss.on('connection', ws => {
+wss.on('connection', (ws, request) => {
   send(ws, lobbySnapshot());
-  ws.on('message', raw => {
+
+  // Resolving the session needs a round trip to the database, but the browser
+  // can send its first message before that finishes. Attaching the message
+  // handler only AFTER the await used to drop those early messages on the
+  // floor (no listener, no error). Instead: buffer them, then play them back
+  // in order once the session is known - so nothing is lost and nothing is
+  // processed before we know who is asking.
+  const pending = [];
+  let ready = false;
+
+  function dispatch(raw) {
     try {
-      handle(
-        ws,
-        JSON.parse(raw.toString())
-      );
+      handle(ws, JSON.parse(raw.toString()));
     } catch (e) {
       error(ws, 'Invalid request.');
     }
+  }
+
+  ws.on('message', raw => {
+    if (ready) dispatch(raw);
+    else pending.push(raw);
   });
+
+  Auth.getSessionAccount(request)
+    .catch(() => null)
+    .then(account => {
+      ws.account = account;
+      // A permanent OWNER account grants owner controls automatically after
+      // login - no separate owner password prompt is ever shown to the owner.
+      ws.admin = !!(account && account.role === 'owner');
+      // Tell the client who it is signed in as. This is NOT admin_state: the
+      // dashboard is only revealed when the client actually asks for it, so
+      // merely connecting as the owner never pops it over the lobby.
+      if (account) {
+        send(ws, { type: 'account', account });
+      }
+      ready = true;
+      for (const raw of pending) dispatch(raw);
+      pending.length = 0;
+    });
 
   ws.on('close', () => {
     // A gallery dies with the connection that opened it, BEFORE the room check

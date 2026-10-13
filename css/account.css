@@ -1,0 +1,184 @@
+/*
+ * Phoenix - css/account.css
+ * ---------------------------------------------------------------------------
+ * Sign-in / register screen (Phase 1 accounts). Same navy radial backdrop,
+ * .online-panel-style surface and gold accent as the access-code dialog, so it
+ * reads as part of the same game rather than a foreign login page.
+ */
+
+.account-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 75;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: radial-gradient(circle at top, #263452, #090f1c 75%);
+  color: #f7e5c0;
+  font-family: system-ui, sans-serif;
+}
+
+.account-overlay[hidden] {
+  display: none !important;
+}
+
+.account-shell {
+  width: 100%;
+  max-width: 460px;
+  padding: 24px;
+  border: 1px solid #75572e;
+  border-radius: 18px;
+  background: #151b2d;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+}
+
+.account-eyebrow {
+  margin: 0;
+  color: #cbb78e;
+  font-size: 11px;
+  letter-spacing: 3px;
+}
+
+.account-shell h2 {
+  margin: 4px 0 6px;
+  color: #ffd16b;
+  font-size: clamp(20px, 5vw, 26px);
+  letter-spacing: 1px;
+}
+
+.account-note {
+  margin: 0 0 6px;
+  color: #f7e5c0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.account-hint {
+  margin: 0 0 14px;
+  color: #cbb78e;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.account-shell input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  margin-bottom: 10px;
+  border: 1px solid #75572e;
+  border-radius: 10px;
+  background: #0d1424;
+  color: #f7e5c0;
+  font: inherit;
+  letter-spacing: 1px;
+}
+
+.account-shell input:focus {
+  outline: none;
+  border-color: #ffd16b;
+}
+
+.account-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.account-actions button {
+  flex: 1;
+  padding: 11px 12px;
+  border: 1px solid #75572e;
+  border-radius: 10px;
+  background: #1d2640;
+  color: #f7e5c0;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.account-actions button[type="submit"] {
+  background: #d9a137;
+  border-color: #d9a137;
+  color: #1a1206;
+}
+
+.account-actions button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.account-toggle {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px;
+  border: 1px dashed #75572e;
+  border-radius: 10px;
+  background: transparent;
+  color: #ffd16b;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.account-feedback {
+  margin: 12px 0 0;
+  min-height: 1.2em;
+  color: #ffb38a;
+  font-size: 13px;
+}
+
+.account-feedback.is-error {
+  color: #ff9d7a;
+}
+
+.account-fineprint {
+  margin: 10px 0 0;
+  color: #8f9dbb;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* ---- main-menu account line ---- */
+
+.menu-account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+}
+
+.menu-account-name {
+  color: #cbb78e;
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+
+.menu-account-name.is-signed-in {
+  color: #ffd16b;
+}
+
+.menu-account-btn {
+  padding: 6px 12px;
+  border: 1px solid #75572e;
+  border-radius: 999px;
+  background: #1d2640;
+  color: #f7e5c0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.menu-account-btn[hidden] {
+  display: none !important;
+}
+
+.menu-account-btn-warn {
+  border-color: #d9a137;
+  color: #ffd16b;
+}

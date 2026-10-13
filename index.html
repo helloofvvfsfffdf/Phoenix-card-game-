@@ -17,6 +17,7 @@
 <link rel="stylesheet" href="css/card-cinematic-scene.css" />
 <link rel="stylesheet" href="css/match-showcase.css" />
 <link rel="stylesheet" href="css/mode-access.css" />
+<link rel="stylesheet" href="css/account.css" />
 <link rel="stylesheet" href="css/allies.css" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128293;</text></svg>" />
 <title>Phoenix</title>
@@ -40,6 +41,12 @@
         <button type="button" id="menu-owner"><span class="menu-symbol">🔒</span> OWNER DASHBOARD <small>SERVER ADMIN · PASSWORD REQUIRED</small></button>
       </nav>
       <p id="menu-feedback" aria-live="polite"></p>
+      <div class="menu-account" id="menu-account-bar">
+        <span id="menu-account" class="menu-account-name">Checking session…</span>
+        <button type="button" id="menu-signin" class="menu-account-btn">SIGN IN</button>
+        <button type="button" id="menu-logout" class="menu-account-btn" hidden>SIGN OUT</button>
+        <button type="button" id="menu-claim-owner" class="menu-account-btn menu-account-btn-warn" hidden>CLAIM OWNERSHIP</button>
+      </div>
       <p class="menu-footer">PHOENIX · PROTOTYPE BUILD · RESTRICTED ACCESS</p>
     </div>
     <div class="menu-photo">
@@ -361,6 +368,27 @@
     <p id="mode-access-feedback" class="mode-access-feedback" aria-live="polite"></p>
   </div>
 </div>
+<div class="account-overlay" id="account-overlay" hidden>
+  <div class="account-shell" role="dialog" aria-modal="true" aria-labelledby="account-title" data-mode="login">
+    <p class="account-eyebrow">PHOENIX · PLAYER ACCOUNT</p>
+    <h2 id="account-title">SIGN IN</h2>
+    <p class="account-note" id="account-reason">Sign in to save your place and play online multiplayer.</p>
+    <p class="account-hint" id="account-hint">Enter your username and password to continue.</p>
+    <form id="account-form" autocomplete="on">
+      <input id="account-username" name="username" type="text" autocomplete="username"
+             maxlength="22" placeholder="Username" aria-label="Username" required />
+      <input id="account-password" name="password" type="password" autocomplete="current-password"
+             maxlength="128" placeholder="Password" aria-label="Password" required />
+      <div class="account-actions">
+        <button id="account-cancel" type="button">NOT NOW</button>
+        <button type="submit" id="account-submit">SIGN IN &rarr;</button>
+      </div>
+    </form>
+    <button id="account-toggle" type="button" class="account-toggle">New here? Create an account</button>
+    <p id="account-feedback" class="account-feedback" aria-live="polite"></p>
+    <p class="account-fineprint">Usernames are 3-22 letters, digits or underscore. Passwords need 8+ characters. No email required.</p>
+  </div>
+</div>
 <section id="admin-panel" hidden class="admin-panel">
   <div class="admin-shell">
     <h2>Server Admin Dashboard</h2>
@@ -401,6 +429,7 @@
 <script src="js/game.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/mode-access.js"></script>
+<script src="js/account-client.js"></script>
 <script src="js/prototype.js"></script>
 <script src="js/allies.js"></script>
 <!-- The browser half of multiplayer. This used to point at js/online.js, which
