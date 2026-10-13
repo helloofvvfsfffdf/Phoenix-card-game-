@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://phoenix-card-game.onrender.com/sitemap.xml

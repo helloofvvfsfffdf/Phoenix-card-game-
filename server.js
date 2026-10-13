@@ -819,6 +819,8 @@ const mime = {
   '.ico': 'image/x-icon',
   '.svg': 'image/svg+xml',
   '.json': 'application/json',
+  '.xml': 'application/xml',
+  '.txt': 'text/plain',
   '.mp3': 'audio/mpeg',
   '.mp4': 'video/mp4',
   '.wasm': 'application/wasm',
