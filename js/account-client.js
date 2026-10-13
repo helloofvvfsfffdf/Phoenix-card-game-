@@ -219,7 +219,12 @@
       post(mode === 'register' ? '/api/register' : '/api/login', { username: username, password: password })
         .then(function (out) {
           if (!out.res.ok || !out.data.ok) {
-            feedback((out.data && out.data.message) || 'Could not sign in.');
+            // The server keeps real database errors in its own log; all that
+            // reaches us is a short, non-sensitive reference code so a bug
+            // report can be matched to that log line exactly.
+            var message = (out.data && out.data.message) || 'Could not sign in.';
+            if (out.data && out.data.code) message += ' [' + out.data.code + ']';
+            feedback(message);
             return;
           }
           $('account-password').value = '';

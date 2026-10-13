@@ -54,6 +54,242 @@ function client() {
   return _supabase;
 }
 
+/* ---------- safe diagnostics ------------------------------------------------
+ * Auth failures used to be swallowed into one generic sentence, which made a
+ * broken database indistinguishable from a typo'd password. The MESSAGE shown
+ * to the player stays generic (internals must never reach a stranger's
+ * browser), but the SERVER LOG now records the real cause - with anything that
+ * looks like a credential removed first.
+ *
+ * Never logged: passwords, bcrypt hashes, session tokens, API keys, cookies.
+ * Logged: Postgres/PostgREST error codes, table names, constraint names,
+ *         network errors, and the KEY TYPE (e.g. "legacy JWT, role=anon")
+ *         which is not a secret but tells us which key was pasted.
+ */
+
+const SECRET_PATTERNS = [
+  /\$2[abxy]\$\d{2}\$[./A-Za-z0-9]{53}/g,                       // bcrypt hash
+  /\beyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\b/g, // JWT
+  /\bsb_(?:secret|publishable|legacy)_[A-Za-z0-9_-]{6,}\b/g,    // new-style keys
+  /\b[0-9a-f]{32,}\b/gi,                                        // hex tokens/hashes
+  /phoenix_session=[^;\s]+/g                                    // raw session cookie
+];
+
+/** Strip anything credential-shaped out of a string before it is logged. */
+function redact(text) {
+  let out = String(text === undefined || text === null ? '' : text);
+  for (const re of SECRET_PATTERNS) out = out.replace(re, '[redacted]');
+  return out;
+}
+
+/**
+ * Turn any PostgREST / fetch error into one safe, loggable line.
+ * PostgREST errors carry {code,message,details,hint}; network errors do not.
+ */
+function describeError(error) {
+  if (!error) return 'none';
+  if (typeof error === 'string') return redact(error);
+  const parts = [];
+  if (error.code) parts.push('code=' + redact(error.code));
+  if (error.message) parts.push('message=' + redact(error.message));
+  if (error.details) parts.push('details=' + redact(error.details));
+  if (error.hint) parts.push('hint=' + redact(error.hint));
+  if (error.status) parts.push('http=' + redact(error.status));
+  if (!parts.length && error.name) parts.push('name=' + redact(error.name));
+  return parts.join(' | ') || redact(JSON.stringify(error));
+}
+
+function authLog(level, message) {
+  const line = '[PHOENIX auth] ' + message;
+  if (level === 'error') console.error(line);
+  else if (level === 'warn') console.warn(line);
+  else console.log(line);
+}
+
+/** Log one failed database operation. `op` must never contain user input. */
+function logDbError(op, error) {
+  authLog('error', op + ' -> ' + describeError(error));
+}
+
+/**
+ * A short, non-sensitive reference code the browser may show so a bug report
+ * can be matched to a log line. Postgres codes reveal nothing useful to an
+ * attacker but make support instant.
+ */
+function userRef(error) {
+  const code = error && error.code ? String(error.code) : '';
+  if (code === '42501') return 'DB-PERMISSION';
+  if (code === '23514') return 'DB-CONSTRAINT';
+  if (code === '23503') return 'DB-FOREIGN-KEY';
+  if (code === '23505') return 'DB-DUPLICATE';
+  if (code === '23502') return 'DB-NOT-NULL';
+  if (code === 'PGRST205' || code === '42P01') return 'DB-TABLE-MISSING';
+  if (code === 'PGRST202' || code === '42883') return 'DB-FUNCTION-MISSING';
+  if (code === '401' || code === '403') return 'DB-KEY-REJECTED';
+  if (error && error.__network) return 'DB-UNREACHABLE';
+  return 'DB-ERROR';
+}
+
+/** One-line actionable hint for the operator, printed next to the error. */
+function hintFor(error) {
+  const code = error && error.code ? String(error.code) : '';
+  if (code === '42501') {
+    return '42501 = permission denied / row-level security. The value in ' +
+      'SUPABASE_SERVICE_ROLE_KEY is almost certainly the ANON (or publishable) ' +
+      'key. It must be the service_role / secret key.';
+  }
+  if (code === '401' || code === '403') {
+    return 'The API key was rejected. Check SUPABASE_SERVICE_ROLE_KEY is complete ' +
+      'and unmodified (no spaces, no quotes, no line break).';
+  }
+  if (code === 'PGRST205' || code === '42P01') {
+    return 'Table not found. Re-run sql/phase1-accounts.sql in the Supabase SQL Editor.';
+  }
+  if (code === 'PGRST202' || code === '42883') {
+    return 'Function not found. Re-run sql/phase1-accounts.sql (creates claim_owner).';
+  }
+  if (error && error.__network) {
+    return 'Supabase could not be reached. Check SUPABASE_URL is the project REST ' +
+      'URL and looks like https://<ref>.supabase.co';
+  }
+  if (code === '23514') {
+    return 'A check constraint rejected the row (username/password_hash/role format).';
+  }
+  return '';
+}
+
+/**
+ * Describe the API key by TYPE ONLY. The key itself is never printed.
+ * A legacy JWT carries its Postgres role in the (unencrypted) payload - that
+ * role is exactly what decides whether RLS lets us in, so it is the single
+ * most useful thing to know when registration fails.
+ */
+function describeKey(key) {
+  if (!key) return 'MISSING';
+  if (key.startsWith('sb_secret_')) return 'new-style secret key (service role)';
+  if (key.startsWith('sb_publishable_')) {
+    return 'new-style PUBLISHABLE key (acts as anon) -- WRONG for SUPABASE_SERVICE_ROLE_KEY';
+  }
+  if (key.startsWith('eyJ')) {
+    try {
+      const payload = key.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const role = JSON.parse(Buffer.from(payload, 'base64').toString('utf8')).role;
+      return 'legacy JWT (role claim: ' + (role || 'unreadable') + ')';
+    } catch (e) {
+      return 'legacy JWT (role claim unreadable)';
+    }
+  }
+  return 'unrecognised format';
+}
+
+/**
+ * Startup self-check. Runs once, after listen(), so it never delays boot.
+ * Answers the four questions that matter without anyone having to guess:
+ *   1. is Supabase configured and is the URL valid?
+ *   2. which KEY TYPE was pasted (wrong key = the classic cause of this bug)?
+ *   3. is Supabase reachable from this server?
+ *   4. can we actually read public.accounts (table exists, grants OK)?
+ *
+ * READ-ONLY - it never writes a row.
+ */
+async function probe() {
+  if (!isConfigured()) {
+    authLog('warn', 'probe: NOT CONFIGURED (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ' +
+      'missing). Auth endpoints answer 503 and the multiplayer gate stays open.');
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(SUPABASE_URL);
+  } catch (e) {
+    authLog('error', 'probe: SUPABASE_URL is not a valid URL. It must look like ' +
+      'https://<project-ref>.supabase.co');
+    return;
+  }
+
+  // The classic mistake: pasting the Postgres connection string
+  // (postgresql://postgres:...@...pooler.supabase.co:6543/postgres) into
+  // SUPABASE_URL. That would carry a DATABASE PASSWORD into logs, so the URL is
+  // never echoed - only its scheme and host, which contain no credentials.
+  if (parsed.protocol !== 'https:' &&
+      parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
+    authLog('error', 'probe: SUPABASE_URL has the wrong scheme (' + parsed.protocol +
+      '). This is a database connection string, not the REST API URL. Use the ' +
+      'Project Settings -> Data API -> REST URL, which looks like ' +
+      'https://<project-ref>.supabase.co');
+    return;
+  }
+  const base = parsed.origin;
+
+  authLog('log', 'probe: url=' + parsed.protocol + '//' + parsed.host +
+    ' | key=' + describeKey(SUPABASE_SERVICE_ROLE_KEY) +
+    ' | owner-setup-key=' + (OWNER_SETUP_KEY ? 'set' : 'NOT set'));
+
+  // 3) Reachability (a plain GET on the REST root - no data touched).
+  try {
+    const res = await fetch(base + '/rest/v1/', {
+      headers: { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: 'Bearer ' + SUPABASE_SERVICE_ROLE_KEY },
+      signal: (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(15000) : undefined
+    });
+    authLog(res.ok ? 'log' : 'warn', 'probe: REST endpoint HTTP ' + res.status);
+  } catch (e) {
+    const err = new Error(redact(e && e.message)); err.__network = true;
+    logDbError('probe: Supabase REST endpoint unreachable', err);
+    authLog('error', 'probe: ' + hintFor(err));
+    return;
+  }
+
+  // 4) Can we read the accounts table? Proves connectivity + key + schema
+  //    cache + SELECT grant in a single round trip.
+  try {
+    const { data, error } = await client().from('accounts').select('id').limit(1);
+    if (error) {
+      logDbError('probe: cannot READ public.accounts', error);
+      const hint = hintFor(error);
+      if (hint) authLog('error', 'probe: ' + hint);
+      return;
+    }
+    authLog('log', 'probe: public.accounts READ OK (' + (data ? data.length : 0) +
+      ' row(s)) -- table exists and the key can reach it.');
+  } catch (e) {
+    logDbError('probe: public.accounts read threw', e);
+    return;
+  }
+
+  // 5) WRITE permissions - the part a READ cannot prove. RLS silently returns
+  //    ZERO ROWS on a blocked SELECT rather than an error, so a rejected write
+  //    is indistinguishable from an empty table. This probe deliberately
+  //    violates a CHECK constraint (empty username / role), so the row can
+  //    never be stored - but it runs the real permission and RLS checks first,
+  //    which is precisely what registration needs to pass.
+  //
+  //    Reaching here at all proves the table exists, and both format checks
+  //    live in that same CREATE TABLE, so "23514" is the expected verdict.
+  try {
+    const { error } = await client().from('accounts')
+      .insert({ username: '', password_hash: '', role: '' });
+    if (!error) {
+      authLog('error', 'probe: write probe UNEXPECTEDLY SUCCEEDED - the format ' +
+        'check constraints are missing. Re-run sql/phase1-accounts.sql.');
+      await client().from('accounts').delete()
+        .eq('password_hash', '').eq('username', '');
+    } else if (String(error.code) === '23514') {
+      authLog('log', 'probe: public.accounts WRITE OK - permissions and RLS are ' +
+        'correct (the probe row was refused by a check constraint, as designed).');
+    } else {
+      logDbError('probe: cannot WRITE public.accounts', error);
+      const hint = hintFor(error);
+      if (hint) authLog('error', 'probe: ' + hint);
+    }
+  } catch (e) {
+    logDbError('probe: public.accounts write threw', e);
+  }
+
+  authLog('log', 'probe: if a registration still fails, the exact error will be ' +
+    'logged here as "register: ..." on the next attempt.');
+}
+
 /* ---------- token helpers ---------- */
 function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -101,16 +337,25 @@ async function getSessionAccount(req) {
     .select('account_id, expires_at')
     .eq('token_hash', tokenHash)
     .maybeSingle();
-  if (error || !session) return null;
+  if (error) {
+    // No session is normal (signed out / expired); a broken QUERY is not.
+    logDbError('session lookup failed', error);
+    return null;
+  }
+  if (!session) return null;
   if (new Date(session.expires_at).getTime() < Date.now()) {
     await client().from('sessions').delete().eq('token_hash', tokenHash);
     return null;
   }
-  const { data: account } = await client()
+  const { data: account, error: accountError } = await client()
     .from('accounts')
     .select('id, username, role')
     .eq('id', session.account_id)
     .maybeSingle();
+  if (accountError) {
+    logDbError('account lookup failed', accountError);
+    return null;
+  }
   if (!account) return null;
   // Project to the three public fields explicitly. The query already asks for
   // them, but re-mapping here means NO consumer can ever receive a password
@@ -118,6 +363,12 @@ async function getSessionAccount(req) {
   return { id: account.id, username: account.username, role: account.role };
 }
 
+/**
+ * Creates a session row. Returns {token, expires} on success, or {error} on
+ * failure. It deliberately does NOT throw: a throw here used to escape the
+ * async HTTP handler as an unhandled rejection (which kills a Node 18+
+ * process), turning a database hiccup into a dead server.
+ */
 async function createSession(accountId) {
   const token = randomToken();
   const tokenHash = hashToken(token);
@@ -127,15 +378,15 @@ async function createSession(accountId) {
     account_id: accountId,
     expires_at: expires.toISOString()
   });
-  if (error) throw error;
+  if (error) return { error };
   return { token, expires };
 }
 
 async function destroySession(req) {
   const token = parseCookies(req)[SESSION_COOKIE];
-  if (token) {
-    await client().from('sessions').delete().eq('token_hash', hashToken(token));
-  }
+  if (!token) return;
+  const { error } = await client().from('sessions').delete().eq('token_hash', hashToken(token));
+  if (error) logDbError('session delete failed', error); // logout must still succeed
 }
 
 /* ---------- register / login ---------- */
@@ -147,30 +398,77 @@ async function register(username, password) {
   if (typeof password !== 'string' || password.length < 8) {
     return { ok: false, message: 'Password must be at least 8 characters.' };
   }
-  // Case-insensitive uniqueness check (the DB index enforces it too).
-  const { data: existing } = await client()
+  // Uniqueness check. The error is inspected too: a SILENT lookup failure
+  // used to be treated as "no such user" and hide a broken database.
+  const lookup = await client()
     .from('accounts').select('id').eq('username', username).maybeSingle();
-  if (existing) return { ok: false, message: 'That username is already taken.' };
+  if (lookup.error) {
+    logDbError('register: username lookup failed', lookup.error);
+    return { ok: false, message: 'Accounts are temporarily unavailable. Try again shortly.',
+             code: userRef(lookup.error) };
+  }
+  if (lookup.data) return { ok: false, message: 'That username is already taken.' };
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-  const { data, error } = await client().from('accounts')
+
+  // `.select()` (array form) rather than `.maybeSingle()`: an INSERT whose
+  // RETURNING comes back empty is a real, distinguishable condition here, and
+  // it should be reported instead of becoming a null dereference.
+  const inserted = await client().from('accounts')
     .insert({ username, password_hash: passwordHash, role: 'player' })
-    .select('id, username, role').maybeSingle();
-  if (error) {
-    if (String(error.message).includes('username_lower') || String(error.code).includes('23505')) {
+    .select('id, username, role');
+
+  if (inserted.error) {
+    logDbError('register: INSERT into public.accounts failed (username=' +
+      redact(username) + ')', inserted.error);
+    const hint = hintFor(inserted.error);
+    if (hint) authLog('error', 'register: ' + hint);
+    if (String(inserted.error.message).includes('username_lower') ||
+        String(inserted.error.code) === '23505') {
       return { ok: false, message: 'That username is already taken.' };
     }
-    return { ok: false, message: 'Registration failed. Please try again.' };
+    // Generic to the browser (no internals leak), specific in the log.
+    return { ok: false, message: 'Registration failed. Please try again.',
+             code: userRef(inserted.error) };
   }
-  const { token } = await createSession(data.id);
-  return { ok: true, account: { id: data.id, username: data.username, role: data.role }, token };
+
+  const row = Array.isArray(inserted.data) ? inserted.data[0] : inserted.data;
+  if (!row) {
+    authLog('error', 'register: INSERT reported success but returned no row. ' +
+      'This usually means row-level security filtered the RETURNING clause.');
+    return { ok: false, message: 'Registration failed. Please try again.', code: 'DB-NO-ROW' };
+  }
+
+  const session = await createSession(row.id);
+  if (session.error) {
+    // The account EXISTS at this point - say so, instead of leaving the player
+    // to register twice and hit "username already taken".
+    logDbError('register: session INSERT failed (account created, sign-in failed)',
+      session.error);
+    return { ok: false,
+             message: 'Your account was created, but sign-in failed. Please sign in instead.',
+             code: userRef(session.error) };
+  }
+  return { ok: true, account: { id: row.id, username: row.username, role: row.role },
+           token: session.token };
 }
 
 async function login(username, password) {
   username = String(username || '').trim();
-  const { data: account } = await client()
+  const lookup = await client()
     .from('accounts').select('id, username, password_hash, role')
     .eq('username', username).maybeSingle();
+
+  if (lookup.error) {
+    // A broken query must NOT be reported as "wrong password" - that sends the
+    // player round in circles while the database is down.
+    logDbError('login: lookup failed', lookup.error);
+    const hint = hintFor(lookup.error);
+    if (hint) authLog('error', 'login: ' + hint);
+    return { ok: false, message: 'Sign-in is temporarily unavailable. Try again shortly.',
+             code: userRef(lookup.error) };
+  }
+  const account = lookup.data;
 
   // Always run a bcrypt compare so a missing user and a wrong password take
   // the same code path. The dummy is only ever used when there is no account,
@@ -180,12 +478,20 @@ async function login(username, password) {
     const hash = account ? account.password_hash : DUMMY_HASH;
     ok = await bcrypt.compare(String(password || ''), hash);
   } catch (e) {
+    logDbError('login: bcrypt compare threw', e);
     ok = false;
   }
   if (!account || !ok) return { ok: false, message: 'Incorrect username or password.' };
 
-  const { token } = await createSession(account.id);
-  return { ok: true, account: { id: account.id, username: account.username, role: account.role }, token };
+  const session = await createSession(account.id);
+  if (session.error) {
+    logDbError('login: session INSERT failed', session.error);
+    return { ok: false, message: 'Sign-in is temporarily unavailable. Try again shortly.',
+             code: userRef(session.error) };
+  }
+  return { ok: true,
+           account: { id: account.id, username: account.username, role: account.role },
+           token: session.token };
 }
 
 /* ---------- owner claim (atomic, via the DB RPC) ---------- */
@@ -208,10 +514,18 @@ async function claimOwner(accountId, setupKey) {
     p_account: accountId,
     p_setup_key: String(setupKey)
   });
-  if (error) return { ok: false, message: 'Could not claim ownership. Please try again.' };
+  if (error) {
+    logDbError('claim-owner: RPC public.claim_owner failed', error);
+    const hint = hintFor(error);
+    if (hint) authLog('error', 'claim-owner: ' + hint);
+    return { ok: false, message: 'Could not claim ownership. Please try again.',
+             code: userRef(error) };
+  }
 
   const result = data || {};
   if (result.ok) return { ok: true };
+  authLog('warn', 'claim-owner: refused by the database, reason=' +
+    redact(result.reason || 'unknown'));
 
   // Map the SQL function's `reason` codes to friendly copy.
   const reasons = {
@@ -226,8 +540,9 @@ async function claimOwner(accountId, setupKey) {
 
 module.exports = {
   SESSION_COOKIE, SESSION_TTL_SEC,
-  isConfigured,
+  isConfigured, probe,
   client, hashToken, parseCookies, isSecure,
   getSessionAccount, sessionCookie, clearSessionCookie,
-  register, login, destroySession, claimOwner
+  register, login, destroySession, claimOwner,
+  describeError, redact
 };

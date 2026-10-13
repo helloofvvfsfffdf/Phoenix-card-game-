@@ -915,54 +915,78 @@ const httpServer = http.createServer(async (req, res) => {
       return;
     }
 
-    if (pathname === '/api/register') {
-      const { username, password } = await readJsonBody();
-      const result = await Auth.register(username, password);
-      if (!result.ok) {
+    // A database problem is not the player's fault: never count it against
+    // their attempts, or a Supabase outage would lock every IP out.
+    function noteFailure(result) {
+      if (!(result && result.code && String(result.code).indexOf('DB-') === 0)) {
         record.failures.push(now);
-        sendJson({ ok: false, message: result.message }, 400);
+      }
+    }
+
+    // The auth calls talk to the network. If one THROWS, an unhandled rejection
+    // in this async handler takes the whole Node process down on Node 18+.
+    try {
+      if (pathname === '/api/register') {
+        const { username, password } = await readJsonBody();
+        const result = await Auth.register(username, password);
+        if (!result.ok) {
+          noteFailure(result);
+          sendJson({ ok: false, message: result.message, code: result.code || null }, 400);
+          return;
+        }
+        accessCodeFails.delete(reqIp);
+        res.setHeader('Set-Cookie', Auth.sessionCookie(result.token, Auth.SESSION_TTL_SEC, Auth.isSecure(req)));
+        sendJson({ ok: true, account: result.account });
+        return;
+      }
+
+      if (pathname === '/api/login') {
+        const { username, password } = await readJsonBody();
+        const result = await Auth.login(username, password);
+        if (!result.ok) {
+          noteFailure(result);
+          sendJson({ ok: false, message: result.message, code: result.code || null }, 401);
+          return;
+        }
+        accessCodeFails.delete(reqIp);
+        res.setHeader('Set-Cookie', Auth.sessionCookie(result.token, Auth.SESSION_TTL_SEC, Auth.isSecure(req)));
+        sendJson({ ok: true, account: result.account });
+        return;
+      }
+
+      // /api/claim-owner
+      const claimant = await Auth.getSessionAccount(req);
+      if (!claimant) {
+        sendJson({ ok: false, message: 'You must be signed in.' }, 401);
+        return;
+      }
+      const { setupKey } = await readJsonBody();
+      const claimResult = await Auth.claimOwner(claimant.id, setupKey);
+      if (!claimResult.ok) {
+        noteFailure(claimResult);
+        sendJson({ ok: false, message: claimResult.message, code: claimResult.code || null }, 400);
         return;
       }
       accessCodeFails.delete(reqIp);
-      res.setHeader('Set-Cookie', Auth.sessionCookie(result.token, Auth.SESSION_TTL_SEC, Auth.isSecure(req)));
-      sendJson({ ok: true, account: result.account });
+      sendJson({ ok: true, account: { ...claimant, role: 'owner' } });
+      return;
+    } catch (err) {
+      // Route every unexpected error through auth.js's redacting formatter so
+      // a stray URL, token or hash can never land in the Render log.
+      console.error('[PHOENIX auth] unhandled error in ' + pathname + ' -> ' +
+        Auth.describeError(err));
+      sendJson({ ok: false, message: 'Something went wrong on the server. Please try again.',
+                 code: 'SERVER-ERROR' }, 500);
       return;
     }
-
-    if (pathname === '/api/login') {
-      const { username, password } = await readJsonBody();
-      const result = await Auth.login(username, password);
-      if (!result.ok) {
-        record.failures.push(now);
-        sendJson({ ok: false, message: result.message }, 401);
-        return;
-      }
-      accessCodeFails.delete(reqIp);
-      res.setHeader('Set-Cookie', Auth.sessionCookie(result.token, Auth.SESSION_TTL_SEC, Auth.isSecure(req)));
-      sendJson({ ok: true, account: result.account });
-      return;
-    }
-
-    // /api/claim-owner
-    const claimant = await Auth.getSessionAccount(req);
-    if (!claimant) {
-      sendJson({ ok: false, message: 'You must be signed in.' }, 401);
-      return;
-    }
-    const { setupKey } = await readJsonBody();
-    const claimResult = await Auth.claimOwner(claimant.id, setupKey);
-    if (!claimResult.ok) {
-      record.failures.push(now);
-      sendJson({ ok: false, message: claimResult.message }, 400);
-      return;
-    }
-    accessCodeFails.delete(reqIp);
-    sendJson({ ok: true, account: { ...claimant, role: 'owner' } });
-    return;
   }
 
   if (req.method === 'POST' && pathname === '/api/logout') {
-    await Auth.destroySession(req);
+    try {
+      await Auth.destroySession(req);
+    } catch (err) {
+      console.error('[PHOENIX auth] logout failed -> ' + Auth.describeError(err));
+    }
     res.setHeader('Set-Cookie', Auth.clearSessionCookie(Auth.isSecure(req)));
     return sendJson({ ok: true });
   }
@@ -972,7 +996,12 @@ const httpServer = http.createServer(async (req, res) => {
       sendJson({ ok: false, authenticated: false, available: false }, 200);
       return;
     }
-    const account = await Auth.getSessionAccount(req);
+    let account = null;
+    try {
+      account = await Auth.getSessionAccount(req);
+    } catch (err) {
+      console.error('[PHOENIX auth] /api/me failed -> ' + Auth.describeError(err));
+    }
     if (!account) return sendJson({ ok: false, authenticated: false, available: true }, 401);
     return sendJson({ ok: true, authenticated: true, available: true, account });
   }
@@ -2028,5 +2057,10 @@ httpServer.listen(
     console.log(
       `PHOENIX multiplayer server: http://localhost:${PORT} instance=${INSTANCE_ID}`
     );
+    // Read-only Supabase health check. Deliberately AFTER listen() so a slow
+    // database can never delay or break startup; the verdict lands in the log.
+    Auth.probe().catch(err => {
+      console.error('[PHOENIX auth] probe failed -> ' + Auth.describeError(err));
+    });
   }
 );
