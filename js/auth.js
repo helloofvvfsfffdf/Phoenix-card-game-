@@ -16,9 +16,37 @@ const { createClient } = require('@supabase/supabase-js');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
+/**
+ * Reduce SUPABASE_URL to a bare origin.
+ *
+ * supabase-js appends `/rest/v1` itself (it resolves `new URL('rest/v1',
+ * baseUrl)`). If the env var ALREADY carries that path - the classic mistake of
+ * pasting the "REST URL" from Project Settings -> Data API instead of the bare
+ * project URL - the client goes on to request `/rest/v1/rest/v1/accounts`.
+ * The gateway routes that to PostgREST as the path `/rest/v1/accounts`, which
+ * PostgREST reads as a three-segment resource and rejects with
+ * PGRST125 "Invalid path specified in request URL".
+ *
+ * A stray trailing slash or surrounding whitespace is already absorbed by
+ * supabase-js, so only the path matters. Stripping it here makes the server
+ * correct no matter how the value was pasted.
+ */
+function normalizeSupabaseUrl(raw) {
+  return String(raw || '')
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/rest\/v1$/i, '')
+    .replace(/\/+$/, '');
+}
+
+const RAW_SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_URL = normalizeSupabaseUrl(RAW_SUPABASE_URL);
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const OWNER_SETUP_KEY = process.env.PHOENIX_OWNER_SETUP_KEY;
+// Absorb the whitespace a dashboard paste often brings. The setup key is only
+// ever compared and hashed, never displayed, so a trailing newline is pure
+// breakage - and it would silently stop the owner claim matching the hash
+// seeded in the database.
+const OWNER_SETUP_KEY = String(process.env.PHOENIX_OWNER_SETUP_KEY || '').trim();
 
 const SESSION_COOKIE = 'phoenix_session';
 const SESSION_TTL_SEC = 7 * 24 * 60 * 60; // 7 days
@@ -124,6 +152,7 @@ function userRef(error) {
   if (code === '23505') return 'DB-DUPLICATE';
   if (code === '23502') return 'DB-NOT-NULL';
   if (code === 'PGRST205' || code === '42P01') return 'DB-TABLE-MISSING';
+  if (code === 'PGRST125') return 'DB-BAD-PATH';
   if (code === 'PGRST202' || code === '42883') return 'DB-FUNCTION-MISSING';
   if (code === '401' || code === '403') return 'DB-KEY-REJECTED';
   if (error && error.__network) return 'DB-UNREACHABLE';
@@ -144,6 +173,11 @@ function hintFor(error) {
   }
   if (code === 'PGRST205' || code === '42P01') {
     return 'Table not found. Re-run sql/phase1-accounts.sql in the Supabase SQL Editor.';
+  }
+  if (code === 'PGRST125') {
+    return 'PGRST125 = the request path was invalid. SUPABASE_URL must be the BARE ' +
+      'project URL (https://<ref>.supabase.co) with no path - never the REST URL ' +
+      'that ends in /rest/v1, because the client adds that itself.';
   }
   if (code === 'PGRST202' || code === '42883') {
     return 'Function not found. Re-run sql/phase1-accounts.sql (creates claim_owner).';
@@ -199,32 +233,50 @@ async function probe() {
     return;
   }
 
-  let parsed;
+  // Report the SHAPE of the configured value. A URL path is not a secret, so
+  // it is shown - and a stray path there is exactly what caused PGRST125,
+  // which the previous version of this probe hid by printing only the host.
   try {
-    parsed = new URL(SUPABASE_URL);
+    const raw = new URL(RAW_SUPABASE_URL);
+    if (raw.protocol !== 'https:' &&
+        raw.hostname !== 'localhost' && raw.hostname !== '127.0.0.1') {
+      // The classic other mistake: pasting the Postgres connection string
+      // (postgresql://postgres:...@...pooler.supabase.co:6543/postgres) here.
+      // That carries a DATABASE PASSWORD, so the URL itself is never echoed -
+      // only its scheme, which contains no credentials.
+      authLog('error', 'probe: SUPABASE_URL has the wrong scheme (' + raw.protocol +
+        '). That is a database connection string, not the REST API URL. Use the ' +
+        'bare project URL, https://<project-ref>.supabase.co');
+      return;
+    }
   } catch (e) {
     authLog('error', 'probe: SUPABASE_URL is not a valid URL. It must look like ' +
       'https://<project-ref>.supabase.co');
     return;
   }
 
-  // The classic mistake: pasting the Postgres connection string
-  // (postgresql://postgres:...@...pooler.supabase.co:6543/postgres) into
-  // SUPABASE_URL. That would carry a DATABASE PASSWORD into logs, so the URL is
-  // never echoed - only its scheme and host, which contain no credentials.
-  if (parsed.protocol !== 'https:' &&
-      parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
-    authLog('error', 'probe: SUPABASE_URL has the wrong scheme (' + parsed.protocol +
-      '). This is a database connection string, not the REST API URL. Use the ' +
-      'Project Settings -> Data API -> REST URL, which looks like ' +
-      'https://<project-ref>.supabase.co');
+  let parsed;
+  try {
+    parsed = new URL(SUPABASE_URL);
+  } catch (e) {
+    authLog('error', 'probe: SUPABASE_URL is not usable after normalising. It must ' +
+      'look like https://<project-ref>.supabase.co');
     return;
   }
   const base = parsed.origin;
+  const rawPath = new URL(RAW_SUPABASE_URL).pathname;
 
   authLog('log', 'probe: url=' + parsed.protocol + '//' + parsed.host +
     ' | key=' + describeKey(SUPABASE_SERVICE_ROLE_KEY) +
     ' | owner-setup-key=' + (OWNER_SETUP_KEY ? 'set' : 'NOT set'));
+
+  if (rawPath && rawPath !== '/') {
+    authLog('warn', 'probe: SUPABASE_URL contained the path "' + rawPath + '". It has ' +
+      'been removed automatically: supabase-js appends /rest/v1 itself, and leaving ' +
+      'it in place makes the client request /rest/v1/rest/v1/... which PostgREST ' +
+      'rejects with PGRST125. The Render env var can still be corrected to the bare ' +
+      'project URL, but registration will work either way.');
+  }
 
   // 3) Reachability (a plain GET on the REST root - no data touched).
   try {
