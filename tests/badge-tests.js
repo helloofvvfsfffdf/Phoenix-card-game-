@@ -1,6 +1,7 @@
 /* Phoenix - Phase 2 badge system tests
  * ---------------------------------------------------------------------------
- * Two halves, no network, no live Supabase:
+ * Two halves, neither of which touches the live Supabase project or any
+ * remote host - the WebSocket used in part 2 talks only to 127.0.0.1.
  *
  *   1. PURE RULES  - js/badges.js validateFeatured(), the server-side decision
  *      that decides which slots a player may end up with.
@@ -14,6 +15,8 @@
  *          - at most three featured slots, no duplicates, must own the badge
  *          - the public profile reports the owner from accounts.role only
  *          - with no badge tables deployed, the API degrades instead of 500ing
+ *          - over a real WebSocket, a match snapshot carries each seat's
+ *            badges: THE PHOENIX beside the owner, never beside anyone else
  *
  *     node tests/badge-tests.js
  */
@@ -27,6 +30,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const WebSocket = require('ws');
 
 const ROOT = path.join(__dirname, '..');
 const Badges = require(path.join(ROOT, 'js', 'badges.js'));
@@ -113,6 +117,27 @@ function runRules() {
       const r = Badges.validateFeatured([], ['legend'], false);
       assert.strictEqual(r.ok, true);
       assert.deepStrictEqual(r.slots, []);
+    }))
+    /* ---- who may be awarded what ------------------------------------- */
+    .then(() => test('THE PHOENIX is NOT on the awardable allowlist', () => {
+      assert.strictEqual(Badges.isAwardable('phoenix'), false,
+        'the owner badge must be unawardable by construction');
+    }))
+    .then(() => test('PLAYED WITH OWNER is awardable', () => {
+      assert.strictEqual(Badges.isAwardable('played-with-owner'), true);
+    }))
+    .then(() => test('nothing else is awardable, whatever a request asks for', () => {
+      ['nonsense', 'divine', '', null, undefined, 42, {}, 'phoenix '].forEach(key => {
+        assert.strictEqual(Badges.isAwardable(key), false,
+          'refused: ' + JSON.stringify(key));
+      });
+    }))
+    .then(() => test('the allowlist can never grow by being listed', () => {
+      assert.strictEqual(Badges.AWARDABLE_KEYS.indexOf('phoenix'), -1);
+      Badges.AWARDABLE_KEYS.push('sneaky');
+      assert.strictEqual(Badges.isAwardable('phoenix'), false,
+        'even with other keys added, THE PHOENIX stays out');
+      Badges.AWARDABLE_KEYS.pop();
     }));
 }
 
@@ -122,6 +147,10 @@ function runRules() {
 
 const PHOENIX = { key: 'phoenix', name: 'THE PHOENIX', rarity: 'divine',
                   description: 'There can only be one Phoenix.' };
+
+// Seeded exactly as sql/played-with-owner-badge.sql seeds it.
+const PLAYED = { key: 'played-with-owner', name: 'PLAYED WITH OWNER', rarity: 'legendary',
+                 description: 'Played a match with the owner of PHOENIX.' };
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -140,7 +169,7 @@ function startFakeSupabase() {
   const state = {
     accounts: [],
     sessions: [],
-    badges: [{ ...PHOENIX, sort_order: 1 }],
+    badges: [{ ...PHOENIX, sort_order: 1 }, { ...PLAYED, sort_order: 2 }],
     grants: [],          // { account_id, badge_key }
     featured: [],        // { account_id, slot, badge_key }
     // Mirrors `one_phoenix_holder`: at most one holder, ever.
@@ -180,8 +209,28 @@ function startFakeSupabase() {
     return flts.every(f => {
       if (f.op === 'eq') return String(row[f.col]) === String(f.val);
       if (f.op === 'is') return f.val === 'null' ? row[f.col] == null : String(row[f.col]) === String(f.val);
+      // Case-insensitive match, exactly as Postgres ILIKE behaves - including
+      // `_` = any one character, `%` = any run, and `\` as the escape that the
+      // server uses to search for a literal underscore inside a username.
+      if (f.op === 'ilike') return likeRegex(f.val).test(String(row[f.col]));
+      if (f.op === 'like') return likeRegex(f.val, false).test(String(row[f.col]));
       return String(row[f.col]) === String(f.val);
     });
+  }
+
+  function escapeRe(ch) { return ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  function likeRegex(pattern, ignoreCase) {
+    const s = String(pattern);
+    let out = '';
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (c === '\\' && i + 1 < s.length) { out += escapeRe(s[++i]); }
+      else if (c === '%') out += '[\\s\\S]*';
+      else if (c === '_') out += '[\\s\\S]';
+      else out += escapeRe(c);
+    }
+    return new RegExp('^' + out + '$', ignoreCase === false ? '' : 'i');
   }
   function readBody(req) {
     return new Promise(resolve => {
@@ -410,6 +459,55 @@ function call(port, method, urlPath, body, cookie) {
   });
 }
 
+/**
+ * A real WebSocket player, handshake authenticated with the session cookie so
+ * the server resolves an account for it exactly as it does for a browser.
+ *
+ * Badges are resolved ONCE during that handshake and then ride along inside
+ * every snapshot, which is what these tests are here to observe.
+ */
+function openMatch(port, cookie) {
+  const ws = new WebSocket('ws://127.0.0.1:' + port, {
+    headers: cookie ? { Cookie: cookie } : {}
+  });
+  const events = [];
+  const client = { ws, events, state: null };
+  ws.on('message', raw => {
+    const message = JSON.parse(raw.toString());
+    events.push(message);
+    if (message.type === 'state') client.state = message;
+  });
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('WebSocket open timeout')), 8000);
+    ws.once('open', () => { clearTimeout(timer); resolve(client); });
+    ws.once('error', err => { clearTimeout(timer); reject(err); });
+  });
+}
+
+function matchWait(client, type, timeoutMs) {
+  const limit = timeoutMs || 10000;
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + limit;
+    const timer = setInterval(() => {
+      const idx = client.events.findIndex(e => e.type === type);
+      if (idx >= 0) {
+        clearInterval(timer);
+        resolve(client.events.splice(idx, 1)[0]);
+      } else if (Date.now() > deadline) {
+        clearInterval(timer);
+        reject(new Error('Timed out waiting for "' + type + '". Saw: ' +
+          client.events.map(e => e.type).join(',')));
+      }
+    }, 20);
+  });
+}
+
+/** Send a lobby action and wait for the resulting authoritative snapshot. */
+function matchSend(client, message) {
+  client.ws.send(JSON.stringify(message));
+  return matchWait(client, 'state');
+}
+
 function runStack() {
   const fakeState = { port: null, api: null };
   let appPort;
@@ -428,6 +526,9 @@ function runStack() {
     })
     .then(app => {
       const session = { cookie: null };
+      // A real room opened over a real WebSocket, so badges can be checked in
+      // the place they actually matter: the match snapshot.
+      const matchRoom = { host: null, guest: null, code: null };
 
       function signIn(username, password) {
         return call(appPort, 'POST', '/api/register', { username, password })
@@ -616,11 +717,151 @@ function runStack() {
           assert.strictEqual(text.includes('SUPABASE'), false);
         })
       ))
+      .then(() => test("the owner's THE PHOENIX badge appears in a real match snapshot", () =>
+        openMatch(appPort, session.ownerCookie).then(host => {
+          matchRoom.host = host;
+          return matchSend(host, { type: 'create', code: '' });
+        }).then(state => {
+          matchRoom.code = state.code;
+          assert.ok(state.players.length === 1, 'the owner is seated');
+          const badges = state.players[0].badges;
+          assert.ok(Array.isArray(badges), 'every seat carries a badges list');
+          const phoenix = badges.find(b => b.key === 'phoenix');
+          assert.ok(phoenix, 'THE PHOENIX shows up beside the owner in the match');
+          assert.strictEqual(phoenix.name, 'THE PHOENIX');
+          assert.strictEqual(phoenix.rarity, 'divine');
+        })
+      ))
+      .then(() => test('a joining player sees exactly their own badges, never THE PHOENIX', () =>
+        openMatch(appPort, session.cookie).then(guest => {
+          matchRoom.guest = guest;
+          return matchSend(guest, { type: 'join', code: matchRoom.code });
+        }).then(state => {
+          assert.strictEqual(state.players.length, 2, 'both players are seated');
+          const owner = state.players.find(p => Array.isArray(p.badges) &&
+            p.badges.some(b => b.key === 'phoenix'));
+          assert.ok(owner, 'the owner badge is visible to everyone in the room');
+
+          const player = state.players.find(p => p.id !== owner.id);
+          assert.ok(player.badges.every(b => b.key !== 'phoenix'),
+            'no other seat ever carries THE PHOENIX');
+
+          // The seat must mirror what the account ACTUALLY holds, read back
+          // through the API - so a snapshot can never show more than the
+          // database granted, and a client cannot claim its own badges.
+          return call(appPort, 'GET', '/api/badges', null, session.cookie).then(api => {
+            const shown = player.badges.map(b => b.key).sort();
+            const held = api.body.featured.filter(Boolean).map(b => b.key).sort();
+            assert.deepStrictEqual(shown, held,
+              'the match shows exactly the badges this account holds, no more');
+          });
+        })
+      ))
+      .then(() => test('a match badge carries ONLY catalogue fields, and no secret', () => {
+        const owner = matchRoom.host.state.players[0].badges[0];
+        assert.deepStrictEqual(Object.keys(owner).sort(), ['key', 'name', 'rarity'],
+          'nothing but the catalogue projection reaches a snapshot');
+        const text = JSON.stringify(matchRoom.host.state);
+        assert.strictEqual(text.includes('account_id'), false,
+          'the account row never travels to a match');
+        assert.strictEqual(text.includes('service_role'), false);
+        assert.strictEqual(text.includes('password'), false);
+      }))
+      /* ---- awarding PLAYED WITH OWNER --------------------------------- */
+      .then(() => test('the owner is offered the awardable badge, and nobody else is', () =>
+        Promise.all([
+          call(appPort, 'GET', '/api/badges', null, session.ownerCookie),
+          call(appPort, 'GET', '/api/badges', null, session.cookie)
+        ]).then(([owner, player]) => {
+          assert.deepStrictEqual(owner.body.awardable.map(b => b.key),
+            ['played-with-owner'],
+            'the owner is offered exactly the allowlisted badge');
+          assert.strictEqual(player.body.awardable.length, 0,
+            'a player is never offered an awardable badge');
+          assert.strictEqual(owner.body.awardable[0].name, 'PLAYED WITH OWNER',
+            'read from the catalogue, never text the page made up');
+        })
+      ))
+      .then(() => test('a NON-OWNER cannot award anything, and learns nothing trying', () => {
+        const attempt = username => call(appPort, 'POST', '/api/badges/award',
+          { username, badgeKey: 'played-with-owner' }, session.cookie);
+        return attempt('alice').then(real => {
+          assert.strictEqual(real.status, 403);
+          assert.strictEqual(real.body.message,
+            'Only the owner of PHOENIX can award badges.');
+          // A name that does not exist gets the IDENTICAL answer: the role is
+          // read before anything else, so this endpoint is not a name oracle.
+          return attempt('definitely-nobody-123');
+        }).then(madeUp => {
+          assert.strictEqual(madeUp.status, 403);
+          assert.strictEqual(madeUp.body.message,
+            'Only the owner of PHOENIX can award badges.');
+        });
+      }))
+      .then(() => test('the owner awards PLAYED WITH OWNER by username, in any case', () =>
+        call(appPort, 'POST', '/api/badges/award',
+          { username: 'ALICE', badgeKey: 'played-with-owner' }, session.ownerCookie)
+          .then(r => {
+            assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+            assert.strictEqual(r.body.username, 'alice',
+              'answered with the stored account name, not the case typed in');
+            assert.strictEqual(r.body.badge.key, 'played-with-owner');
+            assert.strictEqual(r.body.badge.name, 'PLAYED WITH OWNER');
+            assert.strictEqual(r.body.badge.rarity, 'legendary');
+            assert.strictEqual(r.body.alreadyHad, false);
+          })
+      ))
+      .then(() => test('awarding the same player twice is not an error', () =>
+        call(appPort, 'POST', '/api/badges/award',
+          { username: 'alice', badgeKey: 'played-with-owner' }, session.ownerCookie)
+          .then(r => {
+            assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+            assert.strictEqual(r.body.alreadyHad, true);
+          })
+      ))
+      .then(() => test('THE PHOENIX can never be awarded through this route', () =>
+        call(appPort, 'POST', '/api/badges/award',
+          { username: 'alice', badgeKey: 'phoenix' }, session.ownerCookie)
+          .then(r => {
+            assert.strictEqual(r.status, 400);
+            assert.strictEqual(r.body.message, 'That badge cannot be awarded.');
+            return call(appPort, 'GET', '/api/badges', null, session.cookie);
+          }).then(r => {
+            assert.strictEqual(r.body.owned.some(b => b.key === 'phoenix'), false,
+              'the player still holds nothing of the sort');
+          })
+      ))
+      .then(() => test('an unknown username is refused without any grant being written', () =>
+        call(appPort, 'POST', '/api/badges/award',
+          { username: 'nobody-here-999', badgeKey: 'played-with-owner' }, session.ownerCookie)
+          .then(r => {
+            assert.strictEqual(r.status, 404);
+            assert.strictEqual(r.body.message, 'No player with that username.');
+            return fakeState.dump();
+          }).then(d => {
+            assert.strictEqual(
+              d.body.accounts.some(a => a.username === 'nobody-here-999'), false,
+              'a lookup that finds nobody creates nobody');
+          })
+      ))
+      .then(() => test('the recipient holds the badge and can feature it', () =>
+        call(appPort, 'POST', '/api/badges/feature',
+          { slots: ['played-with-owner'] }, session.cookie).then(r => {
+          assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+          assert.strictEqual(r.body.featured[0].key, 'played-with-owner',
+            'now theirs to show beside their name');
+        })
+      ))
       .then(() => test('the server logged no badge errors during the run', () => {
         assert.strictEqual(/\[PHOENIX badges\]/.test(app.output()), false,
           'unexpected badge error in the server log:\n' + app.output().split('\n')
             .filter(l => l.includes('[PHOENIX badges]')).join('\n'));
       }))
+      .then(() => {
+        for (const client of [matchRoom.host, matchRoom.guest]) {
+          if (client) { try { client.ws.close(); } catch (e) { /* already gone */ } }
+        }
+      })
       .then(() => app.child.kill());
     })
     .catch(err => { console.error(err); process.exitCode = 1; })

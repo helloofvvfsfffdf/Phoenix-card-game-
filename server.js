@@ -1054,6 +1054,19 @@ const httpServer = http.createServer(async (req, res) => {
         return sendJson(result, result.ok ? 200 : (result.available === false ? 503 : 400));
       }
 
+      // OWNER ONLY. The role check lives inside Badges.awardBadge and runs
+      // before it reads anything, so this endpoint answers the same way for a
+      // non-owner whatever username or badge key they send. The badge key must
+      // also be on the server's allowlist - THE PHOENIX is not, and cannot be
+      // added by anything in this request.
+      if (req.method === 'POST' && pathname === '/api/badges/award') {
+        const body = await readJsonBody();
+        const result = await Badges.awardBadge(account, body.username, body.badgeKey);
+        return sendJson(result,
+          result.ok ? 200
+                    : (result.status || (result.available === false ? 503 : 400)));
+      }
+
       return sendJson({ ok: false, message: 'Not found.' }, 404);
     } catch (err) {
       console.error('[PHOENIX badges] ' + pathname + ' failed -> ' + Auth.describeError(err));
@@ -1125,6 +1138,21 @@ const cleanName = name =>
 const playerName = (ws, data) =>
   cleanName(ws.account && ws.account.username ? ws.account.username : data && data.name);
 
+/**
+ * The badge projection this connection may show in a match.
+ *
+ * Copied onto the MEMBER rather than read off the socket, because a member's
+ * `ws` is cleared when they disconnect while their seat - and the badge that
+ * belongs on it - must survive in the snapshot.
+ *
+ * The value is entirely server-computed at connect time; a client cannot send
+ * it, so there is no path for a player to equip a badge they do not hold.
+ *
+ * Called once, when the member is created.
+ */
+const memberBadges = ws =>
+  (Array.isArray(ws && ws.badges) ? ws.badges : []);
+
 function code() {
   let c;
 
@@ -1158,6 +1186,9 @@ function snapshot(room, member) {
     id: Rules.SEATS[i].id,
     name: m.name,
     ally: m.ally,
+    // Catalogue-supplied name/rarity only (see Badges.featuredBadges). This is
+    // the ONE place badges enter a match snapshot.
+    badges: Array.isArray(m.badges) ? m.badges : [],
     connected: !!m.ws,
     points: s ? s.players[i].points : 0,
     handCount: s
@@ -1627,6 +1658,7 @@ function handle(ws, data) {
         seat: 0,
         name: playerName(ws, data),
         ally: null,
+        badges: memberBadges(ws),
         ws,
         room: ownerRoom
       };
@@ -1714,6 +1746,7 @@ function handle(ws, data) {
       seat: 0,
       name: playerName(ws, data),
       ally: null,
+      badges: memberBadges(ws),
       ws,
       room
     };
@@ -1770,6 +1803,7 @@ function handle(ws, data) {
       seat: room.members.length,
       name: playerName(ws, data),
       ally: null,
+      badges: memberBadges(ws),
       ws,
       room
     };
@@ -2100,7 +2134,7 @@ wss.on('connection', (ws, request) => {
 
   Auth.getSessionAccount(request)
     .catch(() => null)
-    .then(account => {
+    .then(async account => {
       ws.account = account;
       // A permanent OWNER account grants owner controls automatically after
       // login - no separate owner password prompt is ever shown to the owner.
@@ -2111,6 +2145,22 @@ wss.on('connection', (ws, request) => {
       if (account) {
         send(ws, { type: 'account', account });
       }
+
+      // Featured badges for this connection, resolved ONCE here rather than on
+      // every snapshot. Everything buffered below waits for this, so `badges`
+      // is always set before a create or join can be handled. It cannot throw
+      // - featuredBadges degrades to an empty list - so play is never blocked
+      // by a badge lookup.
+      ws.badges = [];
+      if (account) {
+        try {
+          ws.badges = await Badges.featuredBadges(account);
+        } catch (err) {
+          console.error('[PHOENIX badges] connection lookup failed -> ' +
+            Auth.describeError(err));
+        }
+      }
+
       ready = true;
       for (const raw of pending) dispatch(raw);
       pending.length = 0;

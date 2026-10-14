@@ -436,6 +436,18 @@
       </div>
       <div id="badge-profile-result"></div>
     </section>
+
+    <!-- OWNER ONLY. Left `hidden` in the markup and revealed by the client
+         only for a session the SERVER reported as role = owner, and only when
+         the server says this badge is awardable. -->
+    <section class="badge-section" id="badge-award-panel" hidden>
+      <h3>AWARD A BADGE</h3>
+      <p class="badge-note" id="badge-award-note"></p>
+      <div class="badge-lookup">
+        <input id="badge-award-input" type="text" maxlength="22" placeholder="Player username" aria-label="Username to award to" />
+        <button type="button" id="badge-award-give">AWARD</button>
+      </div>
+    </section>
   </div>
 </div>
 <section id="admin-panel" hidden class="admin-panel">

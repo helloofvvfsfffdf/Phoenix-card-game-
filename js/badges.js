@@ -15,6 +15,21 @@ const Auth = require('./auth');
 const PHOENIX_KEY = 'phoenix';
 const MAX_FEATURED = 3;
 
+/**
+ * Badges the owner may hand to another player, by key.
+ *
+ * An ALLOWLIST rather than "whatever is in the catalogue": adding a badge to
+ * the catalogue never makes it awardable, and THE PHOENIX is absent here by
+ * construction, so no request - whatever it sends - can award the owner badge
+ * through this route.
+ */
+const AWARDABLE_KEYS = ['played-with-owner'];
+
+/** Is this key one the owner is allowed to award? Pure, so it is unit-tested. */
+function isAwardable(key) {
+  return typeof key === 'string' && AWARDABLE_KEYS.indexOf(key) !== -1;
+}
+
 // Rarity tiers, weakest first. Divine sits above Impossible on purpose.
 const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'impossible', 'divine'];
 
@@ -134,6 +149,32 @@ async function featuredRows(accountId) {
   return data || [];
 }
 
+/**
+ * Find an account by username, ignoring case.
+ *
+ * Case cannot make this ambiguous: Phase 1's `accounts_username_lower` index
+ * makes usernames unique ignoring case. `_` and `%` ARE legal characters in a
+ * username but are LIKE wildcards, so they are escaped - otherwise searching
+ * for `josh_1` could land on a different player entirely.
+ *
+ * Returns null when nothing matches. Callers must answer identically whether
+ * the name was never taken or simply not found, so this cannot be used to
+ * enumerate accounts.
+ */
+async function findAccount(username) {
+  username = String(username || '').trim();
+  if (!username) return null;
+
+  const pattern = username.replace(/[\\%_]/g, c => '\\' + c);
+  const { data, error } = await Auth.client()
+    .from('accounts')
+    .select('id, username, role')
+    .ilike('username', pattern)
+    .limit(1);
+  if (error) throw error;
+  return (data && data[0]) || null;
+}
+
 /** Project a public badge record. Only catalogue fields ever leave the server. */
 function toPublicBadge(row) {
   return {
@@ -177,7 +218,13 @@ async function getMine(account) {
     maxFeatured: MAX_FEATURED,
     catalogue: catalogue,
     owned: ownedPublic,
-    featured: slots
+    featured: slots,
+    // What this account is ALLOWED to award, resolved against the catalogue.
+    // Empty for everyone but the owner, and empty until the seed migration has
+    // run - so the award panel simply does not appear when it should not.
+    awardable: account.role === 'owner'
+      ? catalogue.filter(b => isAwardable(b.key))
+      : []
   };
 }
 
@@ -238,20 +285,12 @@ async function setFeatured(account, slots) {
 async function getProfile(username) {
   if (!isAvailable()) return { ok: false, available: false };
 
-  username = String(username || '').trim();
-  if (!username) return { ok: false, message: 'Enter a username.' };
+  if (!String(username || '').trim()) return { ok: false, message: 'Enter a username.' };
 
-  const lookup = await Auth.client()
-    .from('accounts').select('id, username, role').eq('username', username).maybeSingle();
-  if (lookup.error) {
-    if (schemaMissing(lookup.error)) return { ok: false, available: false };
-    logError('getProfile lookup failed', lookup.error);
-    throw lookup.error;
-  }
+  const account = await findAccount(username);
   // Same answer whether the account exists or not: no username enumeration.
-  if (!lookup.data) return { ok: false, message: 'No player with that username.' };
+  if (!account) return { ok: false, message: 'No player with that username.' };
 
-  const account = lookup.data;
   if (account.role === 'owner') await ensureOwnerBadge(account.id);
 
   let catalogue, featured;
@@ -284,8 +323,135 @@ async function getProfile(username) {
   };
 }
 
+/**
+ * Award an ALLOWLISTED badge to a player, found by username.
+ *
+ * OWNER ONLY, and the role is checked before anything at all is looked up, so
+ * this endpoint cannot be turned into a username oracle by a non-owner.
+ *
+ * THE PHOENIX can never travel this way: the key has to be on AWARDABLE_KEYS
+ * to get past step two, and that list does not contain it. No request-crafting
+ * changes that - it is decided in code, not taken from the payload.
+ *
+ * Awarding twice is not an error. It is the same grant, and the table's
+ * primary key already makes it idempotent, so the caller gets a plain success
+ * either way.
+ */
+async function awardBadge(account, username, badgeKey) {
+  if (!isAvailable()) return { ok: false, available: false };
+
+  // 1. Role, before any read. Everything below is owner-only work.
+  if (!account || account.role !== 'owner') {
+    return { ok: false, status: 403,
+             message: 'Only the owner of PHOENIX can award badges.' };
+  }
+
+  // 2. Allowlist. Refused before the catalogue is even opened, so a bad key
+  //    costs one comparison and reveals nothing about what exists.
+  if (!isAwardable(badgeKey)) {
+    return { ok: false, status: 400, message: 'That badge cannot be awarded.' };
+  }
+
+  let catalogue;
+  try {
+    catalogue = await listCatalogue();
+  } catch (error) {
+    if (schemaMissing(error)) return { ok: false, available: false };
+    logError('awardBadge catalogue failed', error);
+    throw error;
+  }
+
+  const badge = catalogue.filter(b => b.key === badgeKey)[0];
+  if (!badge) {
+    // The badge seed migration has not been run yet. Say so plainly instead of
+    // failing on a foreign key nobody can read.
+    return { ok: false, status: 404,
+             message: 'That badge is not available on this server yet.' };
+  }
+
+  const target = await findAccount(username);
+  if (!target) {
+    return { ok: false, status: 404, message: 'No player with that username.' };
+  }
+
+  let held;
+  try {
+    held = await ownedKeys(target.id);
+  } catch (error) {
+    if (schemaMissing(error)) return { ok: false, available: false };
+    throw error;
+  }
+
+  const alreadyHad = held.indexOf(badgeKey) !== -1;
+
+  if (!alreadyHad) {
+    const { error } = await Auth.client()
+      .from('account_badges')
+      .insert({ account_id: target.id, badge_key: badgeKey });
+    if (error) {
+      // Somebody else awarded it in the same instant. The grant exists, which
+      // is the only outcome that matters - otherwise this is a real failure.
+      const again = await ownedKeys(target.id).catch(() => null);
+      if (!again || again.indexOf(badgeKey) === -1) {
+        logError('awardBadge insert failed', error);
+        throw error;
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    // The account's stored name, never the string that was typed in.
+    username: target.username,
+    alreadyHad: alreadyHad,
+    badge: { key: badge.key, name: badge.name, rarity: badge.rarity,
+             description: badge.description }
+  };
+}
+
+/**
+ * A compact, safe projection of one account's FEATURED badges, for attaching
+ * to a match snapshot.
+ *
+ * Deliberately separate from getMine(): this runs during connection setup, so
+ * it must be cheap, and it must NEVER throw. Badges are decoration - a
+ * database hiccup must not stop someone joining a room or playing a match, so
+ * any failure degrades to "no badges" and is logged instead of propagated.
+ *
+ * Only `key` / `name` / `rarity` ever leave this function. All three come from
+ * the badges catalogue, never from anything a player typed, so a match screen
+ * cannot be made to render user-controlled text as a badge.
+ */
+async function featuredBadges(account) {
+  if (!account || !isAvailable()) return [];
+
+  try {
+    if (account.role === 'owner') await ensureOwnerBadge(account.id);
+
+    const catalogue = await listCatalogue();
+    const featured = await featuredRows(account.id);
+
+    const byKey = {};
+    for (const b of catalogue) byKey[b.key] = b;
+
+    // Slot order, then only slots 1..3 that resolve to a real badge.
+    const out = [];
+    for (let slot = 1; slot <= MAX_FEATURED; slot++) {
+      const row = featured.find(r => Number(r.slot) === slot);
+      const badge = row && byKey[row.badge_key];
+      if (badge) {
+        out.push({ key: badge.key, name: badge.name, rarity: badge.rarity });
+      }
+    }
+    return out;
+  } catch (error) {
+    logError('featuredBadges failed (continuing without badges)', error);
+    return [];
+  }
+}
+
 module.exports = {
-  PHOENIX_KEY, MAX_FEATURED, RARITY_ORDER,
-  isAvailable, validateFeatured,
-  getMine, setFeatured, getProfile, ensureOwnerBadge
+  PHOENIX_KEY, MAX_FEATURED, RARITY_ORDER, AWARDABLE_KEYS,
+  isAvailable, validateFeatured, isAwardable,
+  getMine, setFeatured, getProfile, ensureOwnerBadge, featuredBadges, awardBadge
 };

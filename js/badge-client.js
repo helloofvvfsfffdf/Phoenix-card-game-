@@ -18,7 +18,10 @@
     owned: [],
     featured: [null, null, null],
     draft: [null, null, null],
-    profile: null
+    profile: null,
+    // What the SERVER says this session may award. Empty for everyone who is
+    // not the owner, and empty until the badge seed migration has run.
+    awardable: []
   };
 
   function $(id) { return document.getElementById(id); }
@@ -41,6 +44,9 @@
   }
 
   /* ---------- the badge itself (DOM only, catalogue data only) ------------- */
+
+  /** Three featured slots, and never more: the same limit the server enforces. */
+  var MAX_FEATURED = 3;
 
   var RARITY_LABEL = {
     common: 'COMMON', uncommon: 'UNCOMMON', rare: 'RARE', epic: 'EPIC',
@@ -94,6 +100,66 @@
       tile.appendChild(el('p', 'badge-desc', badge.description));
     }
     return tile;
+  }
+
+  /**
+   * One COMPACT badge marker - for match seats, the lobby roster and anywhere
+   * there is no room for a full tile.
+   *
+   * Same rarity classes as the tiles, so a badge looks like itself wherever it
+   * turns up: a gold pill with a crown for Divine, a tier-coloured pill for
+   * everything else. The label is the rarity, which is what a player needs to
+   * read at a glance during a match.
+   *
+   * `badge` is always a server catalogue row (key/name/rarity). It is written
+   * with textContent, never innerHTML, so nothing a player typed can reach the
+   * screen through this function.
+   */
+  function badgeChip(badge) {
+    if (!badge || typeof badge !== 'object') return null;
+
+    var rarity = String(badge.rarity || 'common').toLowerCase();
+    var label = RARITY_LABEL[rarity] || rarity.toUpperCase();
+    var name = badge.name ? String(badge.name) : '';
+
+    var chip = el('span', 'badge-chip badge--' + rarity);
+    if (badge.key) chip.setAttribute('data-badge-key', String(badge.key));
+    chip.setAttribute('data-rarity', rarity);
+    chip.setAttribute('title', (name ? name + ' \u00b7 ' : '') + label);
+
+    if (rarity === 'divine') {
+      var mark = el('span', 'badge-chip-mark', '\uD83D\uDC51'); // crown
+      mark.setAttribute('aria-hidden', 'true');
+      chip.appendChild(mark);
+    }
+
+    if (name) chip.appendChild(el('span', 'badge-chip-name', name));
+    chip.appendChild(el('span', 'badge-chip-rarity', label));
+    return chip;
+  }
+
+  /**
+   * Every badge in `list`, as chips inside ONE wrapper element, capped at
+   * three. Returns null when there is nothing to show so callers can simply
+   * skip appending.
+   *
+   * A single wrapper rather than a fragment: it gives the layout somewhere to
+   * apply its gap, and it keeps every DOM the game runs on - the real one and
+   * the headless one the tests use - to plain append.
+   *
+   * Defensive about shape: a missing or malformed list renders as "no badges"
+   * rather than throwing inside a match render loop.
+   */
+  function badgeChips(list) {
+    if (!Array.isArray(list) || !list.length) return null;
+
+    var group = el('span', 'badge-chips');
+    var shown = 0;
+    for (var i = 0; i < list.length && shown < MAX_FEATURED; i++) {
+      var chip = badgeChip(list[i]);
+      if (chip) { group.appendChild(chip); shown++; }
+    }
+    return shown ? group : null;
   }
 
   /* ---------- rendering ---------------------------------------------------- */
@@ -192,6 +258,37 @@
     renderSlots();
     renderCollection();
     renderProfile();
+    renderAward();
+  }
+
+  /**
+   * The award panel: owner only, and only for a badge the server actually has
+   * to give.
+   *
+   * Two independent conditions, both server-supplied. `isOwner` comes from
+   * accounts.role, and `awardable` is the server's allowlist resolved against
+   * the catalogue - so the panel cannot appear because the page was edited,
+   * and cannot appear before sql/played-with-owner-badge.sql has been run.
+   */
+  function renderAward() {
+    var panel = $('badge-award-panel');
+    if (!panel) return;
+
+    var badge = state.awardable && state.awardable[0];
+    var show = !!state.isOwner && !!badge;
+    panel.hidden = !show;
+    if (!show) return;
+
+    var note = $('badge-award-note');
+    if (note) {
+      note.textContent = '';
+      note.appendChild(el('strong', '', badge.name));
+      note.appendChild(document.createTextNode(
+        ' \u2014 ' + (badge.description || '') +
+        ' Type the player\u2019s username below. It goes straight into their ' +
+        'collection, and they choose whether to feature it.'
+      ));
+    }
   }
 
   function renderProfile() {
@@ -244,6 +341,7 @@
       state.owned = d.owned || [];
       state.featured = d.featured || [null, null, null];
       state.draft = state.featured.slice();
+      state.awardable = Array.isArray(d.awardable) ? d.awardable : [];
       setFeedback('');
       render();
     }).catch(function () {
@@ -297,6 +395,49 @@
       state.profile = d.profile;
       setFeedback('');
       renderProfile();
+    }).catch(function () {
+      setFeedback('Could not reach the server. Try again.', true);
+    });
+  }
+
+  /**
+   * Award the allowlisted badge to the player named in the field.
+   *
+   * This sends a username and a badge key - nothing else. Every decision
+   * (is this session the owner, does this badge exist, may it be awarded, does
+   * that account exist) is made on the server, and the panel it lives in is
+   * only a convenience: a non-owner who posts to the endpoint anyway gets the
+   * same refusal from the role check.
+   */
+  function award() {
+    var badge = state.awardable && state.awardable[0];
+    if (!badge) return;
+
+    var input = $('badge-award-input');
+    var name = input ? input.value.trim() : '';
+    if (!name) {
+      setFeedback('Enter the username of the player to award it to.', true);
+      return;
+    }
+
+    setFeedback('Awarding\u2026');
+
+    api('/api/badges/award', {
+      method: 'POST',
+      body: JSON.stringify({ username: name, badgeKey: badge.key })
+    }).then(function (r) {
+      var d = r.data || {};
+      if (!d.ok) {
+        setFeedback(d.message || 'Could not award that badge.', true);
+        if (d.available === false) load();
+        return;
+      }
+      if (input) input.value = '';
+      // d.username is the account's stored name, not what was typed.
+      setFeedback(d.alreadyHad
+        ? d.username + ' already has ' + badge.name + '.'
+        : 'Awarded ' + badge.name + ' to ' + d.username +
+          '. They can feature it from their own badge screen.');
     }).catch(function () {
       setFeedback('Could not reach the server. Try again.', true);
     });
@@ -372,7 +513,27 @@
         if (e.key === 'Enter') { e.preventDefault(); lookup(); }
       });
     }
+
+    // Owner-only award controls. Hidden unless renderAward() revealed them,
+    // but harmless either way: the server decides who may award what.
+    var awardBtn = $('badge-award-give');
+    if (awardBtn) awardBtn.onclick = award;
+
+    var awardInput = $('badge-award-input');
+    if (awardInput) {
+      awardInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); award(); }
+      });
+    }
   });
 
-  window.PhoenixBadges = { open: open, close: close, reload: load };
+  window.PhoenixBadges = {
+    open: open,
+    close: close,
+    reload: load,
+    // Compact markers, shared with the match UI so a badge renders the same
+    // way in a seat as it does on the badge screen.
+    chips: badgeChips,
+    chip: badgeChip
+  };
 })();

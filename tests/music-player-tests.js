@@ -59,6 +59,10 @@ function browser(saved, mode) {
     readyState: 'loading', body: node(),
     getElementById: function (id) { return nodes[id] || (nodes[id] = node()); },
     createElement: function (tag) { if (tag === 'audio') { audioInstances++; return audio; } return node(); },
+    // Real browsers have this and badge-client.js writes its explanatory copy
+    // with it, so the stub needs it too or the badge screen cannot be rendered
+    // here at all.
+    createTextNode: function (text) { var n = node(); n.textContent = text; return n; },
     querySelectorAll: function () { return []; },
     querySelector: function () { return null; },
     addEventListener: function (key, fn) {

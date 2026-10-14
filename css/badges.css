@@ -60,6 +60,107 @@
   line-height: 1.45;
 }
 
+/* --------------------------- compact chips --------------------------------- */
+/*
+ * The same badges, shrunk to one line, for match seats and the lobby roster
+ * where a full tile would bury the score. Same --tier palette as the tiles so
+ * a badge is recognisably itself wherever it appears.
+ */
+
+/*
+ * No vertical margin here on purpose. This wrapper lands in four different
+ * layouts and a margin would misbehave in three of them: match seats are a
+ * column flex that already spaces its children with `gap`, the dice rows are a
+ * centred flex row that a top margin would push off-centre, and the lobby and
+ * leaderboard lines are plain inline flows where it would jump the line height.
+ * Each of those provides its own spacing, or gets it below.
+ */
+.badge-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 100%;
+}
+
+/* The two inline flows: nudge the run of chips off the text they follow. */
+.phoenix-victory-standings .badge-chips,
+.lobby-player-row .badge-chips {
+  margin-left: 7px;
+}
+
+/*
+ * Match seats paint a blanket `.online-seat-meta span` at 13px, and a chip is
+ * a span - so without this the pill, its two labels and the crown would all
+ * balloon to 13px and swallow the seat. Scoped to the seat and specific enough
+ * to win regardless of which stylesheet loads last.
+ */
+.online-seat-meta .badge-chips span,
+.online-seat-meta .badge-chip {
+  font-size: 9.5px;
+}
+
+.online-seat-meta .badge-chip-mark {
+  font-size: 11px;
+}
+
+.badge-chip {
+  --tier: #8b93a7;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--tier) 55%, #2c3550);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tier) 16%, #0b1120);
+  color: var(--tier);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 1.4px;
+  line-height: 1.5;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge-chip.badge--common    { --tier: #9aa3b5; }
+.badge-chip.badge--uncommon  { --tier: #5fbf78; }
+.badge-chip.badge--rare      { --tier: #4c9dff; }
+.badge-chip.badge--epic      { --tier: #b06cff; }
+.badge-chip.badge--legendary { --tier: #ff9f43; }
+.badge-chip.badge--impossible{ --tier: #ff4f6d; }
+.badge-chip.badge--divine    { --tier: #ffc93c; }
+
+.badge-chip-name {
+  color: #f7e5c0;
+  letter-spacing: 1px;
+}
+
+.badge-chip-rarity {
+  opacity: 0.9;
+}
+
+/* Divine keeps its crown and gold body even at chip size - the whole point of
+   the badge is that it is recognisable at a glance during a match. */
+.badge-chip.badge--divine {
+  background:
+    linear-gradient(180deg, rgba(255, 233, 168, 0.28), rgba(217, 140, 26, 0.2));
+  border-color: #ffc93c;
+  color: #ffdf8a;
+  box-shadow: 0 0 8px rgba(255, 201, 60, 0.35);
+}
+
+.badge-chip.badge--divine .badge-chip-name {
+  color: #fff3cf;
+}
+
+.badge-chip-mark {
+  font-size: 11px;
+  line-height: 1;
+  filter: drop-shadow(0 0 3px rgba(255, 201, 60, 0.8));
+}
+
 /* --------------------------- DIVINE treatment ----------------------------- */
 
 .badge-tile.badge--divine {

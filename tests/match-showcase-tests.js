@@ -35,4 +35,96 @@ module.exports=function(test,equal,deepEqual,assert){
     assert(meta.children.some(c=>c.textContent==='Ally: Cobra'),'the public name is shown in the seat');
     assert(!meta.children.some(c=>/Phoenix|Tilly|Louie|Simba|Elsie|Maple|\bTed\b/.test(c.textContent||'')),'no catalogue name in the public seat');
   });
+  test('match seats render each player\'s verified badges and nothing for anyone else',function(){
+    const b=require('./match-audio-tests').online();
+    b.loadScript('allies.js');
+    b.loadScript('badge-client.js');
+    b.receive('playing',false,{players:[
+      {id:'human',name:'Owner',ally:'phoenix',points:20000,handCount:2,connected:true,
+       badges:[{key:'phoenix',name:'THE PHOENIX',rarity:'divine'}]},
+      {id:'p2',name:'Alice',ally:'tilly',points:0,handCount:5,connected:true,badges:[]}
+    ],current:'human',acting:false});
+    const meta=index=>b.nodes['online-seats'].children[index].children.find(n=>n.className==='online-seat-meta');
+    const group=meta(0).children.find(n=>n.className==='badge-chips');
+    assert(group,'the seat that holds a badge carries one');
+    assert(!meta(1).children.some(n=>n.className==='badge-chips'),'a seat with no badges shows none at all');
+    equal(group.children.length,1,'one chip per badge actually held');
+    const chip=group.children[0];
+    equal(chip.className,'badge-chip badge--divine','the top tier keeps its own styling');
+    equal(chip.getAttribute('data-rarity'),'divine');
+    equal(chip.children.find(n=>n.className==='badge-chip-name').textContent,'THE PHOENIX','the catalogue name, never typed text');
+    equal(chip.children.find(n=>n.className==='badge-chip-rarity').textContent,'DIVINE');
+    equal(chip.children.find(n=>n.className==='badge-chip-mark').textContent,'\uD83D\uDC51','the crown');
+  });
+  test('a malformed badge list from a snapshot degrades to no badges instead of breaking the seat',function(){
+    const b=require('./match-audio-tests').online();
+    b.loadScript('allies.js');
+    b.loadScript('badge-client.js');
+    b.receive('playing',false,{players:[
+      {id:'human',name:'Player',ally:'phoenix',points:0,handCount:2,connected:true,badges:'not-an-array'},
+      {id:'p2',name:'Alice',ally:'tilly',points:0,handCount:5,connected:true,badges:[null,'x',{rarity:'divine'}]}
+    ],current:'human',acting:false});
+    const meta=index=>b.nodes['online-seats'].children[index].children.find(n=>n.className==='online-seat-meta');
+    assert(!meta(0).children.some(n=>n.className==='badge-chips'),'a non-array is simply not shown');
+    const partial=meta(1).children.find(n=>n.className==='badge-chips');
+    assert(partial,'unusable entries are skipped, usable ones still render');
+    assert(partial.children.every(n=>typeof n.className==='string'&&n.className.indexOf('badge-chip')===0),'only chips reach the seat');
+  });
+  /* ---- the owner-only AWARD panel ----------------------------------------
+   * `test()` is synchronous, so the badge screen is driven by a thenable that
+   * resolves inline - the same chain shape fetch gives it, minus the waiting.
+   */
+  function awardHarness(box) {
+    const b = require('./match-audio-tests').online();
+    b.loadScript('badge-client.js');
+    // load() refuses to fetch at all when no account module is present.
+    b.context.PhoenixAccount = { available: function () { return true; } };
+    const resolve = function (value) {
+      if (value && typeof value.then === 'function' && value.__sync) return value;
+      return {
+        __sync: true,
+        then: function (fn) { return resolve(fn(value)); },
+        catch: function () { return resolve(value); }
+      };
+    };
+    b.context.fetch = function () {
+      return resolve({ json: function () { return resolve(box.payload); } });
+    };
+    b.reload = function () { b.context.PhoenixBadges.reload(); return b; };
+    return b;
+  }
+
+  const AWARDABLE = [{ key: 'played-with-owner', name: 'PLAYED WITH OWNER',
+    rarity: 'legendary', description: 'Played a match with the owner of PHOENIX.' }];
+  const OWNER_VIEW = { ok: true, available: true, isOwner: true, maxFeatured: 3,
+    catalogue: AWARDABLE, owned: [], featured: [null, null, null], awardable: AWARDABLE };
+  const PLAYER_VIEW = Object.assign({}, OWNER_VIEW, { isOwner: false, awardable: [] });
+
+  test('the award panel opens for a server-confirmed owner and for nobody else', function () {
+    const box = { payload: OWNER_VIEW };
+    const b = awardHarness(box);
+
+    // The first load is what materialises the panel, so it is read back after.
+    b.reload();
+    const panel = b.nodes['badge-award-panel'];
+    equal(panel.hidden, false, 'the owner is offered the panel');
+
+    // Its wording comes from the CATALOGUE row the server sent, never from
+    // anything a user could have typed.
+    const note = b.nodes['badge-award-note'];
+    equal(note.children[0].textContent, 'PLAYED WITH OWNER');
+    assert(note.children.some(function (n) {
+      return /Played a match with the owner/.test(n.textContent || '');
+    }), 'the server description is shown');
+
+    box.payload = PLAYER_VIEW;
+    b.reload();
+    equal(panel.hidden, true, 'a player is never offered it');
+
+    // Belt and braces: even a response that listed a badge by mistake stays
+    // shut, because the ROLE is what opens this panel, not the badge list.
+    box.payload = Object.assign({}, PLAYER_VIEW, { awardable: AWARDABLE });
+    b.reload();
+    equal(panel.hidden, true, 'isOwner alone decides, not the badge list');
+  });
 };

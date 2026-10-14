@@ -557,6 +557,8 @@
       const value = state.dice.rolls[index];
       const line = el('div', 'online-seat online-dice-row' + (index === waiting ? ' online-current' : ''));
       line.append(el('strong', '', player.name + (index === state.seat ? ' (you)' : '')));
+      const rollBadges = badgesFor(player);
+      if (rollBadges) line.append(rollBadges);
       line.append(el('span', 'online-dice-value', value ? 'rolled ' + value : 'not rolled yet'));
       actions.append(line);
     });
@@ -655,6 +657,9 @@
       state.players.forEach((p, idx) => {
         const row = el('div', 'lobby-player-row');
         row.append(el('span', 'lobby-player-name', p.name + (idx === 0 ? ' (host)' : '')));
+
+        const lobbyBadges = badgesFor(p);
+        if (lobbyBadges) row.append(lobbyBadges);
         if (idx !== 0) {
           const kickBtn = el('button', 'online-secondary', 'KICK');
           kickBtn.type = 'button';
@@ -835,7 +840,7 @@ function renderPlaying() {
             ? state.publicAllies[player.ally].name.toUpperCase()
             : (player.ally || 'No ally').toUpperCase();
 
-          standings.append(el(
+          const line = el(
             'p',
             '',
             medal + ' ' + player.name +
@@ -844,7 +849,10 @@ function renderPlaying() {
             ' — ' +
             player.points.toLocaleString() +
             ' points'
-          ));
+          );
+          const placeBadges = badgesFor(player);
+          if (placeBadges) line.appendChild(placeBadges);
+          standings.append(line);
         });
 
       victory.append(standings);
@@ -1007,6 +1015,21 @@ function renderPlaying() {
     if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.decorate('online-screen');
   }
 
+  /**
+   * This player's VERIFIED badges, as compact chips, or nothing.
+   *
+   * The list comes from the server snapshot, which built it from the badges
+   * catalogue against the account row at connect time. Nothing here reads a
+   * player-supplied string, so no one can put a fake crown next to their own
+   * name by typing it. If the badge module is not on this page, this is a
+   * no-op - matches must never depend on it.
+   */
+  function badgesFor(player) {
+    const badges = window.PhoenixBadges;
+    if (!badges || typeof badges.chips !== 'function') return null;
+    return badges.chips(player && player.badges);
+  }
+
   function renderSeats() {
     const seats = $('online-seats');
     seats.replaceChildren();
@@ -1021,6 +1044,9 @@ function renderPlaying() {
 
       const meta = el('div', 'online-seat-meta');
       meta.append(el('strong', '', player.name + (index === state.seat ? ' (you)' : '')));
+
+      const seatBadges = badgesFor(player);
+      if (seatBadges) meta.append(seatBadges);
 
       const info = player.ally ? allyInfo(player.ally) : null;
 
