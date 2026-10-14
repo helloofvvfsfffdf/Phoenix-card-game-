@@ -436,6 +436,11 @@
   /** Reveals the admin dashboard (once authorised) and brings it into view. */
   function revealAdminPanel() {
     renderAdminPanel();
+    // The announcements list in the dashboard is rendered by its own module, so
+    // ask it for a fresh copy now that the owner can actually see it. Absent
+    // from the page, or absent from a server without announcements, this is a
+    // no-op - the dashboard must never depend on it.
+    if (window.PhoenixAnnouncements) window.PhoenixAnnouncements.refresh();
     const panel = $('admin-panel');
     // Opened from the main menu: tuck the menu away so the dashboard is the page.
     if (PhoenixOnline.adminFromMenu && $('phoenix-menu')) {

@@ -12,6 +12,7 @@ const Effects = require('./js/effects.js');
 const Gallery = require('./js/gallery.js');
 const Auth = require('./js/auth.js');
 const Badges = require('./js/badges.js');
+const Announcements = require('./js/announcements.js');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
@@ -1070,6 +1071,47 @@ const httpServer = http.createServer(async (req, res) => {
       return sendJson({ ok: false, message: 'Not found.' }, 404);
     } catch (err) {
       console.error('[PHOENIX badges] ' + pathname + ' failed -> ' + Auth.describeError(err));
+      return sendJson({ ok: false, message: 'Something went wrong on the server. Please try again.',
+                        code: 'SERVER-ERROR' }, 500);
+    }
+  }
+
+  // ---- Announcements ---------------------------------------------------------
+  // READING is public: the newest post belongs on the main menu for every
+  // visitor, signed in or not. WRITING is owner-only - checked here against
+  // accounts.role, and again by the Postgres announcement_author_only trigger,
+  // so a bug in this file still cannot let anyone but the owner post.
+  if (pathname === '/api/announcements') {
+    if (!Announcements.isAvailable()) {
+      sendJson({ ok: false, available: false,
+                 message: 'Announcements are not available on this server.' }, 503);
+      return;
+    }
+
+    try {
+      if (req.method === 'GET') {
+        const result = await Announcements.list();
+        return sendJson(result, result.ok ? 200 : 503);
+      }
+
+      if (req.method === 'POST') {
+        // The session comes from the httpOnly cookie, exactly as it does for
+        // badges. The browser never sends a role, and an owner account is
+        // never asked for a separate owner password on this route.
+        const account = await Auth.getSessionAccount(req);
+        if (!account) {
+          return sendJson({ ok: false, message: 'Sign in first.' }, 401);
+        }
+        const body = await readJsonBody();
+        const result = await Announcements.create(account, body.body);
+        return sendJson(result,
+          result.ok ? 200
+                    : (result.status || (result.available === false ? 503 : 400)));
+      }
+
+      return sendJson({ ok: false, message: 'Not found.' }, 404);
+    } catch (err) {
+      console.error('[PHOENIX announcements] ' + pathname + ' failed -> ' + Auth.describeError(err));
       return sendJson({ ok: false, message: 'Something went wrong on the server. Please try again.',
                         code: 'SERVER-ERROR' }, 500);
     }

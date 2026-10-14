@@ -571,6 +571,9 @@ require('./card-cinematic-integration-tests')(test,equal,deepEqual,assert);
 suite('Showcase-style match UI and confirmed dice');
 require('./match-showcase-tests')(test,equal,deepEqual,assert);
 
+suite('Announcements on the main menu');
+require('./announcement-client-tests')(test,equal,deepEqual,assert);
+
 /* ===================================================================== */
 /* The deck                                                               */
 /* ===================================================================== */

@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="css/mode-access.css" />
 <link rel="stylesheet" href="css/account.css" />
 <link rel="stylesheet" href="css/badges.css" />
+<link rel="stylesheet" href="css/announcements.css" />
 <link rel="stylesheet" href="css/allies.css" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128293;</text></svg>" />
 <title>Phoenix</title>
@@ -37,6 +38,7 @@
         <button type="button" id="menu-multi"><span class="menu-symbol">♟</span> MULTIPLAYER <small>PRIVATE ROOMS · INVITE CODE</small></button>
         <button type="button" id="menu-gallery"><span class="menu-symbol">▦</span> GALLERY <small>PRIVATE · INVITE CODE</small></button>
         <button type="button" id="menu-badges"><span class="menu-symbol">👑</span> BADGES <small>COLLECTION · FEATURED · VERIFY OWNER</small></button>
+        <button type="button" id="menu-announcements"><span class="menu-symbol">📣</span> ANNOUNCEMENTS <small>OFFICIAL POSTS · LAST 30 DAYS</small></button>
         <button type="button" id="menu-cards"><span class="menu-symbol">▣</span> CARD COLLECTION <small>COMING SOON</small></button>
         <button type="button" id="menu-cinematics"><span class="menu-symbol">✦</span> CARD CINEMATICS <small>WATCH ALL 14 · SILENT PREVIEW GALLERY</small></button>
         <button type="button" id="menu-settings"><span class="menu-symbol">⚙</span> SETTINGS <small>MUSIC, SOUND &amp; EFFECTS</small></button>
@@ -64,6 +66,20 @@
       <span><small>THE LEGENDARY</small>PHOENIX</span>
     </div>
   </div>
+
+  <!-- The newest announcement, bottom right of the menu. This sits INSIDE the
+       menu on purpose: opening any other screen hides the menu, so the card
+       goes with it and needs no script to take it off other screens. Left
+       hidden until the server confirms there is something to say. -->
+  <aside class="menu-announcement" id="menu-announcement" hidden>
+    <p class="menu-announcement-head">
+      <span class="menu-announcement-tag">📣 OFFICIAL ANNOUNCEMENT</span>
+      <button type="button" id="menu-announcement-close" class="menu-announcement-close" aria-label="Dismiss announcement">×</button>
+    </p>
+    <p class="menu-announcement-body" id="menu-announcement-body"></p>
+    <p class="menu-announcement-stamp" id="menu-announcement-stamp"></p>
+    <button type="button" id="menu-announcement-more" class="menu-announcement-more">SEE ALL ANNOUNCEMENTS →</button>
+  </aside>
 </section>
 <section id="ally-picker" class="ally-picker" hidden><div class="ally-shell"><button id="ally-back" type="button" class="ally-back">← MAIN MENU</button><div class="ally-heading"><span>PHOENIX • PLAYER PROFILE</span><h2>CHOOSE YOUR ALLY</h2><p>Choose your companion. In online multiplayer, allies are drafted after rolling dice!</p></div><div id="ally-grid" class="ally-grid"></div><div class="ally-bottom"><div id="ally-selection">Select an ally</div><button id="ally-confirm" type="button" disabled>CONFIRM ALLY →</button></div><p id="ally-feedback" aria-live="polite"></p></div></section><section id="online-screen" hidden><div class="online-shell"><div class="online-top"><h1>PHOENIX · ONLINE MULTIPLAYER</h1><button id="online-back" type="button">← MAIN MENU</button><button id="online-admin" type="button" title="Server admin">SERVER</button></div><p id="online-feedback" role="status"></p><div id="online-setup" class="online-panel"><h2>Multiplayer lobby</h2><div class="online-mode-tabs" role="tablist" aria-label="Multiplayer mode"><button type="button" id="online-mode-public" class="online-mode-tab online-mode-tab-active" role="tab" aria-selected="true">PUBLIC MULTIPLAYER</button><button type="button" id="online-mode-owner" class="online-mode-tab" role="tab" aria-selected="false">OWNER &amp; FRIENDS</button></div><div id="online-public-panel" class="online-mode-panel"><p>Keep the invite code blank to make the lobby public — anyone on the site can join. Add a 3-6 character code to make it private, and share that code with friends.</p><p>Five real players, five devices. Players roll dice for turn order and ally draft order. Each ally is unique; in public lobbies allies appear as random animals so no private name or portrait ever leaves this screen.</p><div class="online-form"><input id="online-create-code" maxlength="6" placeholder="Optional invite code" aria-label="Optional invite code"><span class="online-code-hint">Keep the code blank to make the lobby public.</span><button class="online-primary" id="online-create" type="button">CREATE LOBBY</button></div><hr><div class="online-form"><input id="online-code-input" maxlength="6" placeholder="Invite code" aria-label="Invite code"><button class="online-primary" id="online-join" type="button">JOIN ROOM</button></div><div id="online-lobby-browser"><h3>Open public lobbies</h3><div id="lobby-list" class="lobby-list"></div></div></div><div id="online-owner-panel" class="online-mode-panel" hidden><p>Only the owner can create a room. Anyone with an invite code can join.</p><p>Five real players, five devices — with the real allies: their names, portraits and abilities. This mode is private and never appears in the public lobby list.</p><div class="online-form"><span id="online-owner-password-field" hidden><input id="online-owner-password" type="password" autocomplete="off" maxlength="256" placeholder="Owner password" aria-label="Owner password"></span><button class="online-primary" id="online-owner-create" type="button">CREATE ROOM</button></div><hr><div class="online-form"><input id="online-owner-code-input" maxlength="6" placeholder="6-character invite code" aria-label="Invite code"><button class="online-primary" id="online-owner-join" type="button">JOIN ROOM</button></div></div></div><div id="online-room" hidden><div class="online-panel"><h2>Room <span id="online-room-code"></span> <span id="online-room-mode" class="online-room-mode"></span> <button id="online-copy" type="button">COPY CODE</button></h2><p id="online-phase"></p><label>Rounds <select id="online-rounds"><option value="5">5</option><option value="10" selected>10</option><option value="15">15</option><option value="20">20</option></select></label><div id="online-seats" class="online-seats"></div></div><div class="online-layout"><div class="online-panel"><div id="online-actions"></div><div id="online-hand"></div></div><div class="online-panel"><h3>Table log</h3><ol id="online-log"></ol></div></div></div></div></section><div class="game-toolbar" id="game-toolbar" hidden><button type="button" id="back-to-menu">← Main menu</button><strong id="game-mode-label">Single Player</strong></div><section class="testing-panel" id="testing-panel" hidden><div class="testing-head"><h2>⚗ Multiplayer Testing</h2><span>Local pass-and-play • You control all five players</span></div><p id="testing-status"></p><div id="testing-scores" class="testing-scores"></div><h3 class="testing-hand-title">Available moves — click a card to play it</h3><div id="testing-cards" class="testing-cards"></div><p id="testing-feedback" role="status"></p></section>
 <div class="app" id="phoenix-game" hidden>
@@ -450,6 +466,21 @@
     </section>
   </div>
 </div>
+<!-- The archive: every announcement from the last 30 days, newest first. -->
+<div class="announcement-overlay" id="announcement-overlay" hidden>
+  <div class="announcement-shell" role="dialog" aria-modal="true" aria-labelledby="announcement-title">
+    <div class="announcement-top">
+      <div>
+        <p class="announcement-eyebrow">PHOENIX · OFFICIAL POSTS</p>
+        <h2 id="announcement-title">ANNOUNCEMENTS</h2>
+      </div>
+      <button type="button" id="announcement-close" class="announcement-close" aria-label="Close announcements">×</button>
+    </div>
+    <p class="announcement-note" id="announcement-note"></p>
+    <ul class="announcement-list" id="announcement-list"></ul>
+    <p class="announcement-empty" id="announcement-empty"></p>
+  </div>
+</div>
 <section id="admin-panel" hidden class="admin-panel">
   <div class="admin-shell">
     <h2>Server Admin Dashboard</h2>
@@ -460,6 +491,24 @@
     <button id="admin-unlock" class="online-primary">Unlock Lobby Creation</button>
     <h3>Active public lobbies</h3>
     <div id="admin-room-list" class="admin-room-list"></div>
+
+    <!-- Announcements. Only ever reached after the server has authorised this
+         session as the owner, and the server checks the role again on every
+         post, so this box cannot be used by anyone who is not the owner. -->
+    <h3>Announcements</h3>
+    <p class="announce-hint">
+      Your newest post appears in the bottom right corner of the main menu, and stays
+      in the archive for <span id="announce-hint-days">30</span> days.
+    </p>
+    <textarea id="announce-body" rows="3" placeholder="Write an announcement for everyone…" aria-label="Announcement"></textarea>
+    <div class="announce-actions">
+      <button id="announce-post" class="online-primary">POST ANNOUNCEMENT</button>
+      <span id="announce-count" class="announce-count"></span>
+    </div>
+    <p id="announce-feedback" aria-live="polite"></p>
+    <ul id="announce-list" class="announce-list"></ul>
+    <p class="announcement-empty" id="announce-empty"></p>
+
     <button id="admin-logout" class="online-secondary">Logout</button>
   </div>
 </section>
@@ -491,6 +540,7 @@
 <script src="js/ui.js"></script>
 <script src="js/mode-access.js"></script>
 <script src="js/account-client.js"></script>
+<script src="js/announcement-client.js"></script>
 <script src="js/badge-client.js"></script>
 <script src="js/prototype.js"></script>
 <script src="js/allies.js"></script>
