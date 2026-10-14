@@ -1,0 +1,146 @@
+/*
+ * Phoenix - css/leaderboard.css
+ * ---------------------------------------------------------------------------
+ * The all-time board of players ranked by wins, opened from the main menu.
+ *
+ * Same navy backdrop and gold accent as the badge, account and announcement
+ * screens, so it reads as part of the same game. Every animation is
+ * transform/opacity only and is switched off under prefers-reduced-motion.
+ */
+
+.leaderboard-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 78;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: radial-gradient(circle at top, #263452, #090f1c 75%);
+  color: #f7e5c0;
+  font-family: system-ui, sans-serif;
+  overflow-y: auto;
+}
+
+.leaderboard-overlay[hidden] { display: none !important; }
+
+.leaderboard-shell {
+  width: 100%;
+  max-width: 640px;
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border: 1px solid #75572e;
+  border-radius: 18px;
+  background: #151b2d;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+}
+
+.leaderboard-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.leaderboard-eyebrow {
+  margin: 0;
+  color: #e8a46b;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 3px;
+}
+
+.leaderboard-shell h2 {
+  margin: 4px 0 0;
+  color: #ffd16b;
+  font-size: clamp(24px, 4vw, 34px);
+  letter-spacing: 3px;
+}
+
+.leaderboard-close {
+  padding: 4px 9px;
+  border: 1px solid #75572e;
+  border-radius: 8px;
+  background: transparent;
+  color: #cbb78e;
+  font-size: 18px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.leaderboard-close:hover { border-color: #ffc93c; color: #ffc93c; }
+
+.leaderboard-note {
+  margin: 12px 0 16px;
+  color: #a9a0b9;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.leaderboard-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid #2c3550;
+  border-radius: 12px;
+  background: #111a2c;
+  margin-bottom: 8px;
+}
+
+/* The top of the board gets the gold treatment, so first place reads as first
+   place without needing a colour of its own. */
+.leaderboard-row:first-child {
+  border-color: color-mix(in srgb, #ffc93c 55%, #2c3550);
+  background: linear-gradient(180deg, rgba(255, 201, 60, 0.13), #111a2c);
+}
+
+.leaderboard-medal {
+  font-size: 16px;
+  text-align: center;
+  line-height: 1;
+}
+
+.leaderboard-name {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: #fff3db;
+  overflow-wrap: anywhere;
+}
+
+.leaderboard-wins {
+  color: #ffc93c;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  white-space: nowrap;
+}
+
+.leaderboard-empty {
+  margin: 6px 0 0;
+  color: #8e85a0;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.leaderboard-empty:empty { display: none; }
+
+/* --------------------------- responsive ----------------------------------- */
+
+@media (max-width: 700px) {
+  .leaderboard-overlay { padding: 10px; }
+  .leaderboard-shell { padding: 16px; }
+  .leaderboard-row { grid-template-columns: 28px 1fr auto; gap: 8px; }
+  .leaderboard-name { font-size: 13px; }
+}

@@ -20,6 +20,7 @@
 <link rel="stylesheet" href="css/account.css" />
 <link rel="stylesheet" href="css/badges.css" />
 <link rel="stylesheet" href="css/announcements.css" />
+<link rel="stylesheet" href="css/leaderboard.css" />
 <link rel="stylesheet" href="css/allies.css" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128293;</text></svg>" />
 <title>Phoenix</title>
@@ -39,6 +40,7 @@
         <button type="button" id="menu-gallery"><span class="menu-symbol">▦</span> GALLERY <small>PRIVATE · INVITE CODE</small></button>
         <button type="button" id="menu-badges"><span class="menu-symbol">👑</span> BADGES <small>COLLECTION · FEATURED · VERIFY OWNER</small></button>
         <button type="button" id="menu-announcements"><span class="menu-symbol">📣</span> ANNOUNCEMENTS <small>OFFICIAL POSTS · LAST 30 DAYS</small></button>
+        <button type="button" id="menu-leaderboard"><span class="menu-symbol">🏆</span> LEADERBOARD <small>PLAYERS RANKED BY WINS</small></button>
         <button type="button" id="menu-cards"><span class="menu-symbol">▣</span> CARD COLLECTION <small>COMING SOON</small></button>
         <button type="button" id="menu-cinematics"><span class="menu-symbol">✦</span> CARD CINEMATICS <small>WATCH ALL 14 · SILENT PREVIEW GALLERY</small></button>
         <button type="button" id="menu-settings"><span class="menu-symbol">⚙</span> SETTINGS <small>MUSIC, SOUND &amp; EFFECTS</small></button>
@@ -466,6 +468,23 @@
     </section>
   </div>
 </div>
+<!-- The all-time board: players ranked by how many online matches they have
+     won. Public, and the owner is never on it. -->
+<div class="leaderboard-overlay" id="leaderboard-overlay" hidden>
+  <div class="leaderboard-shell" role="dialog" aria-modal="true" aria-labelledby="leaderboard-title">
+    <div class="leaderboard-top">
+      <div>
+        <p class="leaderboard-eyebrow">PHOENIX · ALL-TIME</p>
+        <h2 id="leaderboard-title">LEADERBOARD</h2>
+      </div>
+      <button type="button" id="leaderboard-close" class="leaderboard-close" aria-label="Close leaderboard">×</button>
+    </div>
+    <p class="leaderboard-note">Players ranked by how many online matches they have won. Play a match to climb.</p>
+    <ul class="leaderboard-list" id="leaderboard-list"></ul>
+    <p class="leaderboard-empty" id="leaderboard-empty"></p>
+  </div>
+</div>
+
 <!-- The archive: every announcement from the last 30 days, newest first. -->
 <div class="announcement-overlay" id="announcement-overlay" hidden>
   <div class="announcement-shell" role="dialog" aria-modal="true" aria-labelledby="announcement-title">
@@ -541,6 +560,7 @@
 <script src="js/mode-access.js"></script>
 <script src="js/account-client.js"></script>
 <script src="js/announcement-client.js"></script>
+<script src="js/leaderboard-client.js"></script>
 <script src="js/badge-client.js"></script>
 <script src="js/prototype.js"></script>
 <script src="js/allies.js"></script>

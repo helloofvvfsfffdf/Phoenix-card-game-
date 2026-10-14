@@ -574,6 +574,9 @@ require('./match-showcase-tests')(test,equal,deepEqual,assert);
 suite('Announcements on the main menu');
 require('./announcement-client-tests')(test,equal,deepEqual,assert);
 
+suite('The players leaderboard');
+require('./leaderboard-client-tests')(test,equal,deepEqual,assert);
+
 /* ===================================================================== */
 /* The deck                                                               */
 /* ===================================================================== */

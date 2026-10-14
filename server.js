@@ -13,6 +13,7 @@ const Gallery = require('./js/gallery.js');
 const Auth = require('./js/auth.js');
 const Badges = require('./js/badges.js');
 const Announcements = require('./js/announcements.js');
+const Wins = require('./js/wins.js');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
@@ -811,6 +812,12 @@ function startGame(room) {
   room.lastPhoenixRound = 1;
   room.tedHiddenUntil = {};
 
+  // A fresh id for a fresh match. Wins are counted against THIS, so the same
+  // match finishing twice still counts once, and a rematch between the same
+  // people is a different match that can be won again.
+  room.matchId = crypto.randomUUID();
+  room.winRecorded = false;
+
   addLog(
     room,
     'Match started! Turn order: ' +
@@ -1117,6 +1124,32 @@ const httpServer = http.createServer(async (req, res) => {
     }
   }
 
+  // ---- Leaderboard -----------------------------------------------------------
+  // Public and read-only: who won how much is the whole point of a leaderboard,
+  // so it needs no session and answers the same signed in or not. What leaves
+  // the server is a rank, a username and a number - never an account row, never
+  // a role, and never the owner, who js/wins.js keeps off the board in three
+  // separate places.
+  if (pathname === '/api/leaderboard') {
+    if (!Wins.isAvailable()) {
+      sendJson({ ok: false, available: false,
+                 message: 'The leaderboard is not available on this server.' }, 503);
+      return;
+    }
+
+    try {
+      if (req.method !== 'GET') {
+        return sendJson({ ok: false, message: 'Not found.' }, 404);
+      }
+      const result = await Wins.leaderboard();
+      return sendJson(result, result.ok ? 200 : 503);
+    } catch (err) {
+      console.error('[PHOENIX wins] ' + pathname + ' failed -> ' + Auth.describeError(err));
+      return sendJson({ ok: false, message: 'Something went wrong on the server. Please try again.',
+                        code: 'SERVER-ERROR' }, 500);
+    }
+  }
+
   const file = path.resolve(
     ROOT,
     '.' + (pathname === '/' ? '/index.html' : pathname)
@@ -1194,6 +1227,23 @@ const playerName = (ws, data) =>
  */
 const memberBadges = ws =>
   (Array.isArray(ws && ws.badges) ? ws.badges : []);
+
+/**
+ * The account this connection proved itself to be, copied onto the MEMBER.
+ *
+ * Same reasoning as memberBadges: a member's `ws` is cleared when they
+ * disconnect while their seat must survive in the snapshot, so anything the
+ * seat needs to remember is copied across when the member is created.
+ *
+ * Only the id and the role are kept - never the username, which the match
+ * already carries as `name`, and never anything that could be edited later.
+ * A client cannot send this: it comes from the httpOnly session the socket
+ * authenticated with, so a player cannot claim someone else's wins.
+ */
+const memberAccount = ws =>
+  (ws && ws.account
+    ? { id: ws.account.id, role: ws.account.role }
+    : null);
 
 function code() {
   let c;
@@ -1419,8 +1469,42 @@ function skipUnplayableTurns(room) {
     }
   }
 
+/**
+ * Count the result of a finished match, once.
+ *
+ * Called from broadcast(), which every snapshot leaves through, so a match can
+ * only ever be counted from here - and `matchId` is minted when the match
+ * starts, so reporting the same finish twice is a no-op at the database
+ * rather than a second win.
+ *
+ * Fire-and-forget on purpose. The ledger is not part of the game state, so a
+ * slow or missing database must never delay or spoil the end of someone's
+ * match, and this is written AFTER skipUnplayableTurns(), which is the last
+ * place the game can finish.
+ */
+function recordMatchWin(room) {
+  const s = room.state;
+
+  if (!s || !s.over || !room.matchId || room.winRecorded) return;
+  room.winRecorded = true;
+
+  // A tie is not a win for whoever happens to sit in the top seat.
+  if (s.tied || s.winnerSeat < 0 || !room.members[s.winnerSeat]) return;
+
+  // The account is the one this socket proved itself to be at connect time.
+  // Wins.recordWin() keeps players only, so the owner's result is dropped
+  // before anything is written.
+  const winner = room.members[s.winnerSeat];
+
+  Wins.recordWin(room.matchId, winner.account).catch(err => {
+    console.error('[PHOENIX wins] could not count a finished match -> ' +
+      Auth.describeError(err));
+  });
+}
+
 function broadcast(room) {
   skipUnplayableTurns(room);
+  recordMatchWin(room);
 
   room.members.forEach(m => {
     send(m.ws, snapshot(room, m));
@@ -1701,6 +1785,7 @@ function handle(ws, data) {
         name: playerName(ws, data),
         ally: null,
         badges: memberBadges(ws),
+        account: memberAccount(ws),
         ws,
         room: ownerRoom
       };
@@ -1789,6 +1874,7 @@ function handle(ws, data) {
       name: playerName(ws, data),
       ally: null,
       badges: memberBadges(ws),
+      account: memberAccount(ws),
       ws,
       room
     };
@@ -1846,6 +1932,7 @@ function handle(ws, data) {
       name: playerName(ws, data),
       ally: null,
       badges: memberBadges(ws),
+      account: memberAccount(ws),
       ws,
       room
     };
