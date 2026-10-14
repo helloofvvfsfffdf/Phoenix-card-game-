@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="css/match-showcase.css" />
 <link rel="stylesheet" href="css/mode-access.css" />
 <link rel="stylesheet" href="css/account.css" />
+<link rel="stylesheet" href="css/badges.css" />
 <link rel="stylesheet" href="css/allies.css" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128293;</text></svg>" />
 <title>Phoenix</title>
@@ -35,6 +36,7 @@
         <button type="button" id="menu-test"><span class="menu-symbol">⚗</span> MULTIPLAYER TESTING <small>LOCAL · CONTROL ALL PLAYERS</small></button>
         <button type="button" id="menu-multi"><span class="menu-symbol">♟</span> MULTIPLAYER <small>PRIVATE ROOMS · INVITE CODE</small></button>
         <button type="button" id="menu-gallery"><span class="menu-symbol">▦</span> GALLERY <small>PRIVATE · INVITE CODE</small></button>
+        <button type="button" id="menu-badges"><span class="menu-symbol">👑</span> BADGES <small>COLLECTION · FEATURED · VERIFY OWNER</small></button>
         <button type="button" id="menu-cards"><span class="menu-symbol">▣</span> CARD COLLECTION <small>COMING SOON</small></button>
         <button type="button" id="menu-cinematics"><span class="menu-symbol">✦</span> CARD CINEMATICS <small>WATCH ALL 14 · SILENT PREVIEW GALLERY</small></button>
         <button type="button" id="menu-settings"><span class="menu-symbol">⚙</span> SETTINGS <small>MUSIC, SOUND &amp; EFFECTS</small></button>
@@ -47,6 +49,14 @@
         <button type="button" id="menu-logout" class="menu-account-btn" hidden>SIGN OUT</button>
         <button type="button" id="menu-claim-owner" class="menu-account-btn menu-account-btn-warn" hidden>CLAIM OWNERSHIP</button>
       </div>
+      <div class="menu-security" id="menu-security" role="note">
+        <strong>⚠️ SECURITY NOTICE:</strong>
+        Do not trust anyone claiming to be the owner of PHOENIX. The real owner is identified
+        by the exclusive
+        <span class="menu-security-badge">DIVINE badge THE PHOENIX 👑🔥</span>.
+        Anyone without this verified badge is <strong>NOT the owner</strong>, regardless of their username.
+        <button type="button" id="menu-security-verify" class="menu-security-verify">Check who really owns PHOENIX &rarr;</button>
+      </div>
       <p class="menu-footer">PHOENIX · PROTOTYPE BUILD · RESTRICTED ACCESS</p>
     </div>
     <div class="menu-photo">
@@ -55,7 +65,7 @@
     </div>
   </div>
 </section>
-<section id="ally-picker" class="ally-picker" hidden><div class="ally-shell"><button id="ally-back" type="button" class="ally-back">← MAIN MENU</button><div class="ally-heading"><span>PHOENIX • PLAYER PROFILE</span><h2>CHOOSE YOUR ALLY</h2><p>Choose your companion. In online multiplayer, allies are drafted after rolling dice!</p></div><div id="ally-grid" class="ally-grid"></div><div class="ally-bottom"><div id="ally-selection">Select an ally</div><button id="ally-confirm" type="button" disabled>CONFIRM ALLY →</button></div><p id="ally-feedback" aria-live="polite"></p></div></section><section id="online-screen" hidden><div class="online-shell"><div class="online-top"><h1>PHOENIX · ONLINE MULTIPLAYER</h1><button id="online-back" type="button">← MAIN MENU</button><button id="online-admin" type="button" title="Server admin">SERVER</button></div><p id="online-feedback" role="status"></p><div id="online-setup" class="online-panel"><h2>Multiplayer lobby</h2><div class="online-mode-tabs" role="tablist" aria-label="Multiplayer mode"><button type="button" id="online-mode-public" class="online-mode-tab online-mode-tab-active" role="tab" aria-selected="true">PUBLIC MULTIPLAYER</button><button type="button" id="online-mode-owner" class="online-mode-tab" role="tab" aria-selected="false">OWNER &amp; FRIENDS</button></div><div id="online-public-panel" class="online-mode-panel"><p>Keep the invite code blank to make the lobby public — anyone on the site can join. Add a 3-6 character code to make it private, and share that code with friends.</p><p>Five real players, five devices. Players roll dice for turn order and ally draft order. Each ally is unique; in public lobbies allies appear as random animals so no private name or portrait ever leaves this screen.</p><div class="online-form"><input id="online-name" maxlength="22" placeholder="Your player name" aria-label="Player name"><input id="online-create-code" maxlength="6" placeholder="Optional invite code" aria-label="Optional invite code"><span class="online-code-hint">Keep the code blank to make the lobby public.</span><button class="online-primary" id="online-create" type="button">CREATE LOBBY</button></div><hr><div class="online-form"><input id="online-code-input" maxlength="6" placeholder="Invite code" aria-label="Invite code"><button class="online-primary" id="online-join" type="button">JOIN ROOM</button></div><div id="online-lobby-browser"><h3>Open public lobbies</h3><div id="lobby-list" class="lobby-list"></div></div></div><div id="online-owner-panel" class="online-mode-panel" hidden><p>Only the owner can create a room. Anyone with an invite code can join.</p><p>Five real players, five devices — with the real allies: their names, portraits and abilities. This mode is private and never appears in the public lobby list.</p><div class="online-form"><input id="online-owner-name" maxlength="22" placeholder="Your player name" aria-label="Player name"><input id="online-owner-password" type="password" autocomplete="off" maxlength="256" placeholder="Owner password" aria-label="Owner password"><button class="online-primary" id="online-owner-create" type="button">CREATE ROOM</button></div><hr><div class="online-form"><input id="online-owner-code-input" maxlength="6" placeholder="6-character invite code" aria-label="Invite code"><button class="online-primary" id="online-owner-join" type="button">JOIN ROOM</button></div></div></div><div id="online-room" hidden><div class="online-panel"><h2>Room <span id="online-room-code"></span> <span id="online-room-mode" class="online-room-mode"></span> <button id="online-copy" type="button">COPY CODE</button></h2><p id="online-phase"></p><label>Rounds <select id="online-rounds"><option value="5">5</option><option value="10" selected>10</option><option value="15">15</option><option value="20">20</option></select></label><div id="online-seats" class="online-seats"></div></div><div class="online-layout"><div class="online-panel"><div id="online-actions"></div><div id="online-hand"></div></div><div class="online-panel"><h3>Table log</h3><ol id="online-log"></ol></div></div></div></div></section><div class="game-toolbar" id="game-toolbar" hidden><button type="button" id="back-to-menu">← Main menu</button><strong id="game-mode-label">Single Player</strong></div><section class="testing-panel" id="testing-panel" hidden><div class="testing-head"><h2>⚗ Multiplayer Testing</h2><span>Local pass-and-play • You control all five players</span></div><p id="testing-status"></p><div id="testing-scores" class="testing-scores"></div><h3 class="testing-hand-title">Available moves — click a card to play it</h3><div id="testing-cards" class="testing-cards"></div><p id="testing-feedback" role="status"></p></section>
+<section id="ally-picker" class="ally-picker" hidden><div class="ally-shell"><button id="ally-back" type="button" class="ally-back">← MAIN MENU</button><div class="ally-heading"><span>PHOENIX • PLAYER PROFILE</span><h2>CHOOSE YOUR ALLY</h2><p>Choose your companion. In online multiplayer, allies are drafted after rolling dice!</p></div><div id="ally-grid" class="ally-grid"></div><div class="ally-bottom"><div id="ally-selection">Select an ally</div><button id="ally-confirm" type="button" disabled>CONFIRM ALLY →</button></div><p id="ally-feedback" aria-live="polite"></p></div></section><section id="online-screen" hidden><div class="online-shell"><div class="online-top"><h1>PHOENIX · ONLINE MULTIPLAYER</h1><button id="online-back" type="button">← MAIN MENU</button><button id="online-admin" type="button" title="Server admin">SERVER</button></div><p id="online-feedback" role="status"></p><div id="online-setup" class="online-panel"><h2>Multiplayer lobby</h2><div class="online-mode-tabs" role="tablist" aria-label="Multiplayer mode"><button type="button" id="online-mode-public" class="online-mode-tab online-mode-tab-active" role="tab" aria-selected="true">PUBLIC MULTIPLAYER</button><button type="button" id="online-mode-owner" class="online-mode-tab" role="tab" aria-selected="false">OWNER &amp; FRIENDS</button></div><div id="online-public-panel" class="online-mode-panel"><p>Keep the invite code blank to make the lobby public — anyone on the site can join. Add a 3-6 character code to make it private, and share that code with friends.</p><p>Five real players, five devices. Players roll dice for turn order and ally draft order. Each ally is unique; in public lobbies allies appear as random animals so no private name or portrait ever leaves this screen.</p><div class="online-form"><input id="online-create-code" maxlength="6" placeholder="Optional invite code" aria-label="Optional invite code"><span class="online-code-hint">Keep the code blank to make the lobby public.</span><button class="online-primary" id="online-create" type="button">CREATE LOBBY</button></div><hr><div class="online-form"><input id="online-code-input" maxlength="6" placeholder="Invite code" aria-label="Invite code"><button class="online-primary" id="online-join" type="button">JOIN ROOM</button></div><div id="online-lobby-browser"><h3>Open public lobbies</h3><div id="lobby-list" class="lobby-list"></div></div></div><div id="online-owner-panel" class="online-mode-panel" hidden><p>Only the owner can create a room. Anyone with an invite code can join.</p><p>Five real players, five devices — with the real allies: their names, portraits and abilities. This mode is private and never appears in the public lobby list.</p><div class="online-form"><span id="online-owner-password-field" hidden><input id="online-owner-password" type="password" autocomplete="off" maxlength="256" placeholder="Owner password" aria-label="Owner password"></span><button class="online-primary" id="online-owner-create" type="button">CREATE ROOM</button></div><hr><div class="online-form"><input id="online-owner-code-input" maxlength="6" placeholder="6-character invite code" aria-label="Invite code"><button class="online-primary" id="online-owner-join" type="button">JOIN ROOM</button></div></div></div><div id="online-room" hidden><div class="online-panel"><h2>Room <span id="online-room-code"></span> <span id="online-room-mode" class="online-room-mode"></span> <button id="online-copy" type="button">COPY CODE</button></h2><p id="online-phase"></p><label>Rounds <select id="online-rounds"><option value="5">5</option><option value="10" selected>10</option><option value="15">15</option><option value="20">20</option></select></label><div id="online-seats" class="online-seats"></div></div><div class="online-layout"><div class="online-panel"><div id="online-actions"></div><div id="online-hand"></div></div><div class="online-panel"><h3>Table log</h3><ol id="online-log"></ol></div></div></div></div></section><div class="game-toolbar" id="game-toolbar" hidden><button type="button" id="back-to-menu">← Main menu</button><strong id="game-mode-label">Single Player</strong></div><section class="testing-panel" id="testing-panel" hidden><div class="testing-head"><h2>⚗ Multiplayer Testing</h2><span>Local pass-and-play • You control all five players</span></div><p id="testing-status"></p><div id="testing-scores" class="testing-scores"></div><h3 class="testing-hand-title">Available moves — click a card to play it</h3><div id="testing-cards" class="testing-cards"></div><p id="testing-feedback" role="status"></p></section>
 <div class="app" id="phoenix-game" hidden>
 
   <!-- ============================ MASTHEAD ============================ -->
@@ -243,11 +253,11 @@
         <p>A private, read-only look at every ally and every card in the game. Nothing here can change a match.</p>
       </header>
 
-      <div class="gallery-panel" id="gallery-create-panel">
+      <div class="gallery-panel" id="gallery-create-panel" hidden>
         <h3>Open a gallery</h3>
-        <p>Use the same owner password you use to create multiplayer rooms. You will get a six-character invitation code to share.</p>
+        <p id="gallery-create-copy">You are signed in as the owner of PHOENIX. Open a gallery and you will get a six-character invitation code to share.</p>
         <div class="gallery-form">
-          <input id="gallery-owner-password" type="password" autocomplete="off" maxlength="256" placeholder="Owner password" aria-label="Owner password">
+          <span id="gallery-owner-password-field" hidden><input id="gallery-owner-password" type="password" autocomplete="off" maxlength="256" placeholder="Owner password" aria-label="Owner password"></span>
           <button class="gallery-primary" id="gallery-create" type="button">OPEN GALLERY</button>
         </div>
       </div>
@@ -389,6 +399,45 @@
     <p class="account-fineprint">Usernames are 3-22 letters, digits or underscore. Passwords need 8+ characters. No email required.</p>
   </div>
 </div>
+<div class="badge-overlay" id="badge-overlay" hidden>
+  <div class="badge-shell" role="dialog" aria-modal="true" aria-labelledby="badge-title">
+    <div class="badge-top">
+      <div>
+        <p class="badge-eyebrow">PHOENIX · PLAYER BADGES</p>
+        <h2 id="badge-title">BADGES</h2>
+      </div>
+      <button type="button" id="badge-close" class="badge-close" aria-label="Close badges">×</button>
+    </div>
+    <p class="badge-note">Feature up to three badges. They appear beside your name and on your player profile.</p>
+
+    <section class="badge-section">
+      <h3>FEATURED · THREE SLOTS</h3>
+      <div class="badge-featured" id="badge-featured"></div>
+      <div class="badge-actions">
+        <button type="button" id="badge-save" class="badge-save">SAVE FEATURED BADGES</button>
+        <p id="badge-feedback" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="badge-section">
+      <h3>MY COLLECTION</h3>
+      <div class="badge-collection" id="badge-collection"></div>
+    </section>
+
+    <section class="badge-section">
+      <h3>VERIFY A PLAYER</h3>
+      <p class="badge-note">
+        Only the account holding the exclusive DIVINE badge <strong>THE PHOENIX</strong> is the owner of PHOENIX.
+        Username plays no part in it — this check reads the verified role stored on the server.
+      </p>
+      <div class="badge-lookup">
+        <input id="badge-profile-input" type="text" maxlength="22" placeholder="Username" aria-label="Username to verify" />
+        <button type="button" id="badge-profile-find">VERIFY</button>
+      </div>
+      <div id="badge-profile-result"></div>
+    </section>
+  </div>
+</div>
 <section id="admin-panel" hidden class="admin-panel">
   <div class="admin-shell">
     <h2>Server Admin Dashboard</h2>
@@ -430,6 +479,7 @@
 <script src="js/ui.js"></script>
 <script src="js/mode-access.js"></script>
 <script src="js/account-client.js"></script>
+<script src="js/badge-client.js"></script>
 <script src="js/prototype.js"></script>
 <script src="js/allies.js"></script>
 <!-- The browser half of multiplayer. This used to point at js/online.js, which

@@ -32,10 +32,10 @@ Player, Multiplayer Testing, gallery) keep the portraits and names.
 5. Run `npm start`.
 6. Open **http://localhost:3000** in a browser (do not open `index.html` directly).
 7. Choose **MULTIPLAYER**, then pick a mode on the ONLINE MULTIPLAYER screen:
-   - **PUBLIC MULTIPLAYER**: type a name and press **CREATE LOBBY**.
+   - **PUBLIC MULTIPLAYER**: press **CREATE LOBBY**. Your name in the lobby is your account name — there is no name field any more.
      - Leave the **optional invite code blank** to make the lobby **public** — it appears in the lobby browser for everyone and gets an automatic code.
      - Type a **3–6 character code** to make the lobby **private** — it is hidden, and only people you give that code to can join.
-   - **OWNER & FRIENDS**: type a name, enter the **owner password** and press **CREATE ROOM**. The room is private with the real allies; friends join with the invite code.
+   - **OWNER & FRIENDS**: press **CREATE ROOM**. The room is private with the real allies; friends join with the invite code. If you are signed in as the owner, no password is asked — your session already proves who you are. Everyone else still enters the owner password.
 8. Other players open the same server URL and either pick a room from the **public lobby list** or join by typing the invite code.
 9. Once five players are connected, the host presses **START MATCH**.
 
@@ -45,7 +45,7 @@ To play with people on your local Wi-Fi, they can open `http://YOUR-COMPUTER-LAN
 
 - Any visitor can create a **public** lobby — no owner password needed for the PUBLIC mode.
 - **Creating a public lobby** asks for an **optional invite code**. Blank = **public** (listed for everyone, automatic 6-character code); a 3–6 character code = **private** (hidden, joinable only with that exact code). Invalid or already-used custom codes are refused.
-- **Owner & Friends** (the OWNER & FRIENDS tab): creating a room requires the **owner password** (validated with the same timing-safe check and IP lockout as the admin dashboard). Owner rooms are always private, get an automatic 6-character code, and are **never** listed in the lobby browser. They play with the real allies — no `publicAllies` map is ever sent to them.
+- **Owner & Friends** (the OWNER & FRIENDS tab): for anyone who is **not** the owner, creating a room requires the **owner password** (validated with the same timing-safe check and IP lockout as the admin dashboard). A signed-in **owner** needs no password at all — the server reads `accounts.role` from the session on every request and never consults a username. Owner rooms are always private, get an automatic 6-character code, and are **never** listed in the lobby browser. They play with the real allies — no `publicAllies` map is ever sent to them.
 - **Public** lobbies are broadcast to every connected client in the lobby browser (host name, player count, phase only — no private data).
 - **Private** lobbies are invisible to everyone who does not have the invite code.
 - A maximum of **5 active lobbies** is enforced across public and private together (`PHOENIX_MAX_ROOMS` to override). When the limit is reached, new creations are refused with a clear message.

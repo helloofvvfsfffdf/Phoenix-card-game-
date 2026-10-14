@@ -176,6 +176,17 @@
     var dash = $('menu-dashboard');
     if (dash) dash.hidden = !(account && account.role === 'owner');
 
+    // The one-time owner-claim button. Hidden unless the setup hash is in the
+    // URL AND the signed-in account is not already the owner, so the menu
+    // never offers to claim ownership it already holds.
+    var claim = $('menu-claim-owner');
+    if (claim) {
+      claim.hidden = !(
+        location.hash === '#owner-setup' &&
+        available && account && account.role !== 'owner'
+      );
+    }
+
     // The SERVER button on the multiplayer screen opens the same dashboard, so
     // it is owner-only as well. With no account system it stays as it always was.
     var serverBtn = $('online-admin');
@@ -258,7 +269,14 @@
       // Owner setup is deliberately invisible in the normal UI: it only appears
       // when the page is opened with #owner-setup in the URL. The server is the
       // real gate - it still requires a signed-in session AND the one-time key.
-      claim.hidden = location.hash !== '#owner-setup';
+      //
+      // It is ALSO hidden for an account that already owns the game, so the
+      // menu never offers to claim what it already has. That is decided from
+      // the role the server sent back, not from anything on this page.
+      claim.hidden = !(
+        location.hash === '#owner-setup' &&
+        available && account && account.role !== 'owner'
+      );
       claim.onclick = function () {
         var key = prompt('Enter the one-time owner setup key:');
         if (!key) return;
@@ -270,6 +288,8 @@
           account = out.data.account;
           renderAccountBits();
           claim.hidden = true;
+          // Drop the setup hash so a reload does not re-offer the button.
+          if (history.replaceState) history.replaceState(null, '', location.pathname);
           alert('Ownership claimed. You are now the permanent OWNER.');
         }).catch(function () { alert('Cannot reach the server.'); });
       };
@@ -304,6 +324,11 @@
   window.PhoenixAccount = {
     refresh: refresh,
     requireLogin: requireLogin,
-    current: function () { return account; }
+    current: function () { return account; },
+    // Whether THIS server runs an account system at all. Distinct from
+    // `current()` being null: a signed-out visitor and a server with no
+    // accounts both have no current account, but only the latter means
+    // "there is no owner role here to read".
+    available: function () { return available; }
   };
 })();

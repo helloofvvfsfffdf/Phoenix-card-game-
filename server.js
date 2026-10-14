@@ -11,6 +11,7 @@ const Maple = require('./js/maple.js');
 const Effects = require('./js/effects.js');
 const Gallery = require('./js/gallery.js');
 const Auth = require('./js/auth.js');
+const Badges = require('./js/badges.js');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
@@ -304,9 +305,10 @@ function galleryCode() {
  * PHOENIX Gallery over the WebSocket.
  *
  * Three messages, and nothing here ever sends game state:
- *   gallery_create  owner password required, same secret and same IP lockout as
- *                   creating a room. Returns the invitation code.
- *   gallery_join    invitation code only. Never the password.
+ *   gallery_create  verified OWNER ROLE only. No password is typed and no
+ *                   username is consulted - the session's accounts.role decides.
+ *                   Returns the invitation code.
+ *   gallery_join    invitation code only.
  *   gallery_close   the creating connection only. Revokes the code at once.
  *
  * @returns {boolean} true if the message was a gallery message and is handled
@@ -317,36 +319,50 @@ function handleGallery(ws, data) {
   }
 
   if (data.type === 'gallery_create') {
-    // The SAME owner secret, compared the SAME way, with the SAME per-IP failure
-    // tracking. Reusing it is the point: one password, one lockout, no second
-    // thing to get wrong.
-    const now = Date.now();
-    const ip = clientIp(ws);
-    const auth = authRecord(ip, now);
+    // WHO may create a gallery is decided here, from the verified account
+    // role on this connection - never from a typed password and never from a
+    // username. Only the real owner passes; everyone else is refused outright.
+    if (Auth.isConfigured()) {
+      if (!ws.account || ws.account.role !== 'owner') {
+        return error(
+          ws,
+          'Only the owner of PHOENIX can open a gallery.'
+        ), true;
+      }
+    } else {
+      // No account system on this server (local development / headless runs):
+      // there is no owner account to read, so fall back to the owner password.
+      // This path is unreachable in production, where accounts are configured,
+      // and it still demands the correct secret rather than opening up.
+      const now = Date.now();
+      const ip = clientIp(ws);
+      const auth = authRecord(ip, now);
 
-    if (auth.lockedUntil > now) {
-      return error(ws, 'Too many incorrect attempts. Try again later.'), true;
-    }
-
-    if (!validOwnerPassword(data.ownerPassword)) {
-      auth.failures.push(now);
-
-      if (auth.failures.length >= AUTH_MAX_FAILURES) {
-        auth.lockedUntil = now + AUTH_LOCK_MS;
+      if (auth.lockedUntil > now) {
+        return error(ws, 'Too many incorrect attempts. Try again later.'), true;
       }
 
-      return error(
-        ws,
-        'Incorrect owner password or too many attempts.'
-      ), true;
-    }
+      if (!validOwnerPassword(data.ownerPassword)) {
+        auth.failures.push(now);
 
-    auth.failures = [];
+        if (auth.failures.length >= AUTH_MAX_FAILURES) {
+          auth.lockedUntil = now + AUTH_LOCK_MS;
+        }
+
+        return error(
+          ws,
+          'Incorrect owner password or too many attempts.'
+        ), true;
+      }
+
+      auth.failures = [];
+    }
 
     // One session per connection. Creating again replaces the old code rather than
     // leaving a second one lying around that only the owner knows is dead.
     Gallery.closeOwnedBy(galleries, ws);
 
+    const now = Date.now();
     const code = Gallery.create(galleries, ws, now, galleryCode);
 
     if (!code) {
@@ -1006,6 +1022,46 @@ const httpServer = http.createServer(async (req, res) => {
     return sendJson({ ok: true, authenticated: true, available: true, account });
   }
 
+  // ---- Phase 2: badges ------------------------------------------------------
+  // Every rule here is evaluated on the server from accounts.role. The browser
+  // never sends a role, and never receives anything but catalogue rows.
+  if (pathname === '/api/badges' || pathname.indexOf('/api/badges/') === 0) {
+    if (!Auth.isConfigured()) {
+      sendJson({ ok: false, available: false, message: 'Badges are not available on this server.' }, 503);
+      return;
+    }
+
+    try {
+      // Public, read-only profile lookup: GET /api/badges/profile?username=x
+      if (req.method === 'GET' && pathname === '/api/badges/profile') {
+        const query = new URL(req.url, 'http://localhost').searchParams;
+        const result = await Badges.getProfile(query.get('username') || '');
+        return sendJson(result, result.ok ? 200 : (result.available === false ? 503 : 404));
+      }
+
+      // Everything below needs a live session.
+      const account = await Auth.getSessionAccount(req);
+      if (!account) return sendJson({ ok: false, authenticated: false, available: true }, 401);
+
+      if (req.method === 'GET' && pathname === '/api/badges') {
+        const result = await Badges.getMine(account);
+        return sendJson(result, result.ok ? 200 : 503);
+      }
+
+      if (req.method === 'POST' && pathname === '/api/badges/feature') {
+        const body = await readJsonBody();
+        const result = await Badges.setFeatured(account, body.slots);
+        return sendJson(result, result.ok ? 200 : (result.available === false ? 503 : 400));
+      }
+
+      return sendJson({ ok: false, message: 'Not found.' }, 404);
+    } catch (err) {
+      console.error('[PHOENIX badges] ' + pathname + ' failed -> ' + Auth.describeError(err));
+      return sendJson({ ok: false, message: 'Something went wrong on the server. Please try again.',
+                        code: 'SERVER-ERROR' }, 500);
+    }
+  }
+
   const file = path.resolve(
     ROOT,
     '.' + (pathname === '/' ? '/index.html' : pathname)
@@ -1052,6 +1108,22 @@ const cleanName = name =>
     .replace(/[<>\r\n]/g, '')
     .trim()
     .slice(0, 22) || 'Player';
+
+/**
+ * A player's lobby name is their ACCOUNT name.
+ *
+ * Derived here, on the server, from the signed-in session. The browser no
+ * longer offers a name field, so nobody can join a lobby wearing somebody
+ * else's name - the value comes from the same row that owns the session
+ * cookie, not from anything the client typed.
+ *
+ * When the server has no account system at all (local development and the
+ * headless test harnesses), there is no session to read, so the legacy
+ * supplied name is still honoured. That fallback is unreachable in
+ * production: there, an unauthenticated socket is refused long before this.
+ */
+const playerName = (ws, data) =>
+  cleanName(ws.account && ws.account.username ? ws.account.username : data && data.name);
 
 function code() {
   let c;
@@ -1481,35 +1553,46 @@ function handle(ws, data) {
     // ally names, portraits and abilities stay exactly as the catalogue has them
     // on every screen. A public create (no password) keeps its randomised
     // animal identities and never touches the real ones.
+    //
+    // A signed-in OWNER needs no password at all. Their authority comes from
+    // accounts.role - verified on the server, from the session cookie, on every
+    // single request. Nothing about this check reads a username.
+    const isOwner = !!(ws.account && ws.account.role === 'owner');
+
     const ownerRequested =
-      typeof data.ownerPassword === 'string' && data.ownerPassword.length > 0;
+      isOwner ||
+      (typeof data.ownerPassword === 'string' && data.ownerPassword.length > 0);
 
     if (ownerRequested) {
-      const now = Date.now();
-      const ip = clientIp(ws);
-      const auth = authRecord(ip, now);
+      // Only the password path is rate-limited and lockout-protected: an
+      // owner's session has already passed sign-in.
+      if (!isOwner) {
+        const now = Date.now();
+        const ip = clientIp(ws);
+        const auth = authRecord(ip, now);
 
-      if (auth.lockedUntil > now) {
-        return error(
-          ws,
-          'Too many incorrect attempts. Try again later.'
-        );
-      }
-
-      if (!validOwnerPassword(data.ownerPassword)) {
-        auth.failures.push(now);
-
-        if (auth.failures.length >= AUTH_MAX_FAILURES) {
-          auth.lockedUntil = now + AUTH_LOCK_MS;
+        if (auth.lockedUntil > now) {
+          return error(
+            ws,
+            'Too many incorrect attempts. Try again later.'
+          );
         }
 
-        return error(
-          ws,
-          'Incorrect owner password or too many attempts.'
-        );
-      }
+        if (!validOwnerPassword(data.ownerPassword)) {
+          auth.failures.push(now);
 
-      auth.failures = [];
+          if (auth.failures.length >= AUTH_MAX_FAILURES) {
+            auth.lockedUntil = now + AUTH_LOCK_MS;
+          }
+
+          return error(
+            ws,
+            'Incorrect owner password or too many attempts.'
+          );
+        }
+
+        auth.failures = [];
+      }
 
       if (serverState.creationLocked) {
         return error(
@@ -1527,7 +1610,7 @@ function handle(ws, data) {
 
       const ownerRoom = {
         code: code(),
-        name: cleanName(data.name),
+        name: playerName(ws, data),
         visibility: 'private',
         mode: 'owner',
         createdAt: Date.now(),
@@ -1542,7 +1625,7 @@ function handle(ws, data) {
 
       const ownerMember = {
         seat: 0,
-        name: cleanName(data.name),
+        name: playerName(ws, data),
         ally: null,
         ws,
         room: ownerRoom
@@ -1609,7 +1692,7 @@ function handle(ws, data) {
 
     const room = {
       code: roomCode,
-      name: cleanName(data.name),
+      name: playerName(ws, data),
       visibility,
       mode: 'public',
       publicAllies: publicAllies(),
@@ -1629,7 +1712,7 @@ function handle(ws, data) {
 
     const m = {
       seat: 0,
-      name: cleanName(data.name),
+      name: playerName(ws, data),
       ally: null,
       ws,
       room
@@ -1685,7 +1768,7 @@ function handle(ws, data) {
 
     const m = {
       seat: room.members.length,
-      name: cleanName(data.name),
+      name: playerName(ws, data),
       ally: null,
       ws,
       room

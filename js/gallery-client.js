@@ -63,13 +63,68 @@
     $('gallery-gate-feedback').textContent = text || '';
   }
 
+  /**
+   * The CREATE panel's visibility, and whether it needs a password.
+   *
+   * Production (accounts configured): the SERVER grants access from the
+   * session's verified owner role, so no password is asked and the field is
+   * not rendered at all.
+   *
+   * A server with no account system has no owner role to read, so it keeps the
+   * original password field. That is local development only - and even there
+   * the server still validates the secret; nothing is opened by the page.
+   *
+   * Either way this is cosmetic. The server refuses gallery_create for anyone
+   * it does not accept, whatever the page chooses to display.
+   */
+  function ownerAccess() {
+    const accounts = window.PhoenixAccount;
+    const configured = !!(accounts && accounts.available && accounts.available());
+
+    if (configured) {
+      const account = accounts.current ? accounts.current() : null;
+      return {
+        isOwner: !!(account && account.role === 'owner'),
+        needsPassword: false
+      };
+    }
+
+    return { isOwner: true, needsPassword: true };
+  }
+
   function openGate() {
     hideAll();
     gateMessage('');
     $('gallery-gate').hidden = false;
-    $('gallery-owner-password').value = '';
     $('gallery-code-input').value = '';
-    $('gallery-owner-password').focus();
+
+    const access = ownerAccess();
+    setNode('gallery-create-panel', function (node) { node.hidden = !access.isOwner; });
+
+    // Defensive throughout: a headless test harness supplies stub nodes with no
+    // children and no methods, and the doorway must open there just the same.
+    const input = $('gallery-owner-password');
+    if (input) {
+      const field = $('gallery-owner-password-field');
+      if (field) field.hidden = !access.needsPassword;
+      input.value = '';
+    }
+
+    const copy = $('gallery-create-copy');
+    if (copy && copy.textContent !== undefined) {
+      copy.textContent = access.needsPassword
+        ? 'Enter the owner password. You will get a six-character invitation code to share.'
+        : 'You are signed in as the owner of PHOENIX. Open a gallery and you will get a six-character invitation code to share.';
+    }
+
+    const focusTarget = access.isOwner ? $('gallery-create') : $('gallery-code-input');
+    if (focusTarget && typeof focusTarget.focus === 'function') focusTarget.focus();
+  }
+
+  /** Runs `fn` on an element only if it actually exists. */
+  function setNode(id, fn) {
+    const node = $(id);
+    if (node) fn(node);
   }
 
   /**
@@ -98,15 +153,20 @@
    * Maple is the odd one out, and the gallery has to say so plainly: she is not on
    * the draftable list, has no owner, and acts on her own. That is not an opinion
    * - server.js keeps her out of ALLIES - and the wording here says which.
+   *
+   * The pronoun comes from the catalogue (`ally.pronoun`), never from the ally's
+   * name: Ted is "him", Phoenix is "her", and neither is guessed here.
    */
   function allyFacts(ally) {
     const facts = [];
+    const pronoun = ally.pronoun || 'them';
 
     if (ally.id === 'maple') {
       facts.push('Neutral · belongs to nobody · cannot be drafted');
-      facts.push('Independent — she rolls once every round on her own');
+      facts.push('Independent — ' + (ally.pronoun === 'him' ? 'he' : 'she') +
+                 ' rolls once every round on ' + (ally.pronoun === 'him' ? 'his' : 'her') + ' own');
     } else {
-      facts.push('Draftable · one player holds her');
+      facts.push('Draftable · one player holds ' + pronoun);
     }
 
     return facts;
@@ -405,24 +465,50 @@
     $('gallery-leave').addEventListener('click', function () { leave(''); });
 
     $('gallery-create').addEventListener('click', function () {
-      gateMessage('Checking your password...');
+      const access = ownerAccess();
+
+      // Account servers: send nothing. The SERVER reads the owner role off the
+      // session and decides - this file claims nothing on the player's behalf.
+      // Servers with no accounts: the original password is still required.
+      if (access.needsPassword) {
+        const field = $('gallery-owner-password');
+        const value = field ? field.value : '';
+        if (!value) {
+          gateMessage('Enter the owner password.');
+          return;
+        }
+        gateMessage('Checking your password...');
+        window.PhoenixNet.setGalleryOwner(true);
+        send({ type: 'gallery_create', ownerPassword: value });
+        if (field) field.value = '';
+        return;
+      }
+
+      gateMessage('Opening your gallery...');
       window.PhoenixNet.setGalleryOwner(true);
-      send({ type: 'gallery_create', ownerPassword: $('gallery-owner-password').value });
+      send({ type: 'gallery_create' });
     });
 
     $('gallery-join').addEventListener('click', function () {
       gateMessage('Checking the code...');
       window.PhoenixNet.setGalleryOwner(false);
-      send({ type: 'gallery_join', code: $('gallery-code-input').value });
+      const codeInput = $('gallery-code-input');
+      send({ type: 'gallery_join', code: codeInput ? codeInput.value : '' });
     });
 
     // Enter submits from either field, which is how anyone actually types a code.
-    $('gallery-code-input').addEventListener('keydown', function (event) {
-      if (event.key === 'Enter') $('gallery-join').click();
-    });
-    $('gallery-owner-password').addEventListener('keydown', function (event) {
-      if (event.key === 'Enter') $('gallery-create').click();
-    });
+    const codeInput = $('gallery-code-input');
+    if (codeInput) {
+      codeInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') $('gallery-join').click();
+      });
+    }
+    const passwordInput = $('gallery-owner-password');
+    if (passwordInput) {
+      passwordInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') $('gallery-create').click();
+      });
+    }
 
     $('gallery-close').addEventListener('click', function () {
       send({ type: 'gallery_close' });

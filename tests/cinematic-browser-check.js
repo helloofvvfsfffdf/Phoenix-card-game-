@@ -100,7 +100,6 @@ async function main() {
         const action=async(ws,data)=>{const waits=smokePeers.map(next);ws.send(JSON.stringify(data));return Promise.all(waits);};
         window.smokeAction=action;window.smokeTrack=track;window.smokeNative=Native;window.smokeNext=next;
         const a=document.getElementById('phoenix-music');PhoenixMusicPlayer.select('epic');await a.play();PhoenixOnline.enter();
-        document.getElementById('online-name').value='Browser Host';
         document.getElementById('online-create').click();await next(smokeHost);
         for(const name of ['Browser Guest','Browser Third']){const ws=track(new Native('ws://'+location.host));await new Promise(r=>ws.addEventListener('open',r,{once:true}));await action(ws,{type:'join',name,code:smokeStates.get(smokeHost).code});}
         await action(smokeHost,{type:'start',rounds:5});let guard=0;
@@ -141,7 +140,7 @@ async function main() {
       if(process.env.PHOENIX_BROWSER_OWNER_PASSWORD && await evaluate(`!!smokeWinner`)) {
         const legendary=await evaluate(`(async()=>{
           await new Promise(r=>setTimeout(r,200));window.smokePeers=[];window.smokeStates=new Map();PhoenixOnline.enter();
-          document.getElementById('online-name').value='Phoenix Test Host';document.getElementById('online-create').click();await smokeNext(smokeHost);
+          document.getElementById('online-create').click();await smokeNext(smokeHost);
           for(const name of ['Phoenix Observer','Phoenix Third']){const ws=smokeTrack(new smokeNative('ws://'+location.host));await new Promise(r=>ws.addEventListener('open',r,{once:true}));await smokeAction(ws,{type:'join',name,code:smokeStates.get(smokeHost).code});}
           await smokeAction(smokeHost,{type:'start',rounds:10});let guard=0;while(['turnDice','allyDice'].includes(smokeStates.get(smokeHost).phase)){if(guard++>150)throw Error('dice');await smokeAction(smokePeers[smokeStates.get(smokeHost).dice.next],{type:'roll'});}
           const allies=['ted','phoenix','elsie'];while(smokeStates.get(smokeHost).phase==='draft')await smokeAction(smokePeers[smokeStates.get(smokeHost).draftTurn],{type:'chooseAlly',ally:allies.shift()});

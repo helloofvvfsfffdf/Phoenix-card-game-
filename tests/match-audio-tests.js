@@ -18,7 +18,6 @@ function online() {
   b.context.PhoenixCards = require('../js/cards');
   b.loadScript('online-client.js');
   b.context.PhoenixOnline.enter();
-  b.nodes['online-name'].value = 'Player';
   b.nodes['online-create'].onclick(); sockets[0].onopen();
   b.receive = function (phase, over, extra) {
     sockets[0].onmessage({ data: JSON.stringify(Object.assign({ type: 'state', phase: phase, started: phase === 'playing', over: !!over,

@@ -1,15 +1,19 @@
 (function () {
   'use strict';
   // Ally selection display. Gameplay abilities are handled separately by the game/server.
+  //
+  // `pronoun` is the objective-case form used anywhere the gallery or the game
+  // refers to an ally in prose ("one player holds him"). It lives here so the
+  // wording is never guessed from a name: the catalogue is the source of truth.
   var roster = [
-    {id:'phoenix',name:'PHOENIX',title:'Sneaky Snatcher',desc:'Once per round, attempts to steal a random card from an opponent. Defenders may block her.',color:'#ffc642'},
-    {id:'tilly',name:'TILLY',title:'Trouble Maker',desc:'50% chance each round to eliminate an opponent for one round. Protective Paws: 40% chance to block Phoenix.',color:'#b97aff'},
-    {id:'ted',name:'TED',title:'Slobbery Surprise',desc:'50% chance each round to disguise an opponent’s cards for 3 rounds. Protective Howl: 60% chance to stop Phoenix stealing from Ted’s owner.',color:'#8fc9ff'},
-    {id:'louie',name:'LOUIE',title:'Puppet Master',desc:'40% chance to choose a card on an opponent’s next turn. Quick Reflexes: 80% chance to block Phoenix.',color:'#47aaff'},
-    {id:'simba',name:'SIMBA',title:'Card Sabotage',desc:'Blocks one random card in a chosen opponent’s hand for one round. Sharp Claws: 60% chance to block Phoenix.',color:'#ff9e43'},
-    {id:'elsie',name:'ELSIE',title:'Untouchable',desc:'Blocks Phoenix 100%, Louie 70%, and Maple 20% of the time. Cannot block Tilly or Simba.',color:'#ff80b4'}
+    {id:'phoenix',name:'PHOENIX',title:'Sneaky Snatcher',desc:'Once per round, attempts to steal a random card from an opponent. Defenders may block her.',color:'#ffc642',pronoun:'her'},
+    {id:'tilly',name:'TILLY',title:'Trouble Maker',desc:'50% chance each round to eliminate an opponent for one round. Protective Paws: 40% chance to block Phoenix.',color:'#b97aff',pronoun:'her'},
+    {id:'ted',name:'TED',title:'Slobbery Surprise',desc:'50% chance each round to disguise an opponent’s cards for 3 rounds. Protective Howl: 60% chance to stop Phoenix stealing from Ted’s owner.',color:'#8fc9ff',pronoun:'him'},
+    {id:'louie',name:'LOUIE',title:'Puppet Master',desc:'40% chance to choose a card on an opponent’s next turn. Quick Reflexes: 80% chance to block Phoenix.',color:'#47aaff',pronoun:'him'},
+    {id:'simba',name:'SIMBA',title:'Card Sabotage',desc:'Blocks one random card in a chosen opponent’s hand for one round. Sharp Claws: 60% chance to block Phoenix.',color:'#ff9e43',pronoun:'him'},
+    {id:'elsie',name:'ELSIE',title:'Untouchable',desc:'Blocks Phoenix 100%, Louie 70%, and Maple 20% of the time. Cannot block Tilly or Simba.',color:'#ff80b4',pronoun:'her'}
   ];
-  var maple = {id:'maple',name:'MAPLE',title:'Sweet Tooth',desc:'Independent: 40% chance each round to force a random player to use only nice cards for 3 rounds.',color:'#42d6a0',src:'assets/allies/maple.jpg'};
+  var maple = {id:'maple',name:'MAPLE',title:'Sweet Tooth',desc:'Independent: 40% chance each round to force a random player to use only nice cards for 3 rounds.',color:'#42d6a0',src:'assets/allies/maple.jpg',pronoun:'her'};
   roster.forEach(function (a) { a.src = 'assets/allies/' + a.id + '.jpg'; });
   var current = 'phoenix', mode = 'multi';
   function $(id) { return document.getElementById(id); }

@@ -308,13 +308,20 @@
     $('online-mode-public').setAttribute('aria-selected', String(!owner));
     $('online-mode-owner').setAttribute('aria-selected', String(owner));
 
-    // Carry a typed name across so switching modes does not mean retyping it.
-    const from = owner ? $('online-name') : $('online-owner-name');
-    const to = owner ? $('online-owner-name') : $('online-name');
-    if (from && to && from.value && !to.value) to.value = from.value;
+    // An owner needs no password: their authority is the signed-in session, and
+    // the SERVER re-checks it on the create. Everyone else still types it.
+    // (Purely cosmetic - the server refuses regardless of what this shows.)
+    const account = window.PhoenixAccount && window.PhoenixAccount.current
+      ? window.PhoenixAccount.current()
+      : null;
+    const isOwner = !!(account && account.role === 'owner');
+    const passwordField = $('online-owner-password-field');
+    if (passwordField) passwordField.hidden = isOwner;
 
     feedback(owner
-      ? 'Owner & Friends: create a private room with the owner password, or join with an invite code.'
+      ? (isOwner
+          ? 'Owner & Friends: you are signed in as the owner, so create a private room directly.'
+          : 'Owner & Friends: create a private room with the owner password, or join with an invite code.')
       : 'Create a lobby or join one with an invite code.');
   }
 
@@ -331,10 +338,9 @@
       $('online-setup').hidden = false;
       $('online-room').hidden = true;
 
-      const rememberedName = sessionStorage.getItem('phoenix-player-name') || '';
-      $('online-name').value = rememberedName;
-      $('online-owner-name').value = rememberedName;
-
+      // Your name in a lobby is your ACCOUNT name. There is no name field any
+      // more: the server derives it from the signed-in session, so a player
+      // cannot type somebody else's name and nobody has to invent one.
       setMode('public');
 
       // Open the socket as soon as the lobby is entered, not only when a room is
@@ -454,42 +460,45 @@
     const action =
       request && typeof request === 'object' ? request : { type: request };
 
-    // Owner & Friends has its own name field; every public action shares the
-    // original one, so the two modes never read each other's inputs.
+    // Owner & Friends has its own controls; every public action shares the
+    // original ones, so the two modes never read each other's inputs.
     const ownerAction =
       action.type === 'ownerCreate' || action.type === 'ownerJoin';
 
-    const name =
-      (ownerAction ? $('online-owner-name') : $('online-name')).value.trim();
-
-    if (!name) {
-      feedback('Enter your player name.');
-      return;
-    }
-
-    sessionStorage.setItem('phoenix-player-name', name);
+    // NO NAME FIELD ANY MORE. A player's lobby name is their ACCOUNT name,
+    // decided by the server from the signed-in session. This file never sends
+    // one, so nobody can join a lobby wearing somebody else's name.
 
     if (action.type === 'create') {
       // Optional custom invite code: blank (or missing) creates a PUBLIC lobby,
       // a 3-6 character code creates a PRIVATE lobby joinable with that code.
       const code = $('online-create-code').value.trim();
       connect(() => {
-        send({ type: 'create', name, code });
+        send({ type: 'create', code });
       });
       return;
     }
 
     if (action.type === 'ownerCreate') {
-      // The owner password is what marks this as an Owner & Friends room on the
-      // server: it becomes a private room with the real allies and is never
-      // listed in the public lobby browser. Cleared as soon as it is used.
-      const ownerPassword = $('online-owner-password').value;
-      if (!ownerPassword) {
+      // The password is what marks this as an Owner & Friends room for anyone
+      // who is NOT the owner: it becomes a private room with the real allies
+      // and is never listed in the public lobby browser.
+      //
+      // A signed-in OWNER sends no password at all - their authority is the
+      // session, and the server reads the role off it. Cleared as soon as it
+      // is used.
+      const account = window.PhoenixAccount && window.PhoenixAccount.current
+        ? window.PhoenixAccount.current()
+        : null;
+      const isOwner = !!(account && account.role === 'owner');
+
+      const ownerPassword = isOwner ? '' : $('online-owner-password').value;
+      if (!isOwner && !ownerPassword) {
         feedback('Enter the owner password to create a room.');
         return;
       }
       connect(() => {
-        send({ type: 'create', name, code: '', ownerPassword });
+        send({ type: 'create', code: '', ownerPassword });
         $('online-owner-password').value = '';
       });
       return;
@@ -502,7 +511,7 @@
             .value.trim();
 
     connect(() => {
-      send({ type: 'join', name, code });
+      send({ type: 'join', code });
     });
   }
 

@@ -24,7 +24,7 @@ async function main(){try{
     const action=async(ws,data)=>{const waits=gamePeers.map(next);ws.send(JSON.stringify(data));await Promise.all(waits);};
     let games=0,moves=0;
     for(;games<10&&seen.size<14;games++){
-      gamePeers=[];gameStates=new Map();PhoenixOnline.enter();document.getElementById('online-name').value='Cinematic tester';document.getElementById('online-create').click();await next(gameHost);
+      gamePeers=[];gameStates=new Map();PhoenixOnline.enter();document.getElementById('online-create').click();await next(gameHost);
       for(const name of ['Alex','Bob','Riley','Morgan']){const ws=track(new Native('ws://'+location.host));await new Promise(r=>ws.addEventListener('open',r,{once:true}));await action(ws,{type:'join',name,code:gameStates.get(gameHost).code});}
       await action(gameHost,{type:'start',rounds:20});let guard=0;
       while(['turnDice','allyDice'].includes(gameStates.get(gameHost).phase)){if(guard++>250)throw Error('dice stalled');await action(gamePeers[gameStates.get(gameHost).dice.next],{type:'roll'});}
