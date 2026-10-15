@@ -56,6 +56,26 @@ module.exports=function(test,equal,deepEqual,assert){
     equal(chip.children.find(n=>n.className==='badge-chip-rarity').textContent,'DIVINE');
     equal(chip.children.find(n=>n.className==='badge-chip-mark').textContent,'\uD83D\uDC51','the crown');
   });
+  test('a badge with a picture shows it in the seat, and one without gets no empty frame',function(){
+    const b=require('./match-audio-tests').online();
+    b.loadScript('allies.js');
+    b.loadScript('badge-client.js');
+    b.receive('playing',false,{players:[
+      {id:'human',name:'Alice',ally:'phoenix',points:0,handCount:2,connected:true,
+       badges:[{key:'champion',name:'MATCH WINNER',rarity:'common',icon:'assets/phoenix-badge.jpg'}]},
+      {id:'p2',name:'Bob',ally:'tilly',points:0,handCount:2,connected:true,
+       badges:[{key:'played-with-owner',name:'PLAYED WITH OWNER',rarity:'legendary'}]}
+    ],current:'human',acting:false});
+    const chip=i=>b.nodes['online-seats'].children[i]
+      .children.find(n=>n.className==='online-seat-meta')
+      .children.find(n=>n.className==='badge-chips').children[0];
+    const pic=chip(0).children.find(n=>n.className==='badge-chip-icon');
+    assert(pic,'the badge carries the picture the catalogue named');
+    equal(pic.src,'assets/phoenix-badge.jpg','a plain file inside assets/, exactly as the server sent it');
+    equal(pic.alt,'','the name sits beside it, so a screen reader is not told it twice');
+    assert(!chip(1).children.some(n=>n.className==='badge-chip-icon'),
+      'a badge with no picture of its own gets no empty frame');
+  });
   test('a malformed badge list from a snapshot degrades to no badges instead of breaking the seat',function(){
     const b=require('./match-audio-tests').online();
     b.loadScript('allies.js');
@@ -126,5 +146,31 @@ module.exports=function(test,equal,deepEqual,assert){
     box.payload = Object.assign({}, PLAYER_VIEW, { awardable: AWARDABLE });
     b.reload();
     equal(panel.hidden, true, 'isOwner alone decides, not the badge list');
+  });
+
+  test('the collection shows a badge picture only when the catalogue gave the badge one', function () {
+    var CHAMPION = { key: 'champion', name: 'MATCH WINNER', rarity: 'common',
+      description: 'Won a match of PHOENIX.', icon: 'assets/phoenix-badge.jpg' };
+    var PLAYED = { key: 'played-with-owner', name: 'PLAYED WITH OWNER', rarity: 'legendary',
+      description: 'Played a match with the owner of PHOENIX.' };
+
+    var box = { payload: Object.assign({}, PLAYER_VIEW, {
+      catalogue: [CHAMPION, PLAYED], owned: [CHAMPION, PLAYED]
+    }) };
+    var b = awardHarness(box);
+    b.reload();
+
+    var grid = b.nodes['badge-collection'];
+    equal(grid.children.length, 2, 'both owned badges are shown');
+
+    var pic = grid.children[0].children.find(function (n) {
+      return n.className === 'badge-tile-icon';
+    });
+    assert(pic, 'the win badge shows its picture');
+    equal(pic.src, 'assets/phoenix-badge.jpg', 'the path the server named, verbatim');
+    equal(pic.alt, '', 'the badge name is printed right underneath it');
+    assert(!grid.children[1].children.some(function (n) {
+      return n.className === 'badge-tile-icon';
+    }), 'a badge with no picture of its own keeps its plain tile');
   });
 };

@@ -30,6 +30,47 @@ function isAwardable(key) {
   return typeof key === 'string' && AWARDABLE_KEYS.indexOf(key) !== -1;
 }
 
+/**
+ * The badge a player earns by winning a match.
+ *
+ * Listed under its own name rather than buried in a call site, because three
+ * things have to agree on it: the catalogue row seeded in
+ * sql/champion-badge.sql, the allowlist below, and js/wins.js which hands it
+ * over at the end of a match.
+ */
+const WIN_BADGE_KEY = 'champion';
+
+/**
+ * Badges the server hands out by itself, when something happens in a match.
+ *
+ * An ALLOWLIST for exactly the reason AWARDABLE_KEYS is one: adding a badge to
+ * the catalogue never makes it automatically grantable, and THE PHOENIX is
+ * absent here by construction - so no catalogue row, and no caller passing
+ * something it should not, can hand out the owner badge through this route.
+ */
+const AUTO_AWARDABLE_KEYS = [WIN_BADGE_KEY];
+
+function isAutoAwardable(key) {
+  return typeof key === 'string' && AUTO_AWARDABLE_KEYS.indexOf(key) !== -1;
+}
+
+/**
+ * Where a badge picture is allowed to point.
+ *
+ * A badge icon becomes an <img src> in the browser, so it is held to a pattern
+ * that only ever matches a plain file inside assets/: no slashes beyond the
+ * one, no spaces, no quotes, no "..", and no scheme - so it can never be
+ * turned into markup and can never be pointed at another website. The same
+ * pattern is enforced in the database (sql/champion-badge.sql); this is the
+ * second line, so a row that got in another way still cannot reach a page.
+ */
+const ICON_RE = /^assets\/[A-Za-z0-9._-]+\.(jpg|jpeg|png|webp)$/;
+
+/** The safe picture for a badge, or null. Pure, so it is unit-tested. */
+function safeIcon(icon) {
+  return typeof icon === 'string' && ICON_RE.test(icon) ? icon : null;
+}
+
 // Rarity tiers, weakest first. Divine sits above Impossible on purpose.
 const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'impossible', 'divine'];
 
@@ -125,13 +166,14 @@ async function ensureOwnerBadge(accountId) {
 async function listCatalogue() {
   const { data, error } = await Auth.client()
     .from('badges')
-    .select('key, name, rarity, description, sort_order')
+    .select('key, name, rarity, description, sort_order, icon')
     .order('sort_order', { ascending: true })
     .order('rarity', { ascending: true });
   if (error) throw error;
   return (data || []).map(b => ({
     key: b.key, name: b.name, rarity: b.rarity,
-    description: b.description, divine: b.rarity === 'divine'
+    description: b.description, icon: safeIcon(b.icon),
+    divine: b.rarity === 'divine'
   }));
 }
 
@@ -179,7 +221,8 @@ async function findAccount(username) {
 function toPublicBadge(row) {
   return {
     key: row.key, name: row.name, rarity: row.rarity,
-    description: row.description, divine: row.rarity === 'divine'
+    description: row.description, icon: safeIcon(row.icon),
+    divine: row.rarity === 'divine'
   };
 }
 
@@ -405,8 +448,61 @@ async function awardBadge(account, username, badgeKey) {
     username: target.username,
     alreadyHad: alreadyHad,
     badge: { key: badge.key, name: badge.name, rarity: badge.rarity,
-             description: badge.description }
+             description: badge.description, icon: safeIcon(badge.icon) }
   };
+}
+
+/**
+ * Hand a badge to an account, by key - no username, no lookup, no ceremony.
+ *
+ * This is the route the SERVER takes when something happens in a match that
+ * earns a badge, as opposed to awardBadge(), which is the owner handing one to
+ * a named player. The key has to be on AUTO_AWARDABLE_KEYS, so THE PHOENIX can
+ * never travel this way whatever a caller passes: the allowlist is decided in
+ * code, not taken from any payload.
+ *
+ * Granting a badge someone already holds is not an error. account_badges is
+ * keyed on (account_id, badge_key), so the table already makes this
+ * idempotent, and that matters here: this runs at the end of a match, where
+ * the only acceptable outcomes are "they have it" and "quietly nothing".
+ *
+ * Never throws for a badge that is not in the catalogue either. The seed
+ * migration is run by hand, so a server can be up before the badge exists,
+ * and someone who just won must not be told that something went wrong.
+ */
+async function grant(account, badgeKey) {
+  if (!isAvailable()) return { ok: false, available: false };
+  if (!account || !account.id) return { ok: false, skipped: true, reason: 'no-account' };
+
+  // Allowlist first, before any read, for the same reason awardBadge() does it.
+  if (!isAutoAwardable(badgeKey)) {
+    return { ok: false, status: 400, message: 'That badge cannot be granted.' };
+  }
+
+  let error;
+  try {
+    const result = await Auth.client()
+      .from('account_badges')
+      .insert({ account_id: account.id, badge_key: badgeKey });
+    error = result && result.error;
+  } catch (err) {
+    error = err;
+  }
+
+  if (error) {
+    // Already theirs: the same grant, and the primary key is what makes sure
+    // of it however many times a match finish is reported.
+    if (String(error.code) === '23505') return { ok: true, alreadyHeld: true };
+    // The catalogue does not hold this badge yet - the seed migration has not
+    // been run here. Nothing to hand over, and nothing to trouble a player
+    // who has just won about.
+    if (String(error.code) === '23503') return { ok: false, reason: 'not-in-catalogue' };
+    if (schemaMissing(error)) return { ok: false, available: false };
+    logError('grant failed', error);
+    throw error;
+  }
+
+  return { ok: true };
 }
 
 /**
@@ -440,7 +536,8 @@ async function featuredBadges(account) {
       const row = featured.find(r => Number(r.slot) === slot);
       const badge = row && byKey[row.badge_key];
       if (badge) {
-        out.push({ key: badge.key, name: badge.name, rarity: badge.rarity });
+        out.push({ key: badge.key, name: badge.name, rarity: badge.rarity,
+                   icon: safeIcon(badge.icon) });
       }
     }
     return out;
@@ -452,6 +549,8 @@ async function featuredBadges(account) {
 
 module.exports = {
   PHOENIX_KEY, MAX_FEATURED, RARITY_ORDER, AWARDABLE_KEYS,
-  isAvailable, validateFeatured, isAwardable,
-  getMine, setFeatured, getProfile, ensureOwnerBadge, featuredBadges, awardBadge
+  WIN_BADGE_KEY, AUTO_AWARDABLE_KEYS, ICON_RE,
+  isAvailable, validateFeatured, isAwardable, isAutoAwardable, safeIcon,
+  getMine, setFeatured, getProfile, ensureOwnerBadge, featuredBadges, awardBadge,
+  grant
 };

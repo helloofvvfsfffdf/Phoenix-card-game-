@@ -60,6 +60,26 @@
   line-height: 1.45;
 }
 
+/*
+ * A badge's picture, when the catalogue gives it one (sql/champion-badge.sql
+ * decides that, not this file).
+ *
+ * The box is 4:3 - the same shape the picture is cut to - so `object-fit:
+ * cover` has to crop nothing: the gecko as photographed is the gecko shown.
+ * The frame is painted in the badge's own --tier colour, which is what keeps
+ * it reading as part of the badge instead of a picture stuck onto one.
+ */
+.badge-tile-icon {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, var(--tier, #8b93a7) 50%, #2c3550);
+  border-radius: 8px;
+  margin-bottom: 9px;
+  background: #0b1120;
+}
+
 /* --------------------------- compact chips --------------------------------- */
 /*
  * The same badges, shrunk to one line, for match seats and the lobby roster
@@ -159,6 +179,28 @@
   font-size: 11px;
   line-height: 1;
   filter: drop-shadow(0 0 3px rgba(255, 201, 60, 0.8));
+}
+
+/*
+ * The same picture at chip size, for match seats and the roster. A round crop
+ * a single line tall, `flex: 0 0 auto` so it can never be squeezed away by the
+ * pill's own overflow handling, and - because it is an <img>, not a span - it
+ * is untouched by the `.online-seat-meta span` size blanket above it.
+ *
+ * `object-position: left` matters: the picture is 4:3 and the badge is a
+ * circle, so the sides have to give. Her HEAD is at the left of the picture,
+ * so that is what the circle keeps - at 13px a face is the only thing that
+ * could ever have been recognisable.
+ */
+.badge-chip-icon {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  object-position: left center;
+  border: 1px solid color-mix(in srgb, var(--tier, #8b93a7) 65%, #2c3550);
+  border-radius: 50%;
+  background: #0b1120;
 }
 
 /* --------------------------- DIVINE treatment ----------------------------- */

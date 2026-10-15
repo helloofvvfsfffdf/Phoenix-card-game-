@@ -151,7 +151,14 @@ function json(res, status, body) {
  * primary key on (match_id, account_id), and the foreign key to accounts.
  */
 function startFakeSupabase() {
-  const state = { accounts: [], sessions: [], wins: [], hideTable: false };
+  const state = { accounts: [], sessions: [], wins: [], hideTable: false,
+    // Just enough of the badge tables to let js/wins.js hand over MATCH WINNER
+    // the way it would against the real database: the catalogue row it needs,
+    // and account_badges with its own key and foreign key enforced.
+    badges: [{ key: 'champion', name: 'MATCH WINNER', rarity: 'common',
+               description: 'Won a match of PHOENIX.', sort_order: 3,
+               icon: 'assets/phoenix-badge.jpg' }],
+    grants: [] };
 
   function filters(url) {
     const out = [];
@@ -256,6 +263,30 @@ function startFakeSupabase() {
       }
     }
 
+    /* ---- the badge tables wins.js writes to --------------------------- */
+    // A win hands over MATCH WINNER, so the badge tables have to be here too -
+    // otherwise every match would end with a foreign key error in the log.
+    if (p === '/rest/v1/badges' && req.method === 'GET') {
+      return json(res, 200, state.badges);
+    }
+    if (p === '/rest/v1/account_badges' && req.method === 'POST') {
+      const body = await readBody(req);
+      // public.account_badges_badge_key_fkey
+      if (!state.badges.some(b => b.key === body.badge_key)) {
+        return json(res, 409, { code: '23503',
+          message: 'insert or update on table "account_badges" violates foreign key constraint' });
+      }
+      // public.account_badges_pkey - a grant is naturally idempotent, so the
+      // same match reported twice cannot hand the badge out twice either.
+      if (state.grants.some(g => g.account_id === body.account_id &&
+                                 g.badge_key === body.badge_key)) {
+        return json(res, 409, { code: '23505',
+          message: 'duplicate key value violates unique constraint "account_badges_pkey"' });
+      }
+      state.grants.push({ account_id: body.account_id, badge_key: body.badge_key });
+      return json(res, 201, wantsRows(req) ? [state.grants[state.grants.length - 1]] : {});
+    }
+
     /* ---- test-only helpers ----------------------------------------- */
     if (p === '/__promote' && req.method === 'POST') {
       const body = await readBody(req);
@@ -275,7 +306,8 @@ function startFakeSupabase() {
     if (p === '/__dump' && req.method === 'GET') {
       return json(res, 200, {
         accounts: state.accounts.map(a => ({ id: a.id, username: a.username, role: a.role })),
-        wins: state.wins
+        wins: state.wins,
+        grants: state.grants
       });
     }
     if (p === '/__hide-wins' && req.method === 'POST') {
@@ -507,6 +539,26 @@ function runStack() {
         assert.ok(winnerAccount, 'the winner has an account');
         assert.strictEqual(dump.body.wins[0].account_id, winnerAccount.id,
           'the win belongs to the player who actually won');
+      });
+
+      await test('the winner is handed MATCH WINNER, and the loser is not', async () => {
+        const dump = await fakeState.dump();
+        const other = dump.body.accounts.find(
+          a => a.username !== winnerName && a.role === 'player');
+
+        assert.deepStrictEqual(
+          dump.body.grants.filter(g => g.badge_key === 'champion')
+            .map(g => g.account_id).sort(),
+          [winnerAccount.id],
+          'exactly ONE holder: the player who actually won. The server ' +
+          'broadcast several times after the match ended, so recordWin ran ' +
+          'several times too - and the badge still landed only once');
+        assert.strictEqual(
+          dump.body.grants.some(g => g.account_id === other.id && g.badge_key === 'champion'),
+          false, 'losing does not earn it');
+        assert.strictEqual(
+          dump.body.grants.some(g => g.badge_key === 'phoenix'),
+          false, 'and a win can never hand out THE PHOENIX');
       });
 
       await test('the winner is on the board with one win, and the loser is not', async () => {

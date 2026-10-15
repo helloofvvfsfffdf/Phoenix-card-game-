@@ -138,6 +138,53 @@ function runRules() {
       assert.strictEqual(Badges.isAwardable('phoenix'), false,
         'even with other keys added, THE PHOENIX stays out');
       Badges.AWARDABLE_KEYS.pop();
+    }))
+    /* ---- what the server hands out by itself --------------------------- */
+    .then(() => test('MATCH WINNER is the badge a win automatically grants', () => {
+      assert.strictEqual(Badges.WIN_BADGE_KEY, 'champion');
+      assert.strictEqual(Badges.isAutoAwardable('champion'), true);
+      assert.strictEqual(Badges.AUTO_AWARDABLE_KEYS.indexOf('champion') !== -1, true,
+        'the key wins.js asks for must be on the allowlist wins.js can use');
+    }))
+    .then(() => test('THE PHOENIX can never travel the automatic route', () => {
+      // played-with-owner is absent too: it is the owner handing a badge over
+      // BY HAND, which is a different allowlist and a different request.
+      [null, undefined, '', 42, {}, 'phoenix', 'champion '].forEach(key => {
+        assert.strictEqual(Badges.isAutoAwardable(key), false,
+          'refused: ' + JSON.stringify(key));
+      });
+    }))
+    .then(() => test('the automatic allowlist can never grow to reach THE PHOENIX', () => {
+      assert.strictEqual(Badges.AUTO_AWARDABLE_KEYS.indexOf('phoenix'), -1);
+      Badges.AUTO_AWARDABLE_KEYS.push('sneaky');
+      assert.strictEqual(Badges.isAutoAwardable('phoenix'), false,
+        'even with other keys added, THE PHOENIX stays out');
+      Badges.AUTO_AWARDABLE_KEYS.pop();
+    }))
+    /* ---- badge pictures ------------------------------------------------ */
+    .then(() => test('a badge picture is only ever a plain file inside assets/', () => {
+      assert.strictEqual(Badges.safeIcon('assets/phoenix-badge.jpg'), 'assets/phoenix-badge.jpg',
+        'the close-up of Phoenix herself is the whole point of this badge');
+      assert.strictEqual(Badges.safeIcon('assets/PHOENIX.png'), 'assets/PHOENIX.png');
+      assert.strictEqual(Badges.safeIcon('assets/badge-2.webp'), 'assets/badge-2.webp');
+      assert.strictEqual(Badges.safeIcon('assets/tile.jpeg'), 'assets/tile.jpeg');
+    }))
+    .then(() => test('anything that is not a safe picture is dropped, not passed on', () => {
+      const bad = [
+        'assets/../server.js',        // traversal
+        'assets/sub/photo.jpg',       // only one level deep is allowed
+        'assets/a b.jpg',             // no spaces
+        'assets/x.php',               // no other extension
+        'assets/x.jpg?v=2',           // no query string
+        'assets/x.svg',               // never a script-bearing format
+        'https://evil.example/x.jpg', // never another website
+        '//evil.example/x.jpg',
+        'data:image/svg+xml,<svg onload=alert(1)>',
+        '/etc/passwd',
+        '', null, undefined, 42, {}
+      ];
+      bad.forEach(icon => assert.strictEqual(Badges.safeIcon(icon), null,
+        'refused: ' + JSON.stringify(icon)));
     }));
 }
 
@@ -146,11 +193,21 @@ function runRules() {
 /* ======================================================================== */
 
 const PHOENIX = { key: 'phoenix', name: 'THE PHOENIX', rarity: 'divine',
-                  description: 'There can only be one Phoenix.' };
+                  description: 'There can only be one Phoenix.', icon: null };
 
 // Seeded exactly as sql/played-with-owner-badge.sql seeds it.
 const PLAYED = { key: 'played-with-owner', name: 'PLAYED WITH OWNER', rarity: 'legendary',
-                 description: 'Played a match with the owner of PHOENIX.' };
+                 description: 'Played a match with the owner of PHOENIX.', icon: null };
+
+// Seeded exactly as sql/champion-badge.sql seeds it: the badge a win grants,
+// carrying a close-up of Phoenix cut from the main-menu photo.
+const CHAMPION = { key: 'champion', name: 'MATCH WINNER', rarity: 'common',
+                   description: 'Won a match of PHOENIX.', icon: 'assets/phoenix-badge.jpg' };
+
+// The database's rule for badges.icon, enforced here for the same reason every
+// other rule in this file is: so a test cannot pass by skipping the check that
+// actually stops a bad path reaching a page.
+const ICON_RE = /^assets\/[A-Za-z0-9._-]+\.(jpg|jpeg|png|webp)$/;
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -169,7 +226,8 @@ function startFakeSupabase() {
   const state = {
     accounts: [],
     sessions: [],
-    badges: [{ ...PHOENIX, sort_order: 1 }, { ...PLAYED, sort_order: 2 }],
+    badges: [{ ...PHOENIX, sort_order: 1 }, { ...PLAYED, sort_order: 2 },
+             { ...CHAMPION, sort_order: 3 }],
     grants: [],          // { account_id, badge_key }
     featured: [],        // { account_id, slot, badge_key }
     // Mirrors `one_phoenix_holder`: at most one holder, ever.
@@ -258,6 +316,14 @@ function startFakeSupabase() {
         state.grants.push({ account_id: acct.id, badge_key: 'phoenix' });
         state.phoenixHeld = true;
       }
+      // Mirrors sql/champion-badge.sql: after THE PHOENIX, the WHOLE
+      // catalogue. The owner holds every badge there is.
+      state.badges.forEach(b => {
+        if (!state.grants.some(g => g.account_id === acct.id && g.badge_key === b.key)) {
+          state.grants.push({ account_id: acct.id, badge_key: b.key });
+          if (process.env.BADGE_DEBUG) console.log('ENSURE', acct.username, b.key);
+        }
+      });
       const slotOne = state.featured.find(f => f.account_id === acct.id && f.slot === 1);
       if (!slotOne) state.featured.push({ account_id: acct.id, slot: 1, badge_key: 'phoenix' });
       else slotOne.badge_key = 'phoenix';
@@ -374,10 +440,32 @@ function startFakeSupabase() {
       const body = await readBody(req);
       const acct = state.accounts.find(a => a.username === body.username);
       if (!acct) return json(res, 404, { ok: false });
+      // The database's `badges_icon_path` check, enforced here too so a test
+      // cannot slip a picture path past the rule that keeps it a plain file.
+      if (body.icon !== undefined && body.icon !== null && !ICON_RE.test(body.icon)) {
+        return json(res, 400, { code: '23514', message:
+          'violates check constraint "badges_icon_path"' });
+      }
+      if (!state.badges.some(b => b.key === body.badge_key)) {
+        state.badges.push({ key: body.badge_key, name: body.badge_key.toUpperCase(),
+                            rarity: body.rarity || 'legendary',
+                            description: 'A test badge.', sort_order: 4,
+                            icon: body.icon || null });
+      }
       // Non-phoenix grants may be seeded directly (a future "earn a badge").
-      state.grants.push({ account_id: acct.id, badge_key: body.badge_key });
-      state.badges.push({ key: body.badge_key, name: body.badge_key.toUpperCase(),
-                          rarity: 'legendary', description: 'A test badge.', sort_order: 2 });
+      // Idempotent, the way the real table's primary key is: seeding a badge
+      // an account already holds must not make a second copy of it.
+      if (!state.grants.some(g => g.account_id === acct.id && g.badge_key === body.badge_key)) {
+        state.grants.push({ account_id: acct.id, badge_key: body.badge_key });
+      }
+      // And the badges_grant_to_owners trigger: adding a badge to the
+      // catalogue hands it to every owner account the moment it exists, so
+      // "the owner gets access to every badge made" needs no further action.
+      state.accounts.filter(a => a.role === 'owner').forEach(o => {
+        if (!state.grants.some(g => g.account_id === o.id && g.badge_key === body.badge_key)) {
+          state.grants.push({ account_id: o.id, badge_key: body.badge_key });
+        }
+      });
       return json(res, 200, { ok: true });
     }
     if (p === '/__dump' && req.method === 'GET') {
@@ -616,7 +704,9 @@ function runStack() {
           assert.strictEqual(r.body.profile.featured[0].name, 'LEGEND');
           // Only catalogue fields leave the server - never a user string.
           assert.deepStrictEqual(Object.keys(r.body.profile.featured[0]).sort(),
-            ['description', 'divine', 'key', 'name', 'rarity']);
+            ['description', 'divine', 'icon', 'key', 'name', 'rarity']);
+          assert.strictEqual(r.body.profile.featured[0].icon, null,
+            'this one has no picture, and says so rather than showing a blank frame');
         })
       ))
       .then(() => test('an unknown username is refused without leaking existence', () =>
@@ -759,8 +849,10 @@ function runStack() {
       ))
       .then(() => test('a match badge carries ONLY catalogue fields, and no secret', () => {
         const owner = matchRoom.host.state.players[0].badges[0];
-        assert.deepStrictEqual(Object.keys(owner).sort(), ['key', 'name', 'rarity'],
+        assert.deepStrictEqual(Object.keys(owner).sort(), ['icon', 'key', 'name', 'rarity'],
           'nothing but the catalogue projection reaches a snapshot');
+        assert.strictEqual(owner.icon, null,
+          'THE PHOENIX is a design, not a picture - it keeps its crown and flames');
         const text = JSON.stringify(matchRoom.host.state);
         assert.strictEqual(text.includes('account_id'), false,
           'the account row never travels to a match');
@@ -850,6 +942,46 @@ function runStack() {
           assert.strictEqual(r.status, 200, JSON.stringify(r.body));
           assert.strictEqual(r.body.featured[0].key, 'played-with-owner',
             'now theirs to show beside their name');
+        })
+      ))
+      /* ---- MATCH WINNER: the badge a win hands over -------------------- */
+      .then(() => test('MATCH WINNER is served with the Phoenix picture, on the COMMON tier', () =>
+        call(appPort, 'GET', '/api/badges', null, session.cookie).then(r => {
+          const champ = r.body.catalogue.find(b => b.key === 'champion');
+          assert.ok(champ, 'sql/champion-badge.sql seeded it');
+          assert.strictEqual(champ.name, 'MATCH WINNER');
+          assert.strictEqual(champ.rarity, 'common',
+            'the first rung of the ladder, not the top of it');
+          assert.strictEqual(champ.icon, 'assets/phoenix-badge.jpg',
+            'the close-up of Phoenix - the gecko, and nothing behind her');
+          assert.strictEqual(Badges.safeIcon(champ.icon), champ.icon,
+            'and the server only ever hands out a picture it would keep');
+        })
+      ))
+      .then(() => test('the owner holds EVERY badge there is, the automatic ones included', () =>
+        call(appPort, 'GET', '/api/badges', null, session.ownerCookie).then(r => {
+          assert.deepStrictEqual(r.body.owned.map(b => b.key).sort(),
+            ['champion', 'legend', 'phoenix', 'played-with-owner'],
+            'THE PHOENIX, the one the owner handed out by hand, and both seeded badges');
+        })
+      ))
+      .then(() => test('the owner can feature a badge the automatic route gave them', () =>
+        call(appPort, 'POST', '/api/badges/feature',
+          { slots: ['champion'] }, session.ownerCookie).then(r => {
+          assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+          assert.strictEqual(r.body.featured[0].key, 'phoenix', 'slot 1 is still THE PHOENIX');
+          assert.strictEqual(r.body.featured[1].key, 'champion');
+          assert.strictEqual(r.body.featured[1].icon, 'assets/phoenix-badge.jpg',
+            'and the picture travels with it');
+        })
+      ))
+      .then(() => test('a player is never handed a badge they did not earn', () =>
+        call(appPort, 'GET', '/api/badges', null, session.cookie).then(r => {
+          const held = r.body.owned.map(b => b.key);
+          assert.strictEqual(held.indexOf('champion'), -1,
+            'nobody owns MATCH WINNER until they actually win a match');
+          assert.strictEqual(held.indexOf('played-with-owner') !== -1, true,
+            'but the one the owner awarded is theirs to keep');
         })
       ))
       .then(() => test('the server logged no badge errors during the run', () => {

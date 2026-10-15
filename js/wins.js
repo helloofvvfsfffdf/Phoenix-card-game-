@@ -17,6 +17,7 @@
 'use strict';
 
 const Auth = require('./auth');
+const Badges = require('./badges');
 
 /** A cap on one read of the win table. Enough for a very long-running server,
  *  and a guard against ever asking for the whole table at once. */
@@ -77,13 +78,34 @@ function rank(accounts, wins) {
 }
 
 /**
+ * Hand over the badge that comes with a win, and pass the result through.
+ *
+ * Awarded here, in the same breath as the win itself, rather than at the call
+ * site - so any path that ever counts a win hands the badge out, and none of
+ * them can forget to. The grant is idempotent too, so a match reported twice
+ * cannot hand it out twice.
+ *
+ * Badges are decoration. If handing one over fails, the win still stands and
+ * the player is still told nothing went wrong.
+ */
+function withWinBadge(account, result) {
+  return Badges.grant(account, Badges.WIN_BADGE_KEY)
+    .then(() => result)
+    .catch(err => {
+      logError('could not award the win badge ->', err);
+      return result;
+    });
+}
+
+/**
  * Count that `account` won the match named `matchId`.
  *
  * Fire-and-forget from the match path: this never delays a snapshot, and a
  * failure to write a ledger row leaves the match itself completely untouched.
  *
  * A second report of the same match is not an error and not a second win - the
- * primary key on (match_id, account_id) is what makes a win count once.
+ * primary key on (match_id, account_id) is what makes a win count once. It is
+ * also not a second badge, because the grant is idempotent by the same rule.
  */
 async function recordWin(matchId, account) {
   if (!isAvailable()) return { ok: false, available: false };
@@ -94,7 +116,8 @@ async function recordWin(matchId, account) {
   }
 
   // The owner plays like anyone else, but the owner is not ranked - so their
-  // wins are never written down in the first place.
+  // wins are never written down in the first place. They hold every badge
+  // there is anyway, by sql/champion-badge.sql.
   if (account.role !== 'player') {
     return { ok: true, skipped: true, reason: 'not-a-player' };
   }
@@ -117,13 +140,15 @@ async function recordWin(matchId, account) {
   if (error) {
     // The row is already there. That is the guard doing its job, not a fault:
     // the same match reported twice still counts as one win.
-    if (String(error.code) === '23505') return { ok: true, alreadyCounted: true };
+    if (String(error.code) === '23505') {
+      return withWinBadge(account, { ok: true, alreadyCounted: true });
+    }
     if (schemaMissing(error)) return { ok: false, available: false };
     logError('recordWin failed', error);
     throw error;
   }
 
-  return { ok: true };
+  return withWinBadge(account, { ok: true });
 }
 
 /**

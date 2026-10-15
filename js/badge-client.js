@@ -33,6 +33,28 @@
     return node;
   }
 
+  /**
+   * A badge's picture, if the catalogue gave it one, else null.
+   *
+   * Built from an element node with the path put on it through setAttribute -
+   * never innerHTML. The path itself was held to `^assets/[A-Za-z0-9._-]+\.\w+`
+   * twice before it got here: once in the database and once in the server's own
+   * projection (see sql/champion-badge.sql and safeIcon() in js/badges.js). So
+   * it is always a plain file shipped with the game - never markup, never
+   * something on another website - whatever happens to end up in the table.
+   *
+   * `alt` is empty because the badge's name sits right beside it: a screen
+   * reader should say "MATCH WINNER, common" once, not twice.
+   */
+  function badgeIcon(badge, className) {
+    if (!badge || !badge.icon) return null;
+    var img = document.createElement('img');
+    img.className = className;
+    img.setAttribute('src', badge.icon);
+    img.setAttribute('alt', '');
+    return img;
+  }
+
   function api(url, opts) {
     return fetch(url, Object.assign({
       credentials: 'same-origin',
@@ -91,6 +113,9 @@
 
     if (rarity === 'divine') tile.appendChild(crest());
 
+    var pic = badgeIcon(badge, 'badge-tile-icon');
+    if (pic) tile.appendChild(pic);
+
     var name = el('div', 'badge-name', badge.name);
     var tier = el('div', 'badge-rarity', RARITY_LABEL[rarity] || rarity.toUpperCase());
     tile.appendChild(name);
@@ -111,8 +136,9 @@
    * everything else. The label is the rarity, which is what a player needs to
    * read at a glance during a match.
    *
-   * `badge` is always a server catalogue row (key/name/rarity). It is written
-   * with textContent, never innerHTML, so nothing a player typed can reach the
+   * `badge` is always a server catalogue row (key/name/rarity, plus a picture
+   * path when the catalogue gives the badge one). It is written with
+   * textContent, never innerHTML, so nothing a player typed can reach the
    * screen through this function.
    */
   function badgeChip(badge) {
@@ -132,6 +158,9 @@
       mark.setAttribute('aria-hidden', 'true');
       chip.appendChild(mark);
     }
+
+    var pic = badgeIcon(badge, 'badge-chip-icon');
+    if (pic) chip.appendChild(pic);
 
     if (name) chip.appendChild(el('span', 'badge-chip-name', name));
     chip.appendChild(el('span', 'badge-chip-rarity', label));
