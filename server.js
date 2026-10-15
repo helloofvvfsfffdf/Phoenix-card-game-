@@ -1085,9 +1085,10 @@ const httpServer = http.createServer(async (req, res) => {
 
   // ---- Announcements ---------------------------------------------------------
   // READING is public: the newest post belongs on the main menu for every
-  // visitor, signed in or not. WRITING is owner-only - checked here against
-  // accounts.role, and again by the Postgres announcement_author_only trigger,
-  // so a bug in this file still cannot let anyone but the owner post.
+  // visitor, signed in or not. WRITING and TAKING ONE DOWN are owner-only -
+  // checked here against accounts.role, and for posting again by the Postgres
+  // announcement_author_only trigger, so a bug in this file still cannot let
+  // anyone but the owner post.
   if (pathname === '/api/announcements') {
     if (!Announcements.isAvailable()) {
       sendJson({ ok: false, available: false,
@@ -1111,6 +1112,22 @@ const httpServer = http.createServer(async (req, res) => {
         }
         const body = await readJsonBody();
         const result = await Announcements.create(account, body.body);
+        return sendJson(result,
+          result.ok ? 200
+                    : (result.status || (result.available === false ? 503 : 400)));
+      }
+
+      if (req.method === 'DELETE') {
+        // Same session, same role check, no separate owner password: an owner
+        // account is recognised from the httpOnly cookie exactly as it is when
+        // posting. Which post goes is named by one id in the query string, so
+        // the request needs no body and nothing is ever taken from the page.
+        const account = await Auth.getSessionAccount(req);
+        if (!account) {
+          return sendJson({ ok: false, message: 'Sign in first.' }, 401);
+        }
+        const id = new URL(req.url, 'http://localhost').searchParams.get('id');
+        const result = await Announcements.remove(account, id);
         return sendJson(result,
           result.ok ? 200
                     : (result.status || (result.available === false ? 503 : 400)));

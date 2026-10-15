@@ -11,6 +11,11 @@
  *     - the archive lists the window newest first, each post with its date
  *     - the owner's composer sends the words and NOTHING else: no role, no
  *       username, nothing this file chose for itself
+ *     - the owner's dashboard, and only the owner's dashboard, offers a DELETE
+ *       beside each post; pressing it confirms with the owner first and then
+ *       names that one post to the server by the id the server gave it
+ *     - a delete the server refuses is reported in words and the post stays
+ *       where it is, rather than quietly vanishing from the list
  */
 'use strict';
 
@@ -162,5 +167,94 @@ module.exports = function (test, equal, deepEqual, assert) {
 
     equal(sent(b.requests, 'POST').length, 0, 'nothing was sent');
     equal(b.nodes['announce-feedback'].textContent, 'Write an announcement first.');
+  });
+
+  /* ---- taking a post down ------------------------------------------------- */
+
+  var ID_ONE = '0f1c2d3e-4a5b-4c6d-8e7f-001122334455';
+  var ID_TWO = '11111111-2222-4333-8444-555566667777';
+
+  test('the dashboard offers a DELETE beside each post, and the archive never does', function () {
+    var b = harness(archive([
+      { id: ID_ONE, body: 'Newest.', createdAt: '2026-10-14T09:00:00.000Z' },
+      { id: ID_TWO, body: 'Older.', createdAt: '2026-10-01T09:00:00.000Z' }
+    ]));
+
+    var dashboard = b.nodes['announce-list'];
+    equal(dashboard.children.length, 2, 'one row per post in the owner dashboard');
+    equal(dashboard.children[0].className, 'announcement-item announcement-item--managed',
+      'the dashboard row is the kind that carries a control');
+    equal(dashboard.children[0].children.length, 2, 'the words, then the button');
+    equal(dashboard.children[0].children[1].textContent, 'DELETE');
+    assert(dashboard.children[0].children[1].onclick, 'and the button does something');
+
+    var archiveRow = b.nodes['announcement-list'].children[0];
+    equal(archiveRow.className, 'announcement-item',
+      'the public archive keeps the plain row it has always had');
+    equal(archiveRow.children.length, 2, 'a date and the words, nothing more');
+    equal(archiveRow.children[1].textContent, 'Newest.');
+  });
+
+  test('pressing DELETE confirms first, then names that one post to the server', function () {
+    var kept = { id: ID_ONE, body: 'Take this down.', createdAt: '2026-10-14T09:00:00.000Z' };
+    var gone = false;
+    var b = harness(archive([kept]), function (url, opts) {
+      if (opts.method === 'DELETE') { gone = true; return { ok: true }; }
+      // The list is re-read afterwards rather than edited in place, so the
+      // reply changes the moment the delete has happened.
+      return gone ? archive([]) : archive([kept]);
+    });
+
+    var asked = 0;
+    b.context.confirm = function () { asked++; return true; };
+
+    b.nodes['announce-list'].children[0].children[1].onclick();
+
+    equal(asked, 1, 'the owner is asked before anything goes');
+    var deletes = sent(b.requests, 'DELETE');
+    equal(deletes.length, 1, 'exactly one delete went out');
+    equal(deletes[0].url, '/api/announcements?id=' + ID_ONE,
+      'named by the id the server gave that post');
+    equal(deletes[0].body, null, 'the request carries the id and nothing else');
+    equal(b.nodes['announce-feedback'].textContent, 'Deleted.');
+    equal(b.nodes['announce-list'].children.length, 0,
+      'the list is re-read from the server rather than spliced by hand');
+  });
+
+  test('saying no to the confirmation deletes nothing at all', function () {
+    var kept = { id: ID_ONE, body: 'Keep me.', createdAt: '2026-10-14T09:00:00.000Z' };
+    var b = harness(archive([kept]), function (url, opts) {
+      if (opts.method === 'DELETE') return { ok: true };
+      return archive([kept]);
+    });
+
+    var asked = 0;
+    b.context.confirm = function () { asked++; return false; };
+
+    b.nodes['announce-list'].children[0].children[1].onclick();
+
+    equal(asked, 1, 'the owner was asked');
+    equal(sent(b.requests, 'DELETE').length, 0, 'and nothing went to the server');
+    equal(b.nodes['announce-list'].children.length, 1, 'the post is still on the page');
+  });
+
+  test('a delete the server refuses is reported in words, and the post stays', function () {
+    var kept = { id: ID_ONE, body: 'Still here.', createdAt: '2026-10-14T09:00:00.000Z' };
+    var b = harness(archive([kept]), function (url, opts) {
+      if (opts.method === 'DELETE') {
+        return { ok: false, status: 403,
+                 message: 'Only the owner of PHOENIX can delete announcements.' };
+      }
+      return archive([kept]);
+    });
+
+    b.context.confirm = function () { return true; };
+    b.nodes['announce-list'].children[0].children[1].onclick();
+
+    equal(sent(b.requests, 'DELETE').length, 1, 'the server was asked');
+    equal(b.nodes['announce-feedback'].textContent,
+      'Only the owner of PHOENIX can delete announcements.', 'the refusal is shown, not swallowed');
+    equal(b.nodes['announce-list'].children.length, 1,
+      'and the post is still listed - only the server takes it down');
   });
 };

@@ -16,9 +16,11 @@
 --     refused by Postgres itself.
 --
 -- WHAT IT DELIBERATELY DOES NOT DO
---   * It deletes nothing. Old announcements are kept in the table forever; the
---     30-day window is a READ rule applied by the server, so nothing anyone
---     posted is ever removed behind their back.
+--   * It deletes nothing. This script drops no row now and none later either:
+--     the 30-day window is a READ rule applied by the server, so no post is
+--     ever removed just because it got old. The owner can take one down on
+--     purpose from the dashboard - that needs the owner's session and role,
+--     and it is the only thing that ever removes an announcement.
 --   * It grants no access to anon or authenticated. As in Phases 1 and 2 the
 --     browser only ever reaches these rows through the Node server, which uses
 --     the service-role key that never leaves the server.

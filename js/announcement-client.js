@@ -3,13 +3,15 @@
  * Three pieces, all driven by one public read:
  *   1. a corner card on the main menu carrying the newest announcement
  *   2. an archive of everything from the last 30 days
- *   3. the owner's composer, which lives in the owner dashboard
+ *   3. the owner's composer and the DELETE control beside each post, which
+ *      live in the owner dashboard and nowhere else
  *
  * SECURITY NOTE. An announcement is words a person typed. The only safe way to
  * put those on a page is as text, so every one of them is written with
  * textContent and this file never touches innerHTML. The card and the archive
- * are built from a public, read-only endpoint; posting needs the owner session,
- * and the server re-checks that whatever this file believes.
+ * are built from a public, read-only endpoint; posting and deleting need the
+ * owner session, and the server re-checks that whatever this file believes -
+ * the delete button is only ever a way of asking, never a way of deciding.
  *
  * Nothing here is required for a match to run. If this script, its markup or
  * the endpoint are missing, the menu carries on without an announcement.
@@ -81,20 +83,59 @@
 
   /* ---------- the archive and the dashboard list --------------------------- */
 
-  /** One dated post. The same row is used by the archive and the dashboard. */
-  function item(announce) {
-    var row = el('li', 'announcement-item');
-    row.appendChild(el('span', 'announcement-date', formatDate(announce.createdAt)));
-    row.appendChild(el('p', 'announcement-body', announce.body));
+  /**
+   * One dated post.
+   *
+   * The public archive keeps the exact shape it has always had - a date and
+   * the words - because anyone at all can open it. Only the dashboard's list
+   * is `managed`, and only that one gets the control that takes a post down:
+   * a button a stranger could see is a button worth arguing about, so it is
+   * never drawn outside the owner's screen in the first place.
+   */
+  function item(announce, managed) {
+    // A delete button that cannot name its own post is worse than none at all,
+    // so the control appears only when there is an id to send.
+    var withControl = !!managed && !!announce.id;
+    var row = el('li', withControl ? 'announcement-item announcement-item--managed'
+                                   : 'announcement-item');
+
+    // The managed row is a line: the words get a box of their own so the
+    // button sits beside them rather than in the middle of the sentence.
+    var host = row;
+    if (withControl) {
+      host = el('div', 'announcement-item-main');
+      row.appendChild(host);
+    }
+    host.appendChild(el('span', 'announcement-date', formatDate(announce.createdAt)));
+    host.appendChild(el('p', 'announcement-body', announce.body));
+
+    if (withControl) row.appendChild(deleteButton(announce));
     return row;
   }
 
-  function renderList(listId, emptyId, emptyText) {
+  /**
+   * The control beside a post in the owner dashboard.
+   *
+   * It carries the id of the one post it means and nothing else. It never
+   * deletes anything by itself: it asks, the server reads the session off the
+   * httpOnly cookie and decides whether this visitor is the owner, and only
+   * then does a row go. A player who wired up this button by hand would get
+   * exactly the same refusal from the endpoint.
+   */
+  function deleteButton(announce) {
+    var button = el('button', 'announce-delete', 'DELETE');
+    button.type = 'button';
+    button.setAttribute('aria-label', 'Delete this announcement');
+    button.onclick = function () { remove(announce); };
+    return button;
+  }
+
+  function renderList(listId, emptyId, emptyText, managed) {
     var list = $(listId);
     if (list) {
       list.replaceChildren();
       state.announcements.forEach(function (announce) {
-        list.appendChild(item(announce));
+        list.appendChild(item(announce, managed));
       });
     }
     var empty = $(emptyId);
@@ -119,7 +160,7 @@
     renderList('announcement-list', 'announcement-empty',
       'No announcements in the last ' + state.windowDays + ' days.');
     renderList('announce-list', 'announce-empty',
-      'No announcements yet. Yours will appear here.');
+      'No announcements yet. Yours will appear here.', true);
   }
 
   /* ---------- posting ------------------------------------------------------- */
@@ -171,6 +212,49 @@
     if (!count || !field) return;
     var left = state.maxLength - field.value.length;
     count.textContent = left >= 0 ? left + ' left' : 'over the limit';
+  }
+
+  /* ---------- taking one down ----------------------------------------------- */
+
+  /**
+   * Delete ONE post, named by the id the server gave it.
+   *
+   * The browser asks first - one press cannot quietly empty the archive - and
+   * then asks the server, which is the only one of the two that decides. The
+   * request carries the id and nothing else: no role, no username, no body
+   * text to compare. Whether it goes through is settled by the server from
+   * accounts.role, so this button being on the page proves nothing on its own
+   * - which is exactly the point.
+   *
+   * The list is re-read afterwards rather than spliced here, so what is on
+   * screen is always whatever the server says is left.
+   */
+  function remove(announce) {
+    if (!announce || !announce.id) return;
+
+    if (typeof confirm === 'function' &&
+        !confirm('Delete this announcement? It comes down from the menu and the archive straight away.')) {
+      return;
+    }
+
+    say('Deleting…');
+
+    api('/api/announcements?id=' + encodeURIComponent(announce.id), {
+      method: 'DELETE'
+    }).then(function (r) {
+      var d = r.data || {};
+      if (!d.ok) {
+        // Refused, unknown, or a server whose migration has not been run. All
+        // three are reported in words; none of them is treated as a success.
+        say(d.message || 'Could not delete that announcement.', true);
+        if (d.available === false) load();
+        return;
+      }
+      say('Deleted.');
+      load();
+    }).catch(function () {
+      say('Could not reach the server. Try again.', true);
+    });
   }
 
   /* ---------- reading ------------------------------------------------------- */

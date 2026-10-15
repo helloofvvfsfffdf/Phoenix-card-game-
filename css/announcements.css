@@ -2,8 +2,8 @@
  * Phoenix - css/announcements.css
  * ---------------------------------------------------------------------------
  * The owner's announcements: a corner card on the main menu carrying the newest
- * post, an archive of the last 30 days, and the composer inside the owner
- * dashboard.
+ * post, an archive of the last 30 days, and the composer - with the DELETE
+ * control beside each post - inside the owner dashboard.
  *
  * Same navy backdrop and gold accent as the account and badge screens, so it
  * reads as part of the same game. Every animation is transform/opacity only
@@ -258,6 +258,39 @@
 }
 
 .announce-list:empty { display: none; }
+
+/* One dashboard post: the words in a box of their own, and the control that
+   takes it down on the right. The public archive never gets this modifier,
+   so nothing a visitor can open ever grows a button. */
+.announcement-item--managed {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.announcement-item-main { flex: 1; min-width: 0; }
+
+.announce-delete {
+  flex: none;
+  padding: 5px 9px;
+  border: 1px solid #6d3a46;
+  border-radius: 8px;
+  background: transparent;
+  color: #ff8b9c;
+  font-family: system-ui, sans-serif;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  cursor: pointer;
+}
+
+.announce-delete:hover {
+  border-color: #ff8b9c;
+  background: rgba(255, 139, 156, 0.12);
+}
+
+.announce-delete:focus-visible { outline: 2px solid #ffc93c; outline-offset: 2px; }
 
 /* --------------------------- responsive ----------------------------------- */
 

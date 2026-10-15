@@ -15,9 +15,14 @@
  *          - an empty or over-long post is refused
  *          - the newest post is the one the menu shows, and posts older than
  *            the window are never returned
- *          - the payload carries only words and a date - never an account id,
- *            a username, the service-role key or a password
+ *          - the payload carries only an id for the post, its words and a date
+ *            - never an account id, a username, the service-role key or a
+ *            password
  *          - the database itself refuses a non-owner insert
+ *          - taking a post down needs a session, and the owner's role: a player
+ *            is refused whether or not the id is a real one, an id that is not
+ *            an announcement's is refused, and an id that names nothing is
+ *            reported as such rather than passing for a success
  *          - with the migration not deployed, the API degrades instead of 500ing
  *
  *     node tests/announcement-tests.js
@@ -229,6 +234,18 @@ function startFakeSupabase() {
         state.announcements.push(row);
         return json(res, 201, wantsRows(req) ? [row] : {});
       }
+      if (req.method === 'DELETE') {
+        // PostgREST removes by filter and answers with the rows it removed
+        // when representation is asked for - which is how the app learns
+        // whether that id named anything, rather than hoping it did. The id
+        // arrives in PostgREST's own `eq.` form, exactly as filters() reads it
+        // for every other operation.
+        const id = String(url.searchParams.get('id') || '').replace(/^eq\./, '');
+        const at = state.announcements.findIndex(r => r.id === id);
+        if (at < 0) return json(res, 200, wantsRows(req) ? [] : {});
+        const row = state.announcements.splice(at, 1)[0];
+        return json(res, 200, wantsRows(req) ? [row] : {});
+      }
     }
 
     /* ---- test-only helpers ----------------------------------------- */
@@ -350,6 +367,15 @@ function runStack() {
         return call(appPort, 'POST', '/api/register', { username, password }).then(res => {
           const raw = res.setCookie.find(c => /^phoenix_session=/.test(c)) || '';
           return { cookie: raw.split(';')[0], res };
+        });
+      }
+
+      /** The id the archive gives to a named post, so a test can point at one. */
+      function idOf(body) {
+        return call(appPort, 'GET', '/api/announcements').then(r => {
+          const row = r.body.announcements.find(a => a.body === body);
+          assert.ok(row, 'the post "' + body + '" is still in the archive');
+          return row.id;
         });
       }
 
@@ -500,6 +526,89 @@ function runStack() {
               d.body.announcements.some(a => /behind the server/.test(a.body)), false);
           })
         ))
+        .then(() => test('the archive names each post with an id and adds nothing else', () =>
+          call(appPort, 'GET', '/api/announcements').then(r => {
+            const one = r.body.announcements[0];
+            assert.ok(Announcements.isAnnouncementId(one.id),
+              'an id in the shape an announcement id has');
+            assert.deepStrictEqual(Object.keys(one).sort(), ['body', 'createdAt', 'id'],
+              'the id names the post, and brings no account, role or author with it');
+          })
+        ))
+        .then(() => test('taking a post down needs a session, exactly like posting', () =>
+          idOf('Maintenance at 3am.')
+            .then(id => call(appPort, 'DELETE', '/api/announcements?id=' + id))
+            .then(r => {
+              assert.strictEqual(r.status, 401);
+              assert.strictEqual(r.body.ok, false);
+              return fakeState.dump();
+            })
+            .then(d => {
+              assert.ok(d.body.announcements.some(a => a.body === 'Maintenance at 3am.'),
+                'and nothing was removed');
+            })
+        ))
+        .then(() => test('a player cannot take a post down', () =>
+          idOf('Maintenance at 3am.')
+            .then(id => call(appPort, 'DELETE', '/api/announcements?id=' + id,
+                             null, session.cookie))
+            .then(r => {
+              assert.strictEqual(r.status, 403);
+              assert.strictEqual(r.body.message,
+                'Only the owner of PHOENIX can delete announcements.');
+              return fakeState.dump();
+            })
+            .then(d => {
+              // The role is read before the id is, so a player gets the same
+              // answer whether the id is a real one or a guess.
+              assert.ok(d.body.announcements.some(a => a.body === 'Maintenance at 3am.'),
+                'and the post is untouched');
+            })
+        ))
+        .then(() => test('an id that is not an announcement id is refused', () =>
+          call(appPort, 'DELETE', '/api/announcements?id=42', null, session.ownerCookie)
+            .then(r => {
+              assert.strictEqual(r.status, 400);
+              assert.strictEqual(r.body.message, 'That is not an announcement.');
+              return fakeState.dump();
+            })
+            .then(d => {
+              assert.ok(d.body.announcements.some(a => a.body === 'Maintenance at 3am.'),
+                'nothing went near the database');
+            })
+        ))
+        .then(() => test('an id that names nothing is reported, not passed off as a delete', () =>
+          call(appPort, 'DELETE', '/api/announcements?id=' + crypto.randomUUID(),
+               null, session.ownerCookie).then(r => {
+            assert.strictEqual(r.status, 404);
+            assert.strictEqual(r.body.ok, false);
+            assert.strictEqual(r.body.message, 'That announcement is no longer here.');
+          })
+        ))
+        .then(() => test('the owner takes one announcement down, and only that one', () =>
+          idOf('Maintenance at 3am.')
+            .then(id => call(appPort, 'DELETE', '/api/announcements?id=' + id,
+                             null, session.ownerCookie))
+            .then(r => {
+              assert.strictEqual(r.status, 200, JSON.stringify(r.body));
+              assert.strictEqual(r.body.ok, true);
+              return fakeState.dump();
+            })
+            .then(d => {
+              assert.strictEqual(
+                d.body.announcements.some(a => a.body === 'Maintenance at 3am.'), false,
+                'it is gone from the table');
+              assert.ok(d.body.announcements.some(a => a.body === 'Season two begins tonight.'),
+                'every other post is still where it was');
+              return call(appPort, 'GET', '/api/announcements');
+            })
+            .then(r => {
+              assert.strictEqual(
+                r.body.announcements.some(a => a.body === 'Maintenance at 3am.'), false,
+                'and gone from the archive the menu reads');
+              assert.ok(r.body.announcements.some(a => a.body === 'Season two begins tonight.'));
+            })
+        ))
         .then(() => test('with the migration not deployed the API degrades, never 500s', () =>
           fakeState.api('/__hide-announcements', { value: true })
             .then(() => call(appPort, 'GET', '/api/announcements'))
@@ -512,6 +621,12 @@ function runStack() {
               { body: 'Anything' }, session.ownerCookie))
             .then(r => {
               assert.notStrictEqual(r.status, 500);
+              assert.strictEqual(r.body.available, false);
+            })
+            .then(() => call(appPort, 'DELETE',
+              '/api/announcements?id=' + crypto.randomUUID(), null, session.ownerCookie))
+            .then(r => {
+              assert.notStrictEqual(r.status, 500, 'deleting degrades the same way');
               assert.strictEqual(r.body.available, false);
             })
             .then(() => fakeState.api('/__hide-announcements', { value: false }))

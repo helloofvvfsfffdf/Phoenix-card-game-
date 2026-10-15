@@ -513,11 +513,13 @@
 
     <!-- Announcements. Only ever reached after the server has authorised this
          session as the owner, and the server checks the role again on every
-         post, so this box cannot be used by anyone who is not the owner. -->
+         post AND on every delete, so this box cannot be used by anyone who is
+         not the owner - the DELETE buttons below are just a way of asking. -->
     <h3>Announcements</h3>
     <p class="announce-hint">
       Your newest post appears in the bottom right corner of the main menu, and stays
       in the archive for <span id="announce-hint-days">30</span> days.
+      Press <strong>DELETE</strong> beside any post below to take it down straight away.
     </p>
     <textarea id="announce-body" rows="3" placeholder="Write an announcement for everyone…" aria-label="Announcement"></textarea>
     <div class="announce-actions">
