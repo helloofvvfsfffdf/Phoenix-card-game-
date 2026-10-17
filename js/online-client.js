@@ -377,6 +377,7 @@
         feedback('');
         render();
         if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.observe(previous, message);
+        if (message.pendingInteraction && message.pendingInteraction.type === 'rps' && window.PhoenixRpsInteractive) { window.PhoenixRpsInteractive.build(); } else if (message.pendingInteraction && message.pendingInteraction.type === 'betrayal' && window.PhoenixBetrayalInteractive) { window.PhoenixBetrayalInteractive.build(); } else if (message.pendingInteraction && message.pendingInteraction.type === 'speed' && window.PhoenixSpeedInteractive) { window.PhoenixSpeedInteractive.build(); } else if (message.pendingInteraction && message.pendingInteraction.type === 'wheel' && window.PhoenixWheelInteractive) { window.PhoenixWheelInteractive.build(); }
         if (window.PhoenixCinematics) window.PhoenixCinematics.consume(message.effects);
         if (window.PhoenixCinematics) window.PhoenixCinematics.match(message);
       }
