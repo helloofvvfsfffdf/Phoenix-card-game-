@@ -822,6 +822,69 @@ function applyMaple(room) {
   if (victim !== null) emitEffect(room, 'ally-maple', -1, victim);
 }
 
+function resolveRpsInteraction(room, pi) {
+  const s = room.state;
+  const pick1 = pi.decisions[pi.participants[0]];
+  const pick2 = pi.decisions[pi.participants[1]];
+
+  let winner, loser;
+  if (pick1 === pick2) {
+    // Tie - shouldn't happen if we validated, but handle gracefully.
+    return { events: [{ type: 'result', cardId: 'rps', text: 'Rock Paper Scissors - tie! No one is eliminated.' }], advanceTurn: true };
+  }
+  if ((pick1 === 'rock' && pick2 === 'scissors') ||
+      (pick1 === 'paper' && pick2 === 'rock') ||
+      (pick1 === 'scissors' && pick2 === 'paper')) {
+    winner = pi.participants[0];
+    loser = pi.participants[1];
+  } else {
+    winner = pi.participants[1];
+    loser = pi.participants[0];
+  }
+
+  const loserPlayer = s.players.find(p => p.id === loser);
+  if (loserPlayer) {
+    Rules.eliminate(s, loserPlayer, 1);
+  }
+
+  const events = [{
+    type: 'result', cardId: 'rps',
+    text: 'Rock Paper Scissors - ' + s.players.find(p => p.id === pi.participants[0]).name +
+      ' chose ' + pick1 + ', ' + s.players.find(p => p.id === pi.participants[1]).name +
+      ' chose ' + pick2 + '. ' + s.players.find(p => p.id === winner).name + ' wins. ' +
+      s.players.find(p => p.id === loser).name + ' is eliminated for 1 round.'
+  }];
+
+  return { events, advanceTurn: true };
+}
+
+function resolveBetrayalInteraction(room, pi) {
+  const s = room.state;
+  const [p1Id, p2Id] = pi.participants;
+  const p1 = s.players.find(p => p.id === p1Id);
+  const p2 = s.players.find(p => p.id === p2Id);
+  const c1 = pi.decisions[p1Id];
+  const c2 = pi.decisions[p2Id];
+
+  let text;
+  if (c1 === 'share' && c2 === 'share') {
+    p1.points += 10000;
+    p2.points += 10000;
+    text = 'Betrayal - ' + p1.name + ' and ' + p2.name + ' both chose Share. Both gain 10,000.';
+  } else if (c1 === 'steal' && c2 === 'share') {
+    p1.points += 20000;
+    text = 'Betrayal - ' + p1.name + ' chose Steal, ' + p2.name + ' chose Share. ' + p1.name + ' gains 20,000.';
+  } else if (c1 === 'share' && c2 === 'steal') {
+    p2.points += 20000;
+    text = 'Betrayal - ' + p1.name + ' chose Share, ' + p2.name + ' chose Steal. ' + p2.name + ' gains 20,000.';
+  } else {
+    text = 'Betrayal - both chose Steal. Nobody gains anything.';
+  }
+
+  const events = [{ type: 'result', cardId: 'betrayal', text }];
+  return { events, advanceTurn: true };
+}
+
 function applyLinkedFate(room) {
   const s = room.state;
   if (!s || s.over || !s.linkedFate) return;
@@ -1579,11 +1642,21 @@ function snapshot(room, member) {
     hunter: s ? !!s.players[i].hunter : false,
     eliminated: s
       ? Rules.isOut(s.players[i], s)
-      : false
+      : false,
+    noEvilPermanent: s ? !!s.players[i].noEvilPermanent : false
   }));
 
   const current = s ? s.players[s.turnInRound] : null;
   const pending = s ? dueChoice(s) : null;
+  const pendingInteraction = room.pendingInteraction
+    ? {
+        type: room.pendingInteraction.type,
+        participants: room.pendingInteraction.participants,
+        submitted: Object.keys(room.pendingInteraction.decisions),
+        createdAt: room.pendingInteraction.createdAt,
+        timeoutMs: room.pendingInteraction.timeoutMs
+      }
+    : null;
   const mine = Rules.SEATS[member.seat].id;
 
   const acting = !!(
@@ -1671,6 +1744,8 @@ function snapshot(room, member) {
           targetId: pending.targetId
         }
       : null,
+
+    pendingInteraction: pendingInteraction,
 
     moves,
 
@@ -1849,6 +1924,12 @@ function leaveRoom(ws, reason) {
 
   m.ws = null;
   ws.member = null;
+
+  // Clear any pending interaction timer.
+  if (room.interactionTimer) {
+    clearTimeout(room.interactionTimer);
+    room.interactionTimer = null;
+  }
 
   if (room.phase === 'lobby') {
     room.members.splice(m.seat, 1);
@@ -2559,6 +2640,87 @@ async function handle(ws, data) {
     return;
   }
 
+  if (data.type === 'interact') {
+    if (Auth.isConfigured() && !ws.account) {
+      return error(ws, 'Please sign in to play.');
+    }
+    const s = room.state;
+    if (!s || s.over) {
+      return error(ws, 'No active match.');
+    }
+    if (room.members.some(p => !p.ws)) {
+      return error(ws, 'A player disconnected. The match is paused.');
+    }
+
+    const pi = room.pendingInteraction;
+    if (!pi) {
+      return error(ws, 'No interaction pending.');
+    }
+
+    const seat = m.seat;
+    const playerId = Rules.SEATS[seat].id;
+
+    // Only participants may submit.
+    if (!pi.participants.includes(playerId)) {
+      return error(ws, 'You are not part of this interaction.');
+    }
+
+    // Already submitted?
+    if (pi.decisions[playerId] !== undefined) {
+      return error(ws, 'You have already submitted.');
+    }
+
+    // Validate the decision based on interaction type.
+    const decision = String(data.decision || '').slice(0, 40).toLowerCase();
+    if (pi.type === 'rps' && !['rock', 'paper', 'scissors'].includes(decision)) {
+      return error(ws, 'Choose rock, paper or scissors.');
+    }
+    if (pi.type === 'betrayal' && !['share', 'steal'].includes(decision)) {
+      return error(ws, 'Choose share or steal.');
+    }
+
+    pi.decisions[playerId] = decision;
+    pi.submittedAt[playerId] = Date.now();
+
+    // Check if all participants have submitted.
+    const allSubmitted = pi.participants.every(p => pi.decisions[p] !== undefined);
+    if (!allSubmitted) {
+      // Tell the submitting player their choice was recorded.
+      send(ws, { type: 'interact-ack', interaction: pi.type });
+      broadcast(room);
+      return;
+    }
+
+    // All decisions in - resolve.
+    let result;
+    if (pi.type === 'rps') {
+      result = resolveRpsInteraction(room, pi);
+    } else if (pi.type === 'betrayal') {
+      result = resolveBetrayalInteraction(room, pi);
+    }
+
+    room.pendingInteraction = null;
+    if (room.interactionTimer) { clearTimeout(room.interactionTimer); room.interactionTimer = null; }
+    if (result && result.events) recordEvents(room, result.events);
+
+    // Advance turn if the interaction is complete.
+    if (result && result.advanceTurn) {
+      const events = Rules.advanceTurn(s);
+      recordEvents(room, events);
+    }
+
+    if (s.round !== room.lastPhoenixRound && !s.over) {
+      room.lastPhoenixRound = s.round;
+      applyPhoenix(room);
+      applyTed(room);
+      applyMaple(room);
+      applyLinkedFate(room);
+    }
+
+    broadcast(room);
+    return;
+  }
+
   if (data.type === 'move') {
     if (Auth.isConfigured() && !ws.account) {
       return error(ws, 'Please sign in to play.');
@@ -2576,8 +2738,9 @@ async function handle(ws, data) {
       );
     }
 
-    const id = Rules.SEATS[m.seat].id;
-    const pending = dueChoice(s);
+    if (room.pendingInteraction) {
+      return error(ws, 'An interaction is in progress. Submit your decision first.');
+    }
 
     if (
       pending
@@ -2623,9 +2786,56 @@ async function handle(ws, data) {
       );
     }
 
-    const beforePoints = s.players.map(p => p.points);
+    // Interactive cards: create a pending interaction instead of resolving immediately.
+    const interactiveCards = ['rps', 'betrayal'];
+    if (interactiveCards.includes(cardId) && !pending) {
+      // Validate participants.
+      if (cardId === 'rps' && (!targetId || targetId === id)) {
+        return error(ws, 'Choose a valid opponent.');
+      }
+      if (cardId === 'betrayal') {
+        const others = s.players.filter(p => p.id !== id && !Rules.isOut(p, s));
+        if (others.length < 2) {
+          return error(ws, 'Betrayal needs two eligible opponents.');
+        }
+      }
 
-    const result = pending
+      // Move card to discard.
+      Rules.moveCardToDiscard(s, actor, cardId);
+
+      room.pendingInteraction = {
+        type: cardId,
+        actorSeat: m.seat,
+        actorId: id,
+        targetId: targetId || null,
+        participants: cardId === 'rps' ? [id, targetId] : null,
+        decisions: {},
+        submittedAt: {},
+        createdAt: Date.now(),
+        timeoutMs: 30000
+      };
+
+      // For Betrayal, pick two targets.
+      if (cardId === 'betrayal') {
+        const others = s.players.filter(p => p.id !== id && !Rules.isOut(p, s));
+        room.pendingInteraction.participants = [others[0].id, others[1].id];
+        room.pendingInteraction.targetIds = [others[0].id, others[1].id];
+      }
+
+      recordEvents(room, [{
+        type: 'card',
+        cardId: cardId,
+        seat: m.seat,
+        targetSeat: targetId ? s.players.findIndex(p => p.id === targetId) : -1,
+        text: actor.name + ' plays ' + Cards.byId(cardId).name + '.'
+      }]);
+
+      // Don't advance turn yet - wait for interaction to resolve.
+      broadcast(room);
+      return;
+    }
+
+      const result = pending
       ? Rules.resolvePendingChoice(
           s,
           cardId,
