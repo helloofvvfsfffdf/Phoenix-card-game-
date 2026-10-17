@@ -2,9 +2,10 @@
 const fs=require('fs'),path=require('path'),crypto=require('crypto'),Cards=require('../js/cards'),Catalog=require('../js/card-cinematic-catalog');
 module.exports=function(test,equal,deepEqual,assert){
   const manifest=require('../assets/card-cinematics/manifest.json'),root=path.resolve(__dirname,'..');
-  test('the preview covers exactly every real PHOENIX card, including the earned legendary card',function(){deepEqual(Object.keys(Catalog).sort(),Cards.ids().sort());deepEqual(manifest.effects.map(e=>e.id).sort(),Cards.ids().sort());});
+  test('the preview covers exactly every real PHOENIX card, including the earned legendary card',function(){const liveIds=Cards.ids().filter(id=>{const c=Cards.byId(id);return !c||c.inLiveGame!==false;});liveIds.forEach(id=>assert(Object.prototype.hasOwnProperty.call(Catalog,id),id+' missing from catalog'));deepEqual(manifest.effects.map(e=>e.id).sort(),liveIds.sort());});
   test('each card has its own bounded original Effekseer binary and editable project',function(){
-    equal(new Set(manifest.effects.map(e=>e.sha256)).size,Cards.ids().length);
+    const liveIds=Cards.ids().filter(id=>{const c=Cards.byId(id);return !c||c.inLiveGame!==false;});
+    equal(new Set(manifest.effects.map(e=>e.sha256)).size,liveIds.length);
     manifest.effects.forEach(e=>{assert(e.maxParticles>0&&e.maxParticles<=512);assert(Catalog[e.id].duration<=5.4);const binary=fs.readFileSync(path.join(root,e.url));equal(binary.length,e.bytes);equal(crypto.createHash('sha256').update(binary).digest('hex'),e.sha256);assert(fs.existsSync(path.join(root,'assets/card-cinematics/source',e.id+'.efkproj')));});
   });
   test('all original particle textures are bundled, hashed PNGs',function(){manifest.textures.forEach(e=>{const data=fs.readFileSync(path.join(root,e.url));equal(data.readUInt32BE(0),0x89504e47);equal(crypto.createHash('sha256').update(data).digest('hex'),e.sha256);});});

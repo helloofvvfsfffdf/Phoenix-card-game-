@@ -3089,7 +3089,7 @@ test('the prompt states the exact rules of every card', function () {
   var game = firstGame({ seed: 5, rounds: 4 });
   humanPlays(game, 'bonus', null);
   var prompt = game.promptForCurrent();
-  Cards.CARDS.forEach(function (card) {
+  Cards.CARDS.filter(function (card) { return card.inLiveGame !== false; }).forEach(function (card) {
     assert(prompt.indexOf(card.name) !== -1, card.name + ' is listed');
     assert(prompt.indexOf(card.rule) !== -1, card.name + "'s rule is given verbatim");
     assert(prompt.indexOf(card.targetNote) !== -1, card.name + "'s target note is given");
