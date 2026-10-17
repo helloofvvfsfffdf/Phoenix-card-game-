@@ -1791,10 +1791,14 @@ function broadcast(room) {
   });
 }
 
-function error(ws, message) {
+function error(ws, message, code) {
   send(ws, {
     type: 'error',
-    message
+    message,
+    // An optional machine-readable reason. The gate uses it so the page can do
+    // more than echo a sentence - it can open the screen that fixes the
+    // problem. Callers that pass nothing stay a plain message.
+    code: code || undefined
   });
 }
 
@@ -2102,6 +2106,12 @@ async function handle(ws, data) {
   if (refusal) {
     if (refusal.kind === 'ban') {
       return send(ws, { type: 'banned', ban: refusal.ban });
+    }
+    // Tagged so the page can open the verification screen itself. Telling a
+    // player to add an email and then making them hunt for the box is a trap;
+    // they tried to play, so show them the thing that unblocks play.
+    if (refusal.kind === 'email') {
+      return error(ws, refusal.message, 'email-required');
     }
     return error(ws, refusal.message);
   }

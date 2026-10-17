@@ -975,6 +975,101 @@ async function main() {
           'the session survived verification');
       });
 
+    // The case a real player hits: an account whose session was opened BEFORE
+    // this feature existed. It has to keep that session and be asked for an
+    // address - never signed out, never made to start again.
+    await test('a session from BEFORE the update survives and is only asked to verify',
+      async () => {
+        const id = crypto.randomUUID();
+        fake.state.accounts.push({
+          id, username: 'oldsession', role: 'player',
+          password_hash: require('bcryptjs').hashSync('password-1234', 10),
+          email: null, email_verified_at: null,
+          created_at: '2025-01-01T00:00:00Z'
+        });
+
+        const browser = makeBrowser();
+        const login = await signIn(browser, port, 'oldsession', 'password-1234',
+          { 'X-Forwarded-For': '198.51.100.41' });
+        assert.strictEqual(login.data.ok, true, JSON.stringify(login.data));
+
+        // Age the session so it is indistinguishable from one opened months ago.
+        const session = fake.state.sessions[fake.state.sessions.length - 1];
+        const tokenHash = session.token_hash;
+        session.created_at = '2025-01-01T00:00:00Z';
+
+        // Still signed in: the update did not invalidate what they already had.
+        const me = await browser.get(port, '/api/me');
+        assert.strictEqual(me.data.account.id, id, 'still signed in on the old session');
+        assert.strictEqual(me.data.verification.required, true, 'and still owes an address');
+
+        // Playing is refused - but they are refused, NOT kicked out.
+        const sock = await browser.connect(port);
+        sock.ws.send(JSON.stringify({ type: 'create' }));
+        const refusal = await waitFor(sock, 'error');
+        assert.strictEqual(refusal.code, 'email-required',
+          'the page is told WHICH screen to open, not just given a sentence');
+        assert.strictEqual(sock.closed, false, 'the socket stays open - not signed out');
+
+        // They add the address on the same session, with no re-login.
+        const ask = await browser.post(port, '/api/account/email/request',
+          { email: 'oldsession@example.com' });
+        assert.strictEqual(ask.data.ok, true, JSON.stringify(ask.data));
+        const prove = await verifyLast(browser, port);
+        assert.strictEqual(prove.data.ok, true, JSON.stringify(prove.data));
+
+        // The very same session row is still the one in use.
+        const still = fake.state.sessions.filter(s => s.token_hash === tokenHash);
+        assert.strictEqual(still.length, 1, 'the pre-update session was NOT replaced');
+        assert.strictEqual(
+          fake.state.sessions.filter(s => s.account_id === id).length, 1,
+          'and no second session was minted to replace it');
+
+        // The prompt is gone, and the socket they already had open can play -
+        // no 15-second wait for a cache to notice.
+        const after = await browser.get(port, '/api/me');
+        assert.strictEqual(after.data.verification.required, false, 'the prompt is gone');
+        sock.ws.send(JSON.stringify({ type: 'create' }));
+        const created = await waitFor(sock, 'state');
+        assert.ok(created.code,
+          'and the match they asked for is theirs at last');
+      });
+
+    // The owner asked for this to apply to everybody, themselves included.
+    await test('the OWNER is not exempt - no verified address, no multiplayer',
+      async () => {
+        const account = fake.state.accounts.find(a => a.username === 'phoenixowner');
+        const savedEmail = account.email;
+        const savedVerified = account.email_verified_at;
+        account.email = null;
+        account.email_verified_at = null;
+
+        try {
+          const browser = makeBrowser();
+          const login = await signIn(browser, port, 'phoenixowner', 'password-1234',
+            { 'X-Forwarded-For': '203.0.113.11' });
+          assert.strictEqual(login.data.ok, true, JSON.stringify(login.data));
+
+          const me = await browser.get(port, '/api/me');
+          assert.strictEqual(me.data.account.role, 'owner', 'this really is the owner');
+          assert.strictEqual(me.data.verification.required, true,
+            'and the owner owes an address like anybody else');
+
+          const sock = await browser.connect(port);
+          sock.ws.send(JSON.stringify({ type: 'create' }));
+          const refusal = await waitFor(sock, 'error');
+          assert.strictEqual(refusal.code, 'email-required',
+            'the owner is refused multiplayer too');
+          assert.ok(/verified email/i.test(refusal.message),
+            'with the same notice every player gets');
+          assert.strictEqual(sock.closed, false,
+            'and is NOT kicked out - the dashboard is still theirs to use');
+        } finally {
+          account.email = savedEmail;
+          account.email_verified_at = savedVerified;
+        }
+      });
+
     await test('an already-verified player is never asked again', async () => {
       const browser = makeBrowser();
       await signIn(browser, port, 'erin', 'password-1234',

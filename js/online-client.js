@@ -353,6 +353,13 @@
         renderAdminPanel();
         return;
       } else if (message.type === 'error') {
+        // The server refused play because this account still owes a verified
+        // address. Open the screen that fixes it rather than making the player
+        // find it - they were trying to play, so show what unblocks play.
+        if (message.code === 'email-required' && window.PhoenixAccount &&
+            typeof window.PhoenixAccount.openVerification === 'function') {
+          window.PhoenixAccount.openVerification();
+        }
         feedback(message.message);
         // The multiplayer feedback line is hidden while on the main menu, so a
         // wrong-password (or lockout) message there would otherwise be invisible.
