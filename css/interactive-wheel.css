@@ -1,0 +1,2 @@
+.wheel-overlay .wheel-graphic { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; max-width: 220px; margin: 1rem auto; }
+.wheel-overlay .wheel-segment { width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #ffd05e, #ff9500); border: 2px solid #fff; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #fff; font-weight: bold; }
