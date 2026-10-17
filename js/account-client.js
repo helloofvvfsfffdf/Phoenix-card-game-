@@ -252,11 +252,74 @@
       .catch(function () { return false; });
   }
 
+  /**
+   * The ACCOUNT row in Settings.
+   *
+   * It exists only while this account still owes a verified address, and is
+   * gone the moment it has one - so the section cannot be found after the job
+   * is done, which is the point of putting it here in the first place.
+   *
+   * The server is asked rather than the page assuming, so this stays correct
+   * when the account was verified on another device, or another tab.
+   */
+  function renderSettingsAccount() {
+    var section = $('settings-account-section');
+    if (!section) return;
+    var note = $('settings-account-note');
+    var action = $('settings-account-action');
+
+    if (!available || !account) { section.hidden = true; return; }
+
+    fetch('/api/account/email/status', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (res) { return res.json().catch(function () { return null; }); })
+      .then(function (status) {
+        // Nothing owed, nothing readable, or no account system at all: the
+        // row has no business being on screen.
+        if (!status || status.ok === false || !status.required) {
+          section.hidden = true;
+          return;
+        }
+        section.hidden = false;
+        if (note) {
+          note.textContent = status.awaitingCode
+            ? 'A code is on its way to ' + status.email + '. Multiplayer stays closed until it is entered.'
+            : (status.email
+              ? status.email + ' has not been proved yet. Multiplayer stays closed until it is.'
+              : (status.notice ||
+                 'Add an email address to keep playing multiplayer.'));
+        }
+        if (action) {
+          action.textContent = status.awaitingCode
+            ? 'ENTER THE CODE'
+            : (status.email ? 'SEND ANOTHER CODE' : 'ADD & VERIFY EMAIL');
+          // Assigned rather than addEventListener so reopening Settings can
+          // never stack a second handler on top of the first.
+          action.onclick = function () {
+            var line = $('settings-account-status');
+            if (line) line.textContent = 'Opening the verification screen…';
+            // The pop-up owns the actual typing; Settings is only a second
+            // door into it, not a second copy of it.
+            openVerifyFromServer().then(function (done) {
+              if (done) return;
+              var back = $('settings-back');
+              if (back) back.click();
+              var field = status.awaitingCode ? $('verify-code') : $('verify-email');
+              if (field && typeof field.focus === 'function') field.focus();
+            });
+          };
+        }
+      })
+      .catch(function () { section.hidden = true; });
+  }
+
   /** The server accepted something: refresh the local account and the screen. */
   function afterVerified(result) {
     if (result && result.account) account = result.account;
     renderAccountBits();
     hideVerify();
+    // The Settings row has nothing left to offer, so it goes now rather than
+    // at the next reload.
+    renderSettingsAccount();
     var line = $('menu-feedback');
     if (line) line.textContent = 'Email verified. Welcome to PHOENIX.';
     if (typeof pending === 'function') {
@@ -450,6 +513,14 @@
     if (!form) return;
 
     wireVerify();
+
+    // Settings is the reliable, user-findable home for this task. Refresh the
+    // row each time it is opened so verification performed in another tab or
+    // device is reflected immediately.
+    ['menu-settings', 'match-settings'].forEach(function (id) {
+      var settingsButton = $(id);
+      if (settingsButton) settingsButton.addEventListener('click', renderSettingsAccount);
+    });
 
     $('account-toggle').onclick = function () {
       setMode(

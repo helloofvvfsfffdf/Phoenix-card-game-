@@ -378,6 +378,18 @@
         <button id="settings-victory-report" type="button">Copy cinematic diagnostic</button>
         <pre id="settings-victory-report-text" class="settings-status" style="white-space:pre-wrap;overflow-wrap:anywhere" hidden></pre>
       </div>
+      <!--
+        The one place besides the pop-up itself where a player can fix a
+        missing email. Hidden once the address is proved: a control that can
+        no longer do anything is clutter, and a standing reminder of a task
+        already finished is worse than none at all.
+      -->
+      <div class="settings-section" id="settings-account-section" hidden>
+        <h3>ACCOUNT</h3>
+        <p class="settings-note" id="settings-account-note"></p>
+        <button id="settings-account-action" type="button">ADD &amp; VERIFY EMAIL</button>
+        <p id="settings-account-status" class="settings-status" aria-live="polite"></p>
+      </div>
       <button class="settings-back" id="settings-back" type="button">&#8592; MAIN MENU</button>
     </div>
   </section>
