@@ -822,6 +822,16 @@ function applyMaple(room) {
   if (victim !== null) emitEffect(room, 'ally-maple', -1, victim);
 }
 
+function applyLinkedFate(room) {
+  const s = room.state;
+  if (!s || s.over || !s.linkedFate) return;
+  // Decrement rounds and remove expired links.
+  s.linkedFate = s.linkedFate.filter(function (link) {
+    link.roundsLeft--;
+    return link.roundsLeft > 0;
+  });
+}
+
 function startGame(room) {
   const oldMembers = room.members.slice();
 
@@ -1745,6 +1755,7 @@ function skipUnplayableTurns(room) {
       applyPhoenix(room);
         applyTed(room);
         applyMaple(room);
+        applyLinkedFate(room);
       }
     }
   }
@@ -2612,6 +2623,8 @@ async function handle(ws, data) {
       );
     }
 
+    const beforePoints = s.players.map(p => p.points);
+
     const result = pending
       ? Rules.resolvePendingChoice(
           s,
@@ -2632,6 +2645,27 @@ async function handle(ws, data) {
       );
     }
 
+    // Linked Fate: share 50% of any point gain with the linked partner.
+    // The bonus must not itself trigger another Linked Fate bonus, so we
+    // compare before/after points and apply the bonus directly without
+    // re-running the resolution path.
+    if (s.linkedFate && s.linkedFate.length) {
+      var gains = s.players.map((p, i) => p.points - beforePoints[i]);
+      s.linkedFate.forEach(function (link) {
+        var aIdx = s.players.findIndex(p => p.id === link.a);
+        var bIdx = s.players.findIndex(p => p.id === link.b);
+        if (aIdx === -1 || bIdx === -1) return;
+        if (gains[aIdx] > 0) {
+          var bonus = Math.floor(gains[aIdx] * 0.5);
+          s.players[bIdx].points += bonus;
+        }
+        if (gains[bIdx] > 0) {
+          var bonus2 = Math.floor(gains[bIdx] * 0.5);
+          s.players[aIdx].points += bonus2;
+        }
+      });
+    }
+
     recordEvents(room, result.events);
 
     if (
@@ -2642,6 +2676,7 @@ async function handle(ws, data) {
       applyPhoenix(room);
         applyTed(room);
         applyMaple(room);
+        applyLinkedFate(room);
       }
 
     broadcast(room);

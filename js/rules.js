@@ -688,6 +688,14 @@
     var actor = state.players[seat];
     if (!card || !actor) return false;
 
+    // Betrayal needs at least two eligible opponents.
+    if (card.id === 'betrayal') {
+      var eligible = opponents(state, seat).filter(function (p) {
+        return isLegalTarget(state, seat, card, p);
+      });
+      if (eligible.length < 2) return false;
+    }
+
     // You can only play a card you are actually holding.
     if (!holdsCard(state, actor.id, cardId)) return false;
 
@@ -2034,6 +2042,13 @@
   function movesForCard(state, seat, cardId, moves) {
     var card = Cards.byId(cardId);
     if (!card) return;
+    // Betrayal needs two eligible opponents.
+    if (card.id === 'betrayal') {
+      var eligible = opponents(state, seat).filter(function (p) {
+        return isLegalTarget(state, seat, card, p);
+      });
+      if (eligible.length < 2) return;
+    }
     if (!card.needsTarget) {
       if (isPlayable(state, seat, cardId, null)) {
         moves.push({ cardId: cardId, targetId: null, card: card, target: null });

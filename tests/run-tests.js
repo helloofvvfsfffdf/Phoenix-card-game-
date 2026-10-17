@@ -2608,9 +2608,12 @@ test('it marks exactly one card, and never says which', function () {
   equal(gemini.cursed.length, 1, 'one card is cursed');
   assert(['knife', 'bonus', 'hunter'].indexOf(gemini.cursed[0]) !== -1,
     'and it is one they actually hold');
-  // The log must not leak which one.
+  // The log must not leak which one. Only the result event matters - draw events
+  // legitimately name the card drawn, which is unrelated to the curse.
+  var resultText = result.events.filter(function (e) { return e.type === 'result'; })
+    .map(function (e) { return e.text; }).join(' | ');
   ['knife', 'bonus', 'hunter'].forEach(function (id) {
-    assert(texts(result).indexOf(Rules.formatCard(id)) === -1,
+    assert(resultText.indexOf(Rules.formatCard(id)) === -1,
       'the log never names ' + id);
   });
   assert(/not told which/.test(texts(result)), 'and says so');

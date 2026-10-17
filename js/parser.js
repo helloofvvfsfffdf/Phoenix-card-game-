@@ -389,6 +389,19 @@
           hint: legalTargetHint(state, seat, card)
         };
       }
+      // Betrayal needs two eligible opponents, not just one.
+      if (card.id === 'betrayal') {
+        var eligible = Rules.opponents(state, seat).filter(function (p) {
+          return Rules.isLegalTarget(state, seat, card, p);
+        });
+        if (eligible.length < 2) {
+          return {
+            ok: false,
+            error: 'Betrayal needs two eligible opponents.',
+            hint: legalTargetHint(state, seat, card)
+          };
+        }
+      }
     } else if (parsed.targetId) {
       return {
         ok: false,
