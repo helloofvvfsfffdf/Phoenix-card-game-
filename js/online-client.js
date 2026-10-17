@@ -376,7 +376,22 @@
         state = message;
         feedback('');
         render();
-        if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.observe(previous, message);
+        if (message.pendingInteraction) {
+      const pi = message.pendingInteraction;
+      if (pi.type === 'rps' && window.PhoenixRpsInteractive) {
+        window.PhoenixRpsInteractive.build();
+      } else if (pi.type === 'betrayal' && window.PhoenixBetrayalInteractive) {
+        window.PhoenixBetrayalInteractive.build();
+      } else if (pi.type === 'speed' && window.PhoenixSpeedInteractive) {
+        window.PhoenixSpeedInteractive.build();
+      } else if (pi.type === 'wheel' && window.PhoenixWheelInteractive) {
+        window.PhoenixWheelInteractive.build();
+      } else if (pi.type === 'dice' || pi.type === 'linkedfate' || pi.type === 'impostor' || pi.type === 'swapper') {
+        // Non-secret cards that need a visual result; show basic status.
+        feedback('Interactive card active: ' + (pi.type || 'unknown'));
+      }
+    }
+    if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.observe(previous, message);
         if (message.pendingInteraction && message.pendingInteraction.type === 'rps' && window.PhoenixRpsInteractive) { window.PhoenixRpsInteractive.build(); } else if (message.pendingInteraction && message.pendingInteraction.type === 'betrayal' && window.PhoenixBetrayalInteractive) { window.PhoenixBetrayalInteractive.build(); } else if (message.pendingInteraction && message.pendingInteraction.type === 'speed' && window.PhoenixSpeedInteractive) { window.PhoenixSpeedInteractive.build(); } else if (message.pendingInteraction && message.pendingInteraction.type === 'wheel' && window.PhoenixWheelInteractive) { window.PhoenixWheelInteractive.build(); }
         if (window.PhoenixCinematics) window.PhoenixCinematics.consume(message.effects);
         if (window.PhoenixCinematics) window.PhoenixCinematics.match(message);
