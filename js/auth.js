@@ -88,12 +88,25 @@ function _resetEmailProbe() { _emailColumns = null; }
 async function schemaHasEmail() {
   if (_emailColumns !== null) return _emailColumns;
   if (!isConfigured()) return false;
-  try {
-    const { error } = await client().from('accounts')
-      .select('email, email_verified_at').limit(1);
-    _emailColumns = !error;
-  } catch (err) {
-    _emailColumns = false;
+  // PostgREST reloads its schema cache after a migration or a deploy, and a
+  // probe that lands inside that window fails TRANSIENTLY. Caching that one
+  // failure would switch the whole email feature off until the next restart,
+  // so the probe is retried before a negative result is believed. A column
+  // that genuinely does not exist fails every attempt the same way and is
+  // still cached as false - the retry only waits out the transient case.
+  const ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    try {
+      const { error } = await client().from('accounts')
+        .select('email, email_verified_at').limit(1);
+      _emailColumns = !error;
+    } catch (err) {
+      _emailColumns = false;
+    }
+    if (_emailColumns) return true;
+    if (attempt < ATTEMPTS) {
+      await new Promise(resolve => setTimeout(resolve, 750));
+    }
   }
   return _emailColumns;
 }
