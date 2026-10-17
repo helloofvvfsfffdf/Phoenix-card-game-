@@ -14,6 +14,8 @@ const Auth = require('./js/auth.js');
 const Badges = require('./js/badges.js');
 const Announcements = require('./js/announcements.js');
 const Wins = require('./js/wins.js');
+const EmailVerification = require('./js/email-verification.js');
+const Moderation = require('./js/moderation.js');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
@@ -213,6 +215,44 @@ const accessCodeCleanup = setInterval(() => {
 }, 60 * 60 * 1000);
 
 accessCodeCleanup.unref();
+
+/*
+ * Account security: how long one enforcement verdict stands before the server
+ * re-reads it from the database.
+ *
+ * Every gameplay action is checked, but a database round trip on each card
+ * played would be absurd - and a ban issued mid-match does not depend on this
+ * timer at all, because issuing one sweeps every live connection immediately.
+ * The timer is only the backstop for a ban written by something other than
+ * this process.
+ */
+const GATE_TTL_MS = 15 * 1000;
+
+/* Moderation and verification endpoints get their own per-IP budget so that
+ * hammering them cannot be used to exhaust the sign-in budget, and vice versa.
+ * Deliberately generous - the owner is one person, not a crowd. */
+const MODERATION_WINDOW_MS = 15 * 60 * 1000;
+const MODERATION_MAX_CALLS = 120;
+const moderationCalls = new Map();
+
+function moderationRecord(ip, now) {
+  let record = moderationCalls.get(ip);
+  if (!record) record = { calls: [] };
+  record.calls = record.calls.filter(t => now - t < MODERATION_WINDOW_MS);
+  moderationCalls.set(ip, record);
+  return record;
+}
+
+const moderationCleanup = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of moderationCalls) {
+    if (record.calls.every(t => now - t >= MODERATION_WINDOW_MS)) {
+      moderationCalls.delete(ip);
+    }
+  }
+}, 60 * 60 * 1000);
+
+moderationCleanup.unref();
 
 function validOwnerPassword(input) {
   if (typeof input !== 'string' || input.length > 256) {
@@ -951,16 +991,46 @@ const httpServer = http.createServer(async (req, res) => {
     // in this async handler takes the whole Node process down on Node 18+.
     try {
       if (pathname === '/api/register') {
-        const { username, password } = await readJsonBody();
-        const result = await Auth.register(username, password);
+        const { username, password, email } = await readJsonBody();
+        const result = await Auth.register(username, password, email);
+
+        // Registration attempts are recorded from the address the SERVER saw,
+        // so one person opening account after account is visible across
+        // deploys. A database failure is not counted against the player.
+        const from = Moderation.trustedIp(req);
+        if (!(result && result.code && String(result.code).indexOf('DB-') === 0)) {
+          await Moderation.noteSignup(from, username, Boolean(result && result.ok));
+        }
+
         if (!result.ok) {
           noteFailure(result);
           sendJson({ ok: false, message: result.message, code: result.code || null }, 400);
           return;
         }
         accessCodeFails.delete(reqIp);
-        res.setHeader('Set-Cookie', Auth.sessionCookie(result.token, Auth.SESSION_TTL_SEC, Auth.isSecure(req)));
-        sendJson({ ok: true, account: result.account });
+        res.setHeader('Set-Cookie', [
+          Auth.sessionCookie(result.token, Auth.SESSION_TTL_SEC, Auth.isSecure(req))
+        ]);
+
+        // Mail a six-digit code straight away so a brand-new player never has
+        // to press a second button to get going. A failure here does NOT undo
+        // the account: they land on the verification screen with a resend
+        // button, which is exactly where they would be anyway.
+        let verification = { required: false, emailSent: false, message: null };
+        if (result.email) {
+          const sent = await EmailVerification.sendCode(result.account, result.email, from);
+          verification = {
+            required: true,
+            emailSent: Boolean(sent.ok),
+            message: sent.ok
+              ? 'We sent a six-digit code to ' + result.email + '.'
+              : (sent.message || 'The verification email could not be sent. You can ask for another code.'),
+            resendAfter: sent.resendAfter || null,
+            expiresInSeconds: sent.expiresInSeconds || null
+          };
+        }
+
+        sendJson({ ok: true, account: result.account, verification });
         return;
       }
 
@@ -973,8 +1043,42 @@ const httpServer = http.createServer(async (req, res) => {
           return;
         }
         accessCodeFails.delete(reqIp);
-        res.setHeader('Set-Cookie', Auth.sessionCookie(result.token, Auth.SESSION_TTL_SEC, Auth.isSecure(req)));
-        sendJson({ ok: true, account: result.account });
+
+        // Is this account under a restriction? Checked on the SERVER, from the
+        // account id, the address the server saw and the device token in the
+        // cookie - never from anything in the request body. The response says
+        // only what the player may know: no address, no other account.
+        const from = Moderation.trustedIp(req);
+        let ban = null;
+        try {
+          ban = await Moderation.restrictionFor({
+            accountId: result.account.id,
+            ip: from,
+            deviceId: Moderation.deviceIdFrom(req)
+          });
+        } catch (err) {
+          console.error('[PHOENIX moderation] login check failed -> ' + Auth.describeError(err));
+        }
+
+        const verification = await EmailVerification.status(result.account).catch(() => null);
+
+        res.setHeader('Set-Cookie', [
+          Auth.sessionCookie(result.token, Auth.SESSION_TTL_SEC, Auth.isSecure(req))
+        ]);
+        sendJson({
+          ok: true,
+          account: result.account,
+          verification: verification
+            ? { required: Boolean(verification.required),
+                verified: Boolean(verification.verified),
+                email: verification.email || null,
+                awaitingCode: Boolean(verification.awaitingCode),
+                resendInSeconds: verification.resendInSeconds || 0,
+                expiresInSeconds: verification.expiresInSeconds || 0,
+                attemptsLeft: verification.attemptsLeft || null }
+            : { required: false, verified: false },
+          ban: ban ? Moderation.publicView(ban, result.account.id) : null
+        });
         return;
       }
 
@@ -1014,6 +1118,134 @@ const httpServer = http.createServer(async (req, res) => {
     res.setHeader('Set-Cookie', Auth.clearSessionCookie(Auth.isSecure(req)));
     return sendJson({ ok: true });
   }
+
+  // ---- Account security: verified email + moderation ------------------------
+  // Everything below sits behind the httpOnly session cookie. A browser can ask
+  // for any of it, but every operation re-reads the role from the database and
+  // answers identically for a stranger whatever they send.
+  if (pathname.indexOf('/api/account/email') === 0 ||
+      pathname.indexOf('/api/moderation') === 0) {
+    if (!Auth.isConfigured()) {
+      return sendJson({ ok: false, available: false,
+                        message: 'Accounts are not available on this server.' }, 503);
+    }
+
+    const spend = () => {
+      const record = moderationRecord(reqIp, Date.now());
+      if (record.calls.length >= MODERATION_MAX_CALLS) return false;
+      record.calls.push(Date.now());
+      return true;
+    };
+
+    try {
+      const account = await Auth.getSessionAccount(req);
+
+      /* ---------------- email verification ---------------- */
+      if (pathname === '/api/account/email/status') {
+        if (!account) return sendJson({ ok: false, authenticated: false }, 401);
+        const status = await EmailVerification.status(account);
+        return sendJson({
+          ok: true,
+          available: status.available !== false,
+          required: Boolean(status.required),
+          verified: Boolean(status.verified),
+          email: status.email || null,
+          awaitingCode: Boolean(status.awaitingCode),
+          resendInSeconds: status.resendInSeconds || 0,
+          expiresInSeconds: status.expiresInSeconds || 0,
+          attemptsLeft: status.attemptsLeft === undefined ? null : status.attemptsLeft,
+          notice: EmailVerification.REQUIRED_NOTICE
+        });
+      }
+
+      if (req.method === 'POST' && pathname === '/api/account/email/request') {
+        if (!account) return sendJson({ ok: false, authenticated: false }, 401);
+        if (!spend()) return sendJson({ ok: false, message: 'Too many requests. Try again later.' }, 429);
+        const body = await readJsonBody();
+        const result = await EmailVerification.sendCode(
+          account, body.email, Moderation.trustedIp(req));
+        return sendJson(result, result.ok ? 200
+          : (result.status || (result.available === false ? 503 : 400)));
+      }
+
+      if (req.method === 'POST' && pathname === '/api/account/email/verify') {
+        if (!account) return sendJson({ ok: false, authenticated: false }, 401);
+        if (!spend()) return sendJson({ ok: false, message: 'Too many requests. Try again later.' }, 429);
+        const body = await readJsonBody();
+        const result = await EmailVerification.verifyCode(account, body.code);
+
+        if (result.ok && !result.alreadyVerified) {
+          // Announce it on every live connection for this account, so a player
+          // who verifies in one tab is let into the game everywhere at once.
+          await Moderation.record('email.verified', account, 'address proven', account.username);
+          announceEmailVerified(account);
+        }
+        return sendJson(result, result.ok ? 200 : (result.status || 400));
+      }
+
+      /* ---------------- moderation (owner only) ---------------- */
+      if (pathname.indexOf('/api/moderation') === 0) {
+        if (!spend()) {
+          return sendJson({ ok: false, message: 'Too many requests. Try again later.' }, 429);
+        }
+        if (req.method === 'GET' && pathname === '/api/moderation/accounts') {
+          const query = new URL(req.url, 'http://localhost').searchParams.get('q') || '';
+          const result = await Moderation.searchAccounts(account, query);
+          if (!result.ok && result.status === 403) {
+            await Moderation.record('access.denied', account, 'search accounts');
+          }
+          return sendJson(result, result.ok ? 200 : (result.status || 400));
+        }
+
+        if (req.method === 'GET' && pathname === '/api/moderation/restrictions') {
+          const status = new URL(req.url, 'http://localhost').searchParams.get('status') || 'active';
+          const result = await Moderation.list(account, status);
+          if (!result.ok && result.status === 403) {
+            await Moderation.record('access.denied', account, 'list restrictions');
+          }
+          return sendJson(result, result.ok ? 200 : (result.status || 400));
+        }
+
+        if (req.method === 'GET' && pathname === '/api/moderation/log') {
+          const limit = new URL(req.url, 'http://localhost').searchParams.get('limit');
+          const result = await Moderation.auditLog(account, limit);
+          if (!result.ok && result.status === 403) {
+            await Moderation.record('access.denied', account, 'read audit log');
+          }
+          return sendJson(result, result.ok ? 200 : (result.status || 400));
+        }
+
+        if (req.method === 'POST' && pathname === '/api/moderation/restrictions') {
+          const body = await readJsonBody();
+          const result = await Moderation.create(account, body);
+          if (!result.ok && result.status === 403) {
+            await Moderation.record('access.denied', account, 'issue a restriction');
+          }
+          if (result.ok) await applyRestrictionsToLiveConnections();
+          return sendJson(result, result.ok ? 200 : (result.status || 400));
+        }
+
+        if (req.method === 'POST' && pathname === '/api/moderation/restrictions/revoke') {
+          const body = await readJsonBody();
+          const result = await Moderation.revoke(account, body.id);
+          if (!result.ok && result.status === 403) {
+            await Moderation.record('access.denied', account, 'lift a restriction');
+          }
+          if (result.ok) await applyRestrictionsToLiveConnections();
+          return sendJson(result, result.ok ? 200 : (result.status || 400));
+        }
+
+        return sendJson({ ok: false, message: 'Not found.' }, 404);
+      }
+
+      return sendJson({ ok: false, message: 'Not found.' }, 404);
+    } catch (err) {
+      console.error('[PHOENIX security] ' + pathname + ' failed -> ' + Auth.describeError(err));
+      return sendJson({ ok: false, message: 'Something went wrong on the server. Please try again.',
+                        code: 'SERVER-ERROR' }, 500);
+    }
+  }
+
   if (req.method === 'GET' && pathname === '/api/me') {
     if (!Auth.isConfigured()) {
       // No account system here: tell the client it needs no sign-in screen.
@@ -1026,8 +1258,39 @@ const httpServer = http.createServer(async (req, res) => {
     } catch (err) {
       console.error('[PHOENIX auth] /api/me failed -> ' + Auth.describeError(err));
     }
-    if (!account) return sendJson({ ok: false, authenticated: false, available: true }, 401);
-    return sendJson({ ok: true, authenticated: true, available: true, account });
+
+    // Device token. The page never sees it (HttpOnly) and the browser never
+    // sends it in a body - the server reads it straight off the connection.
+    const cookies = [];
+    let deviceId = Moderation.deviceIdFrom(req);
+    if (!deviceId) {
+      deviceId = Moderation.newDeviceId();
+      cookies.push(Moderation.deviceCookie(deviceId, Auth.isSecure(req)));
+    }
+
+    if (!account) {
+      if (cookies.length) res.setHeader('Set-Cookie', cookies);
+      return sendJson({ ok: false, authenticated: false, available: true }, 401);
+    }
+
+    // Record where this account is actually playing from, using only what the
+    // server derived from the connection. Best effort: a failure here is logged
+    // and never stops the page loading.
+    await Moderation.observe(account, Moderation.trustedIp(req), deviceId);
+
+    const status = await EmailVerification.status(account).catch(() => null);
+    if (cookies.length) res.setHeader('Set-Cookie', cookies);
+    return sendJson({
+      ok: true, authenticated: true, available: true, account,
+      verification: status
+        ? { required: Boolean(status.required), verified: Boolean(status.verified),
+            email: status.email || null, awaitingCode: Boolean(status.awaitingCode),
+            resendInSeconds: status.resendInSeconds || 0,
+            expiresInSeconds: status.expiresInSeconds || 0,
+            attemptsLeft: status.attemptsLeft === undefined ? null : status.attemptsLeft,
+            notice: EmailVerification.REQUIRED_NOTICE }
+        : { required: false, verified: false }
+    });
   }
 
   // ---- Phase 2: badges ------------------------------------------------------
@@ -1686,7 +1949,128 @@ function handleAdmin(ws, data) {
   return error(ws, 'Unknown admin command.');
 }
 
-function handle(ws, data) {
+/* ------------------------------------------------------------------ */
+/* Account security: the server-side gameplay gate                      */
+/* ------------------------------------------------------------------ */
+
+/** Every connection this process is holding. */
+function liveSockets() {
+  return Array.from(wss.clients || []);
+}
+
+/**
+ * Re-resolve restrictions for every live connection.
+ *
+ * Called the instant a restriction is issued or lifted, which is what makes a
+ * mid-match ban take effect immediately rather than at the next reload: the
+ * player is taken out of their room, told why, and their socket is closed.
+ * Every later message they manage to send is refused too, because the gate
+ * below reads ws.ban, which is now set.
+ *
+ * Lifting a restriction pushes `banned-cleared`, so somebody watching the
+ * restriction screen is let straight back in without reloading anything.
+ */
+async function applyRestrictionsToLiveConnections() {
+  for (const sock of liveSockets()) {
+    if (!sock.account && !sock.deviceId) continue;
+
+    let ban = null;
+    try {
+      ban = await Moderation.restrictionFor({
+        accountId: sock.account ? sock.account.id : null,
+        ip: sock.ip || null,
+        deviceId: sock.deviceId || null
+      });
+    } catch (err) {
+      console.error('[PHOENIX moderation] live sweep failed -> ' + Auth.describeError(err));
+      continue;
+    }
+
+    const wasBanned = Boolean(sock.ban);
+    sock.ban = ban || null;
+    sock.gateCheckedAt = Date.now();
+
+    if (ban && !wasBanned) {
+      send(sock, { type: 'banned', ban: Moderation.publicView(ban, sock.account && sock.account.id) });
+      if (sock.member) leaveRoom(sock, 'banned');
+      const killer = setTimeout(() => {
+        try { sock.close(); } catch (e) { /* already gone */ }
+      }, 250);
+      if (killer && typeof killer.unref === 'function') killer.unref();
+    } else if (!ban && wasBanned) {
+      send(sock, { type: 'banned-cleared' });
+    }
+  }
+}
+
+/** Tell every socket this account holds that its email is now proven. */
+function announceEmailVerified(account) {
+  if (!account) return;
+  for (const sock of liveSockets()) {
+    if (!sock.account || sock.account.id !== account.id) continue;
+    sock.emailVerified = true;
+    send(sock, {
+      type: 'account',
+      account: sock.account,
+      verification: { required: false, verified: true }
+    });
+  }
+}
+
+/**
+ * The one gate every gameplay action passes through.
+ *
+ * Returns null when play may continue, or why it may not. Order matters: a
+ * restriction is reported before an unverified email, because somebody under a
+ * restriction should see that and not an unrelated prompt.
+ *
+ * Both checks are cached on the socket for GATE_TTL_MS rather than re-read on
+ * every card played. That is safe here - and ONLY safe here - because issuing
+ * or lifting a restriction sweeps every connection immediately, so a live ban
+ * never waits for a timer.
+ *
+ * Failure to READ a restriction degrades to "no restriction found" with a
+ * logged error. Enforcement fails open, not closed: a database hiccup must
+ * never lock out somebody who has done nothing wrong. That trade-off is
+ * stated plainly in the delivery report.
+ */
+async function gameplayRefusal(ws) {
+  if (!Auth.isConfigured()) return null;
+  if (!ws.account) return { kind: 'signin', message: 'Please sign in to play.' };
+
+  const now = Date.now();
+  if (!ws.gateCheckedAt || now - ws.gateCheckedAt > GATE_TTL_MS) {
+    ws.gateCheckedAt = now;
+    try {
+      ws.ban = await Moderation.restrictionFor({
+        accountId: ws.account.id,
+        role: ws.account.role,
+        ip: ws.ip || null,
+        deviceId: ws.deviceId || null
+      }) || null;
+    } catch (err) {
+      console.error('[PHOENIX moderation] gate check failed -> ' + Auth.describeError(err));
+    }
+    try {
+      const status = await EmailVerification.status(ws.account);
+      // `required: false` covers every case where verification simply does not
+      // apply: no Supabase, the migration not run yet, or already proven.
+      ws.emailVerified = Boolean(status.verified) || status.required === false;
+    } catch (err) {
+      console.error('[PHOENIX email] gate check failed -> ' + Auth.describeError(err));
+    }
+  }
+
+  if (ws.ban) {
+    return { kind: 'ban', ban: Moderation.publicView(ws.ban, ws.account.id) };
+  }
+  if (!ws.emailVerified) {
+    return { kind: 'email', message: EmailVerification.REQUIRED_NOTICE };
+  }
+  return null;
+}
+
+async function handle(ws, data) {
   if (!data || typeof data !== 'object') {
     return;
   }
@@ -1704,6 +2088,22 @@ function handle(ws, data) {
   // to authenticate and inspect the whole server without ever creating a room.
   if (String(data.type).startsWith('admin_')) {
     return handleAdmin(ws, data);
+  }
+
+  // ---- Account security gate ------------------------------------------------
+  // Everything below this line is GAMEPLAY: opening a room, joining one,
+  // starting a match, picking an ally, playing a card. Every one of them is
+  // refused server-side for a restricted account, for an unverified email, and
+  // for anybody who is not signed in - no matter what the page says, and
+  // whether or not the request came from this site's own JavaScript. Editing
+  // the frontend, clearing storage or driving the socket by hand all arrive
+  // here and are all answered the same way.
+  const refusal = await gameplayRefusal(ws);
+  if (refusal) {
+    if (refusal.kind === 'ban') {
+      return send(ws, { type: 'banned', ban: refusal.ban });
+    }
+    return error(ws, refusal.message);
   }
 
   if (data.type === 'create') {
@@ -2266,11 +2666,24 @@ wss.on('connection', (ws, request) => {
   let ready = false;
 
   function dispatch(raw) {
+    let data;
     try {
-      handle(ws, JSON.parse(raw.toString()));
+      data = JSON.parse(raw.toString());
     } catch (e) {
       error(ws, 'Invalid request.');
+      return;
     }
+    // handle() is async (the security gate reads the database). A rejected
+    // promise here would be an unhandled rejection, which takes a Node 18+
+    // process down - so it is caught, logged and answered like any other bad
+    // message rather than allowed to kill the server.
+    Promise.resolve()
+      .then(() => handle(ws, data))
+      .catch(err => {
+        console.error('[PHOENIX ws] unhandled error in "' + String(data && data.type) +
+          '" -> ' + Auth.describeError(err));
+        error(ws, 'Something went wrong. Please try again.');
+      });
   }
 
   ws.on('message', raw => {
@@ -2304,6 +2717,46 @@ wss.on('connection', (ws, request) => {
         } catch (err) {
           console.error('[PHOENIX badges] connection lookup failed -> ' +
             Auth.describeError(err));
+        }
+      }
+
+      // Where is this connection coming from, and which browser token did it
+      // present? Both are derived from the connection itself - the socket and
+      // its cookies - so nothing in a replayed message can claim otherwise.
+      ws.ip = Moderation.trustedIp(request);
+      ws.deviceId = Moderation.deviceIdFrom(request);
+      ws.gateCheckedAt = Date.now();
+      ws.emailVerified = Boolean(account && account.emailVerified);
+      ws.ban = null;
+
+      // Record the sighting HERE, not only on /api/me. A player can open a
+      // socket without ever calling /api/me, so an owner banning by network
+      // would otherwise find no address on file and silently issue only the
+      // account half of the restriction. Awaited on purpose: the address has
+      // to be on record before anything reads it.
+      if (account) {
+        await Moderation.observe(account, ws.ip, ws.deviceId);
+      }
+
+      // Restriction check, BEFORE a single buffered message is replayed: a
+      // banned player's create/join arrives below and is refused by the gate,
+      // and they are told why on this connection too - so clearing cookies,
+      // signing out or using another browser changes nothing.
+      if (account) {
+        try {
+          ws.ban = await Moderation.restrictionFor({
+            accountId: account.id,
+            role: account.role,
+            ip: ws.ip,
+            deviceId: ws.deviceId
+          }) || null;
+        } catch (err) {
+          console.error('[PHOENIX moderation] handshake check failed -> ' +
+            Auth.describeError(err));
+          ws.ban = null;
+        }
+        if (ws.ban) {
+          send(ws, { type: 'banned', ban: Moderation.publicView(ws.ban, account.id) });
         }
       }
 

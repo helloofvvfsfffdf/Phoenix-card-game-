@@ -77,8 +77,16 @@
     if (submit) submit.textContent = isRegister ? 'CREATE ACCOUNT →' : 'SIGN IN →';
     if (hint) {
       hint.textContent = isRegister
-        ? 'Pick a username and a password of at least 8 characters. No email needed.'
+        ? 'Pick a username, a password of at least 8 characters, and an email address.'
         : 'Enter your username and password to continue.';
+    }
+    // The email field belongs to CREATE only. Sign-in never needs an address,
+    // and an extra field there would just be one more thing to get wrong.
+    var email = $('account-email');
+    if (email) {
+      email.hidden = !isRegister;
+      email.required = isRegister;
+      if (!isRegister) email.value = '';
     }
     var toggle = $('account-toggle');
     if (toggle) {
@@ -108,18 +116,258 @@
 
   /* ---------- what happens after a sign-in ---------- */
 
+  /**
+   * Email verification.
+   *
+   * Two faces on one overlay:
+   *   - ADDRESS: the server says this session still owes a verified address.
+   *   - CODE: a six-digit code is on its way and we are waiting for it.
+   *
+   * The screen is modal and cannot be dismissed, because play is genuinely
+   * blocked until this is done. It never signs anybody out and never shows a
+   * password field again.
+   */
+  var verify = {
+    email: '',
+    cooldownTimer: null,
+    awaitingCode: false
+  };
+
+  function showVerify(mode) {
+    var overlay = $('verify-overlay');
+    if (!overlay) return;
+    overlay.hidden = false;
+    verify.awaitingCode = mode === 'code';
+
+    $('verify-address-form').hidden = verify.awaitingCode;
+    $('verify-code-form').hidden = !verify.awaitingCode;
+
+    var title = $('verify-title');
+    var note = $('verify-note');
+    if (title) {
+      title.textContent = verify.awaitingCode ? 'CHECK YOUR EMAIL' : 'ADD YOUR EMAIL';
+    }
+    if (note) {
+      note.textContent = verify.awaitingCode
+        ? 'We sent a six-digit code to ' + verify.email +
+          '. Enter it below to prove the address is yours.'
+        : (verify.notice ||
+           'Every PHOENIX account now requires a verified email.');
+    }
+    verifyFeedback('');
+    var field = $(verify.awaitingCode ? 'verify-code' : 'verify-email');
+    if (field) setTimeout(function () { field.focus(); }, 60);
+  }
+
+  function hideVerify() {
+    var overlay = $('verify-overlay');
+    if (overlay) overlay.hidden = true;
+    if (verify.cooldownTimer) { clearInterval(verify.cooldownTimer); verify.cooldownTimer = null; }
+  }
+
+  function verifyFeedback(message, good) {
+    var node = $('verify-feedback');
+    if (!node) return;
+    node.textContent = message || '';
+    node.classList.toggle('is-good', !!good);
+    node.classList.toggle('is-bad', !good && !!message);
+  }
+
+  function verifyBusy(on) {
+    ['verify-send', 'verify-confirm', 'verify-resend', 'verify-change'].forEach(function (id) {
+      var node = $(id);
+      if (node) node.disabled = !!on;
+    });
+  }
+
+  /** Live "send another in Ns" line, counting down from the server's number. */
+  function startCooldown(seconds) {
+    var left = Number(seconds) || 0;
+    var line = $('verify-cooldown');
+    var resend = $('verify-resend');
+    if (verify.cooldownTimer) clearInterval(verify.cooldownTimer);
+    if (left <= 0) {
+      if (line) line.textContent = '';
+      if (resend) resend.disabled = false;
+      return;
+    }
+    if (resend) resend.disabled = true;
+    var tick = function () {
+      if (left <= 0) {
+        clearInterval(verify.cooldownTimer);
+        verify.cooldownTimer = null;
+        if (line) line.textContent = '';
+        if (resend) resend.disabled = false;
+        return;
+      }
+      if (line) line.textContent = 'You can request another code in ' + left + ' second' +
+        (left === 1 ? '' : 's') + '.';
+      left -= 1;
+    };
+    tick();
+    verify.cooldownTimer = setInterval(tick, 1000);
+  }
+
+  /** Ask the server for the current state and open the right face of it. */
+  function openVerifyFromServer() {
+    return fetch('/api/account/email/status', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (res) { return res.json().catch(function () { return {}; }); })
+      .then(function (status) {
+        if (!status || status.ok === false) return false;
+        if (!status.required && !status.awaitingCode) { hideVerify(); return true; }
+        verify.email = status.email || '';
+        // The server owns this sentence - it is required to be exact - so it is
+        // taken verbatim rather than restated here.
+        verify.notice = status.notice || null;
+        if (status.awaitingCode) {
+          showVerify('code');
+          startCooldown(status.resendInSeconds);
+        } else {
+          showVerify('address');
+        }
+        return false;
+      })
+      .catch(function () { return false; });
+  }
+
+  /**
+   * Called after sign-in and after /api/me. If the server says this account
+   * still owes a verified address, block play behind the verification screen.
+   */
+  function enforceVerification() {
+    if (!available || !account) return Promise.resolve(false);
+    return fetch('/api/account/email/status', { credentials: 'same-origin', cache: 'no-store' })
+      .then(function (res) { return res.json().catch(function () { return {}; }); })
+      .then(function (status) {
+        // Any answer we cannot read leaves play open: a broken page must not
+        // lock out somebody the server is happy to let in.
+        if (!status || status.ok === false) return false;
+        if (!status.required) return false;
+        verify.email = status.email || '';
+        verify.notice = status.notice || null;
+        showVerify(status.awaitingCode ? 'code' : 'address');
+        if (status.awaitingCode) startCooldown(status.resendInSeconds);
+        return true;
+      })
+      .catch(function () { return false; });
+  }
+
+  /** The server accepted something: refresh the local account and the screen. */
+  function afterVerified(result) {
+    if (result && result.account) account = result.account;
+    renderAccountBits();
+    hideVerify();
+    var line = $('menu-feedback');
+    if (line) line.textContent = 'Email verified. Welcome to PHOENIX.';
+    if (typeof pending === 'function') {
+      var fn = pending;
+      pending = null;
+      fn();
+    }
+  }
+
+  function wireVerify() {
+    var overlay = $('verify-overlay');
+    if (!overlay) return;
+
+    // Sending a code. The address is whatever was typed - it is allowed to be
+    // different from anything on the account, because proving it is the point.
+    $('verify-address-form').onsubmit = function (event) {
+      event.preventDefault();
+      var email = $('verify-email').value.trim();
+      if (!email) { verifyFeedback('Enter an email address.'); return; }
+      verifyBusy(true);
+      verifyFeedback('Sending your code…', true);
+      post('/api/account/email/request', { email: email })
+        .then(function (out) {
+          var data = out.data || {};
+          if (!out.res.ok || !data.ok) {
+            var message = data.message || 'A code could not be sent.';
+            if (data.code) message += ' [' + data.code + ']';
+            verifyFeedback(message);
+            if (data.retryInSeconds) startCooldown(data.retryInSeconds);
+            return;
+          }
+          verify.email = email;
+          showVerify('code');
+          startCooldown(data.resendAfter);
+          verifyFeedback(data.message || 'We sent a six-digit code to ' + email + '.', true);
+        })
+        .catch(function () { verifyFeedback('Cannot reach the server. Try again.'); })
+        .then(function () { verifyBusy(false); });
+    };
+
+    // Checking the six digits.
+    $('verify-code-form').onsubmit = function (event) {
+      event.preventDefault();
+      var code = ($('verify-code').value || '').replace(/\D/g, '');
+      if (code.length !== 6) { verifyFeedback('Enter the six-digit code.'); return; }
+      verifyBusy(true);
+      verifyFeedback('Checking…', true);
+      post('/api/account/email/verify', { code: code })
+        .then(function (out) {
+          var data = out.data || {};
+          $('verify-code').value = '';
+          if (!out.res.ok || !data.ok) {
+            var message = data.message || 'That code did not work.';
+            if (data.code) message += ' [' + data.code + ']';
+            verifyFeedback(message);
+            if (typeof data.attemptsLeft === 'number') {
+              verifyFeedback(message + ' (' + data.attemptsLeft + ' attempts left)');
+            }
+            return;
+          }
+          afterVerified(data);
+        })
+        .catch(function () { verifyFeedback('Cannot reach the server. Try again.'); })
+        .then(function () { verifyBusy(false); });
+    };
+
+    // A fresh code, once the cooldown has run out.
+    $('verify-resend').onclick = function () {
+      if (!verify.email) { showVerify('address'); return; }
+      verifyBusy(true);
+      post('/api/account/email/request', { email: verify.email })
+        .then(function (out) {
+          var data = out.data || {};
+          if (!out.res.ok || !data.ok) {
+            verifyFeedback(data.message || 'A new code could not be sent.');
+            if (data.retryInSeconds) startCooldown(data.retryInSeconds);
+            return;
+          }
+          startCooldown(data.resendAfter);
+          verifyFeedback('A new code is on its way.', true);
+        })
+        .catch(function () { verifyFeedback('Cannot reach the server. Try again.'); })
+        .then(function () { verifyBusy(false); });
+    };
+
+    // Start over with a different address.
+    $('verify-change').onclick = function () {
+      showVerify('address');
+    };
+  }
+
   function signedIn(result, done) {
     account = result.account;
     renderAccountBits();
     hide();
     feedback('', false);
-    var line = $('menu-feedback');
-    if (line) line.textContent = 'Signed in as ' + account.username + '.';
-    if (typeof done === 'function') {
-      var fn = done;
-      pending = null;
-      fn();
-    }
+
+    // An account that still owes us a verified address goes straight to that
+    // screen. `pending` is deliberately NOT cleared here: the callback the
+    // player was waiting for runs once verification is done.
+    if (done) pending = done;
+    enforceVerification().then(function (blocked) {
+      if (blocked) return;
+      var line = $('menu-feedback');
+      if (line) line.textContent = 'Signed in as ' + account.username + '.';
+      if (typeof pending === 'function') {
+        var fn = pending;
+        pending = null;
+        fn();
+      }
+    });
   }
 
   /** Runs `callback` once a session exists, showing the sign-in screen if not. */
@@ -201,6 +449,8 @@
     var form = $('account-form');
     if (!form) return;
 
+    wireVerify();
+
     $('account-toggle').onclick = function () {
       setMode(
         document.querySelector('.account-shell').getAttribute('data-mode') === 'register'
@@ -225,9 +475,20 @@
         feedback('Enter both a username and a password.');
         return;
       }
+      var body = { username: username, password: password };
+      if (mode === 'register') {
+        // The server refuses a registration with no address when the migration
+        // is installed, so ask here rather than letting it fail remotely.
+        var email = ($('account-email').value || '').trim();
+        if (!email) {
+          feedback('Enter an email address. Every PHOENIX account needs a verified one.');
+          return;
+        }
+        body.email = email;
+      }
       busy(true);
       feedback(mode === 'register' ? 'Creating your account…' : 'Signing in…', false);
-      post(mode === 'register' ? '/api/register' : '/api/login', { username: username, password: password })
+      post(mode === 'register' ? '/api/register' : '/api/login', body)
         .then(function (out) {
           if (!out.res.ok || !out.data.ok) {
             // The server keeps real database errors in its own log; all that
@@ -302,7 +563,14 @@
       if (!available) { renderAccountBits(); return; }
 
       var waitForIntro = function () {
-        if (current) { renderAccountBits(); return; }
+        if (current) {
+          renderAccountBits();
+          // An EXISTING account, signed in from before this feature existed,
+          // meets the mandatory update screen here. Nothing is deleted, no
+          // session is ended, and their stats, badges and name are untouched.
+          enforceVerification();
+          return;
+        }
         // Logged out: reveal the sign-in screen once the intro has had its turn.
         show('login', 'Sign in to save your place. New here? Create an account.');
       };
@@ -329,6 +597,11 @@
     // `current()` being null: a signed-out visitor and a server with no
     // accounts both have no current account, but only the latter means
     // "there is no owner role here to read".
-    available: function () { return available; }
+    available: function () { return available; },
+    // Re-check whether this session still owes a verified address and open the
+    // screen if it does. Returns true when play is blocked behind it.
+    enforceVerification: enforceVerification,
+    // Open the verification screen directly (used by the update notice).
+    openVerification: openVerifyFromServer
   };
 })();

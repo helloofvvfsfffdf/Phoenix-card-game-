@@ -21,6 +21,7 @@
 <link rel="stylesheet" href="css/badges.css" />
 <link rel="stylesheet" href="css/announcements.css" />
 <link rel="stylesheet" href="css/leaderboard.css" />
+<link rel="stylesheet" href="css/moderation.css" />
 <link rel="stylesheet" href="css/allies.css" />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128293;</text></svg>" />
 <title>Phoenix</title>
@@ -407,6 +408,12 @@
              maxlength="22" placeholder="Username" aria-label="Username" required />
       <input id="account-password" name="password" type="password" autocomplete="current-password"
              maxlength="128" placeholder="Password" aria-label="Password" required />
+      <!-- Only ever shown in CREATE mode. Kept out of the login form because a
+           sign-in never needs an address, and an extra empty required field
+           there would simply stop people getting in. -->
+      <input id="account-email" name="email" type="email" autocomplete="email"
+             maxlength="254" placeholder="Email address" aria-label="Email address"
+             hidden />
       <div class="account-actions">
         <button id="account-cancel" type="button">NOT NOW</button>
         <button type="submit" id="account-submit">SIGN IN &rarr;</button>
@@ -414,7 +421,43 @@
     </form>
     <button id="account-toggle" type="button" class="account-toggle">New here? Create an account</button>
     <p id="account-feedback" class="account-feedback" aria-live="polite"></p>
-    <p class="account-fineprint">Usernames are 3-22 letters, digits or underscore. Passwords need 8+ characters. No email required.</p>
+    <p class="account-fineprint">Usernames are 3-22 letters, digits or underscore. Passwords need 8+ characters.</p>
+  </div>
+</div>
+
+<!-- Email verification. One screen with two faces: entering the six digits that
+     were just mailed, or adding an address to an account that predates the
+     requirement. It is a SEPARATE overlay from the sign-in one above so that
+     closing it can never sign anybody out. -->
+<div class="account-overlay" id="verify-overlay" hidden>
+  <div class="account-shell" role="dialog" aria-modal="true" aria-labelledby="verify-title">
+    <p class="account-eyebrow">PHOENIX · VERIFY YOUR EMAIL</p>
+    <h2 id="verify-title">CHECK YOUR EMAIL</h2>
+    <p class="account-note" id="verify-note"></p>
+
+    <!-- Face 1: add an address. -->
+    <form id="verify-address-form" autocomplete="on">
+      <input id="verify-email" name="email" type="email" autocomplete="email"
+             maxlength="254" placeholder="Email address" aria-label="Email address" required />
+      <div class="account-actions">
+        <button type="submit" id="verify-send">SEND CODE &rarr;</button>
+      </div>
+    </form>
+
+    <!-- Face 2: type the six digits. -->
+    <form id="verify-code-form" autocomplete="one-time-code" hidden>
+      <input id="verify-code" name="one-time-code" type="text" inputmode="numeric"
+             autocomplete="one-time-code" maxlength="6" placeholder="6-digit code"
+             aria-label="Six digit verification code" required />
+      <div class="account-actions">
+        <button type="button" id="verify-change">USE A DIFFERENT ADDRESS</button>
+        <button type="submit" id="verify-confirm">VERIFY &rarr;</button>
+      </div>
+      <button type="button" id="verify-resend" class="account-toggle">Send a new code</button>
+    </form>
+
+    <p id="verify-feedback" class="account-feedback" aria-live="polite"></p>
+    <p class="account-fineprint" id="verify-cooldown"></p>
   </div>
 </div>
 <div class="badge-overlay" id="badge-overlay" hidden>
@@ -500,6 +543,35 @@
     <p class="announcement-empty" id="announcement-empty"></p>
   </div>
 </div>
+<!-- Shown when the SERVER reports a restriction on this connection. Everything
+     in it comes from the server's own projection: no address, no other player,
+     no internal id, no name beyond the reason the owner wrote. -->
+<div class="account-overlay ban-overlay" id="ban-overlay" hidden>
+  <div class="account-shell ban-shell" role="alertdialog" aria-modal="true"
+       aria-labelledby="ban-headline" aria-describedby="ban-reason">
+    <p class="account-eyebrow">PHOENIX · ACCOUNT RESTRICTION</p>
+    <h2 id="ban-headline">YOU HAVE BEEN BANNED FROM PHOENIX</h2>
+
+    <p class="ban-status" id="ban-status"></p>
+    <p class="account-note" id="ban-reason"></p>
+    <p class="account-hint" id="ban-issued"></p>
+    <p class="account-hint" id="ban-expires"></p>
+
+    <!-- Only present for a network or device restriction. This is the shared
+         household warning, and it is never omitted: the person reading it may
+         not be the person who was restricted. -->
+    <p class="ban-notice" id="ban-notice" hidden></p>
+
+    <p class="ban-footnote">
+      A restriction can only be lifted by the owner of PHOENIX. Signing out,
+      clearing your cookies or using another browser will not remove it.
+    </p>
+    <div class="account-actions">
+      <button type="button" id="ban-close" class="online-secondary">CLOSE</button>
+    </div>
+  </div>
+</div>
+
 <section id="admin-panel" hidden class="admin-panel">
   <div class="admin-shell">
     <h2>Server Admin Dashboard</h2>
@@ -529,6 +601,91 @@
     <p id="announce-feedback" aria-live="polite"></p>
     <ul id="announce-list" class="announce-list"></ul>
     <p class="announcement-empty" id="announce-empty"></p>
+
+    <!-- BAN MANAGEMENT. Owner only, and the server re-checks the role on every
+         single call - these controls are only a way of ASKING. Nothing here
+         can hide a restriction from the server, and an ordinary player who
+         posts to these routes gets a 403 and an audit line. -->
+    <h3>Ban Management</h3>
+    <p class="announce-hint">
+      Search for an account by username or by its account ID, then restrict it.
+      An <strong>account restriction</strong> is the default and follows the player.
+      The network and device options below are separate, optional, and each can be
+      lifted on its own without touching the account.
+    </p>
+
+    <div class="mod-lookup">
+      <input id="mod-search" type="search" maxlength="64"
+             placeholder="Username or account ID" aria-label="Search accounts" />
+      <button id="mod-search-btn" class="online-primary">SEARCH</button>
+    </div>
+    <div id="mod-results" class="mod-results"></div>
+
+    <!-- The issue form. Kept hidden until an account is picked, so nobody can
+         fire a restriction at a half-typed id. -->
+    <div id="mod-issue" class="mod-issue" hidden>
+      <h4 id="mod-issue-title"></h4>
+      <textarea id="mod-reason" rows="2" maxlength="300"
+                placeholder="Reason shown to the player…" aria-label="Reason"></textarea>
+
+      <fieldset class="mod-fieldset">
+        <legend>How long?</legend>
+        <label><input type="radio" name="mod-duration" value="permanent" checked />
+          Permanent — never expires on its own, always reversible by you.</label>
+        <div class="mod-duration-row">
+          <label><input type="radio" name="mod-duration" value="temporary" />
+            Temporary</label>
+          <select id="mod-duration-length" aria-label="Ban length">
+            <option value="3600">1 hour</option>
+            <option value="86400" selected>1 day</option>
+            <option value="604800">7 days</option>
+            <option value="2592000">30 days</option>
+            <option value="7776000">90 days</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <input id="mod-duration-custom" type="datetime-local" hidden
+                 aria-label="Custom expiry date and time" />
+        </div>
+      </fieldset>
+
+      <fieldset class="mod-fieldset">
+        <legend>Optional extras</legend>
+        <p class="mod-warn" id="mod-ip-warning" hidden></p>
+        <label><input type="checkbox" id="mod-ip" />
+          Also restrict this <strong>network address</strong> (optional)</label>
+        <p class="mod-sub" id="mod-ip-detail" hidden></p>
+
+        <label><input type="checkbox" id="mod-device" />
+          Also restrict this <strong>browser device</strong> (optional)</label>
+        <p class="mod-sub" id="mod-device-detail" hidden></p>
+      </fieldset>
+
+      <div class="announce-actions">
+        <button id="mod-issue-btn" class="online-primary">ISSUE RESTRICTION</button>
+        <button id="mod-cancel" class="online-secondary">CANCEL</button>
+      </div>
+      <p id="mod-feedback" aria-live="polite"></p>
+    </div>
+
+    <!-- Live restrictions, filterable by state. -->
+    <div class="mod-lookup">
+      <select id="mod-status" aria-label="Filter restrictions">
+        <option value="active">Active</option>
+        <option value="expired">Expired</option>
+        <option value="revoked">Revoked</option>
+        <option value="all">All</option>
+      </select>
+      <button id="mod-refresh" class="online-secondary">REFRESH</button>
+    </div>
+    <ul id="mod-list" class="mod-list"></ul>
+    <p class="announcement-empty" id="mod-empty"></p>
+
+    <h4 class="mod-subhead">Moderation audit log</h4>
+    <p class="announce-hint">
+      Every restriction issued or lifted is recorded here with who did it and when.
+      The log is append-only: it cannot be edited or deleted, not even by you.
+    </p>
+    <ul id="mod-log" class="mod-log"></ul>
 
     <button id="admin-logout" class="online-secondary">Logout</button>
   </div>
@@ -563,6 +720,7 @@
 <script src="js/account-client.js"></script>
 <script src="js/announcement-client.js"></script>
 <script src="js/leaderboard-client.js"></script>
+<script src="js/moderation-client.js"></script>
 <script src="js/badge-client.js"></script>
 <script src="js/prototype.js"></script>
 <script src="js/allies.js"></script>

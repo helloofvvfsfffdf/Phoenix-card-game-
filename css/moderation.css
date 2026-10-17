@@ -1,0 +1,323 @@
+/*
+ * Phoenix - css/moderation.css
+ * ---------------------------------------------------------------------------
+ * Three things share this file because they are one feature seen from three
+ * sides:
+ *
+ *   1. The VERIFICATION screen - six digits, or an address for an account that
+ *      predates the requirement.
+ *   2. The BAN screen - what a restricted player is told, and nothing more.
+ *   3. BAN MANAGEMENT - the owner's search, issue form and restriction list.
+ *
+ * Same navy backdrop and gold accent as the account and badge screens. Every
+ * animation is transform/opacity only and stops under prefers-reduced-motion.
+ *
+ * Deliberate omission, throughout: no element in this file ever renders an IP
+ * address, a device token, or the name of any other player. The owner's list
+ * shows a reason, a scope, a duration and an actor - that is the whole surface.
+ */
+
+/* ======================================================================== */
+/* 1. VERIFY YOUR EMAIL                                                     */
+/* ======================================================================== */
+
+#verify-overlay .account-shell { text-align: left; }
+
+#verify-code {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 11px;
+  text-align: center;
+  padding-left: calc(14px + 11px);
+  font-variant-numeric: tabular-nums;
+}
+
+#verify-feedback.is-good { color: #8ee6a8; }
+#verify-feedback.is-bad  { color: #ff9b8a; }
+
+#verify-cooldown {
+  min-height: 1em;
+  color: #9a8f82;
+}
+
+#verify-cooldown:not(:empty) { margin-top: 10px; }
+
+/* ======================================================================== */
+/* 2. THE BAN SCREEN                                                        */
+/* ======================================================================== */
+
+.ban-overlay { z-index: 120; }
+
+.ban-shell {
+  border-color: #8c3a2a;
+  background:
+    radial-gradient(130% 90% at 50% -10%, rgba(255, 120, 60, 0.18), transparent 60%),
+    linear-gradient(180deg, #1d1512, #120d0b);
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.72), inset 0 0 0 1px rgba(255, 170, 140, 0.14);
+}
+
+.ban-shell h2 {
+  color: #ff8a5c;
+  font-size: clamp(19px, 3.4vw, 26px);
+  line-height: 1.24;
+  letter-spacing: 1.4px;
+  margin: 2px 0 14px;
+}
+
+/* PERMANENT or UNTIL <date>. The single most important line after the
+ * headline, so it is set apart and never left blank. */
+.ban-status {
+  display: inline-block;
+  margin: 0 0 12px;
+  padding: 6px 12px;
+  border: 1px solid #a4512f;
+  border-radius: 999px;
+  background: rgba(255, 138, 92, 0.1);
+  color: #ffb08c;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.8px;
+}
+
+.ban-status.is-temporary { border-color: #8a6f2c; color: #ffd68a; }
+
+/* The shared-household warning. Red-tinted and impossible to miss: the person
+ * reading this may not be the person who was restricted. */
+.ban-notice {
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  border: 1px solid #a4512f;
+  border-left: 4px solid #ff8a5c;
+  border-radius: 10px;
+  background: rgba(255, 138, 92, 0.09);
+  color: #ffd0bb;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.ban-notice[hidden] { display: none; }
+
+.ban-footnote {
+  margin: 16px 0 0;
+  color: #9a8f82;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+/* ======================================================================== */
+/* 3. BAN MANAGEMENT                                                        */
+/* ======================================================================== */
+
+.mod-lookup {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+
+.mod-lookup input,
+.mod-lookup select {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid #4a4436;
+  border-radius: 9px;
+  background: #14130f;
+  color: #f3e6c8;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.mod-lookup select { flex: 0 0 auto; max-width: 150px; }
+
+.mod-results { display: grid; gap: 6px; margin-bottom: 12px; }
+
+.mod-hit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid #3b3629;
+  border-radius: 9px;
+  background: #16150f;
+}
+
+.mod-hit-name { color: #f7e5c0; font-size: 13.5px; font-weight: 700; }
+
+/* The account ID is shown because it is the unambiguous key an owner copies
+ * when a username is ambiguous - but it is this ONE account's id, never a
+ * list of other people. */
+.mod-hit-id {
+  display: block;
+  margin-top: 2px;
+  color: #8d8271;
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+}
+
+.mod-issue {
+  margin: 14px 0 18px;
+  padding: 14px;
+  border: 1px solid #4a4436;
+  border-left: 3px solid #ffc93c;
+  border-radius: 12px;
+  background: #15140f;
+}
+
+.mod-issue[hidden] { display: none; }
+
+.mod-issue h4 { margin: 0 0 10px; color: #ffc93c; font-size: 13px; letter-spacing: 1.2px; }
+
+.mod-issue textarea {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 9px 11px;
+  border: 1px solid #4a4436;
+  border-radius: 9px;
+  background: #100f0c;
+  color: #f3e6c8;
+  font-family: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.mod-fieldset {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #3b3629;
+  border-radius: 10px;
+}
+
+.mod-fieldset legend { padding: 0 6px; color: #cbb78e; font-size: 11px; font-weight: 800; letter-spacing: 1.6px; }
+
+.mod-fieldset label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 5px 0;
+  color: #e6d7b4;
+  font-size: 12.5px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.mod-fieldset input[type="radio"],
+.mod-fieldset input[type="checkbox"] { margin-top: 2px; accent-color: #ffc93c; }
+
+.mod-duration-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0 22px;
+}
+
+.mod-duration-row select,
+.mod-duration-row input {
+  padding: 6px 9px;
+  border: 1px solid #4a4436;
+  border-radius: 8px;
+  background: #100f0c;
+  color: #f3e6c8;
+  font-family: inherit;
+  font-size: 12.5px;
+}
+
+.mod-duration-row input[hidden] { display: none; }
+
+/* The shared-address warning, shown the moment the network box is ticked. */
+.mod-warn {
+  margin: 2px 0 8px;
+  padding: 9px 11px;
+  border: 1px solid #a4512f;
+  border-left: 3px solid #ff8a5c;
+  border-radius: 8px;
+  background: rgba(255, 138, 92, 0.08);
+  color: #ffd0bb;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.mod-warn[hidden] { display: none; }
+
+/* Honest limits, stated in the UI rather than only in a report. */
+.mod-sub {
+  margin: 2px 0 8px 22px;
+  color: #9a8f82;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.mod-sub[hidden] { display: none; }
+
+.mod-subhead { margin: 22px 0 4px; color: #cbb78e; font-size: 12px; letter-spacing: 1.6px; }
+
+.mod-list, .mod-log {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.mod-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid #3b3629;
+  border-radius: 9px;
+  background: #16150f;
+}
+
+.mod-row.is-expired { opacity: 0.62; }
+.mod-row.is-revoked { opacity: 0.5; }
+
+.mod-scope {
+  display: inline-block;
+  margin-right: 7px;
+  padding: 2px 7px;
+  border: 1px solid #6d5a2c;
+  border-radius: 999px;
+  color: #ffd68a;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 1.3px;
+  vertical-align: middle;
+}
+
+.mod-scope.is-account { border-color: #8c3a2a; color: #ff9b7a; }
+.mod-scope.is-ip     { border-color: #4a5c8c; color: #a8c2ff; }
+.mod-scope.is-device { border-color: #4a7c5c; color: #a8e6c2; }
+
+.mod-who    { color: #f7e5c0; font-size: 12.5px; font-weight: 700; }
+.mod-why    { margin-top: 3px; color: #c3b493; font-size: 11.5px; line-height: 1.5; }
+.mod-when   { margin-top: 3px; color: #8d8271; font-size: 10.5px; }
+.mod-state  { margin-top: 3px; color: #8d8271; font-size: 10.5px; }
+
+.mod-log-entry {
+  padding: 7px 10px;
+  border-left: 2px solid #3b3629;
+  background: #131208;
+  color: #b6a887;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.mod-log-entry strong { color: #e6d7b4; font-weight: 700; }
+
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* --------------------------- motion ------------------------------------- */
+
+@keyframes modArrive {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.mod-issue:not([hidden]) { animation: modArrive 240ms ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mod-issue:not([hidden]) { animation: none; }
+}

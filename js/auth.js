@@ -70,6 +70,34 @@ function isConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
 }
 
+/**
+ * Do the accounts table carry an email address yet?
+ *
+ * sql/email-verification.sql adds them. Until it has been run the server keeps
+ * working exactly as before rather than logging everybody out: registration
+ * simply does not demand an address, and the gameplay gate stays open. Once the
+ * migration lands, the same process starts requiring verification on the next
+ * request with no redeploy.
+ *
+ * Probed once and cached - the schema of a table does not change under us.
+ */
+let _emailColumns = null;
+
+function _resetEmailProbe() { _emailColumns = null; }
+
+async function schemaHasEmail() {
+  if (_emailColumns !== null) return _emailColumns;
+  if (!isConfigured()) return false;
+  try {
+    const { error } = await client().from('accounts')
+      .select('email, email_verified_at').limit(1);
+    _emailColumns = !error;
+  } catch (err) {
+    _emailColumns = false;
+  }
+  return _emailColumns;
+}
+
 function client() {
   if (!_supabase) {
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -401,18 +429,51 @@ async function getSessionAccount(req) {
   }
   const { data: account, error: accountError } = await client()
     .from('accounts')
-    .select('id, username, role')
+    .select('id, username, role, email, email_verified_at')
     .eq('id', session.account_id)
     .maybeSingle();
-  if (accountError) {
-    logDbError('account lookup failed', accountError);
+
+  let accountRow = account;
+  let accountError2 = accountError;
+  // Before sql/email-verification.sql has been run those two columns do not
+  // exist, and PostgREST answers 42703 / PGRST205 rather than returning null.
+  // Retry on the original three columns so an existing player stays signed in
+  // THROUGH the migration - never logged out, never asked to re-register.
+  if (accountError2 && isMissingEmailColumns(accountError2)) {
+    const retry = await client()
+      .from('accounts')
+      .select('id, username, role')
+      .eq('id', session.account_id)
+      .maybeSingle();
+    accountRow = retry.data;
+    accountError2 = retry.error;
+  }
+
+  if (accountError2) {
+    logDbError('account lookup failed', accountError2);
     return null;
   }
-  if (!account) return null;
-  // Project to the three public fields explicitly. The query already asks for
-  // them, but re-mapping here means NO consumer can ever receive a password
-  // hash or any other column, whatever the database happens to return.
-  return { id: account.id, username: account.username, role: account.role };
+  if (!accountRow) return null;
+  // Project to the public fields explicitly. The query already asks for them,
+  // but re-mapping here means NO consumer can ever receive a password hash or
+  // any other column, whatever the database happens to return.
+  return {
+    id: accountRow.id,
+    username: accountRow.username,
+    role: accountRow.role,
+    email: accountRow.email || null,
+    emailVerified: Boolean(accountRow.email_verified_at)
+  };
+}
+
+/**
+ * True when an error means "this column is not there yet", as opposed to a
+ * real database problem. 42703 is undefined_column; PGRST205 / PGRST204 are
+ * PostgREST's schema-cache misses; 42P01 is a missing table.
+ */
+function isMissingEmailColumns(error) {
+  const code = String((error && error.code) || '');
+  return code === '42703' || code === 'PGRST205' || code === 'PGRST204' || code === '42P01';
 }
 
 /**
@@ -441,8 +502,19 @@ async function destroySession(req) {
   if (error) logDbError('session delete failed', error); // logout must still succeed
 }
 
+/**
+ * Address shape, deliberately permissive: Supabase's OTP is what proves
+ * ownership of an address, not a regular expression. This only has to be tight
+ * enough that obvious junk never reaches the mail provider.
+ */
+const EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>.]+(\.[^\s@,;<>.]+)+$/;
+function validEmail(raw) {
+  const email = String(raw === undefined || raw === null ? '' : raw).trim();
+  return email.length >= 5 && email.length <= 254 && EMAIL_RE.test(email);
+}
+
 /* ---------- register / login ---------- */
-async function register(username, password) {
+async function register(username, password, email) {
   username = String(username || '').trim();
   if (!/^[A-Za-z0-9_]{3,22}$/.test(username)) {
     return { ok: false, message: 'Username must be 3-22 letters, digits or underscore.' };
@@ -450,6 +522,16 @@ async function register(username, password) {
   if (typeof password !== 'string' || password.length < 8) {
     return { ok: false, message: 'Password must be at least 8 characters.' };
   }
+
+  // Mandatory once sql/email-verification.sql has been run; optional before
+  // it, so the migration can be applied to a live server without turning every
+  // registration red in the meantime.
+  const needsEmail = await schemaHasEmail();
+  const suppliedEmail = String(email === undefined || email === null ? '' : email).trim();
+  if (needsEmail && !validEmail(suppliedEmail)) {
+    return { ok: false, message: 'A valid email address is required to play PHOENIX.' };
+  }
+  const normalizedEmail = validEmail(suppliedEmail) ? suppliedEmail : null;
   // Uniqueness check. The error is inspected too: a SILENT lookup failure
   // used to be treated as "no such user" and hide a broken database.
   const lookup = await client()
@@ -463,12 +545,22 @@ async function register(username, password) {
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
+  // The address goes on UNVERIFIED, from the very first row: a new account is
+  // created with an email it has not proven, and only Supabase's OTP can flip
+  // that. Never auto-verified, never skipped.
+  const payload = { username, password_hash: passwordHash, role: 'player' };
+  if (needsEmail && normalizedEmail) {
+    payload.email = normalizedEmail;
+    payload.email_verified_at = null;
+  }
+
   // `.select()` (array form) rather than `.maybeSingle()`: an INSERT whose
   // RETURNING comes back empty is a real, distinguishable condition here, and
   // it should be reported instead of becoming a null dereference.
   const inserted = await client().from('accounts')
-    .insert({ username, password_hash: passwordHash, role: 'player' })
-    .select('id, username, role');
+    .insert(payload)
+    .select(needsEmail ? 'id, username, role, email, email_verified_at'
+                       : 'id, username, role');
 
   if (inserted.error) {
     logDbError('register: INSERT into public.accounts failed (username=' +
@@ -501,14 +593,22 @@ async function register(username, password) {
              message: 'Your account was created, but sign-in failed. Please sign in instead.',
              code: userRef(session.error) };
   }
-  return { ok: true, account: { id: row.id, username: row.username, role: row.role },
-           token: session.token };
+  return {
+    ok: true,
+    account: projectAccount(row),
+    // The address that still owes a code, so the route knows to mail one.
+    email: needsEmail ? normalizedEmail : null,
+    token: session.token
+  };
 }
 
 async function login(username, password) {
   username = String(username || '').trim();
+  const withEmail = await schemaHasEmail();
   const lookup = await client()
-    .from('accounts').select('id, username, password_hash, role')
+    .from('accounts')
+    .select(withEmail ? 'id, username, password_hash, role, email, email_verified_at'
+                      : 'id, username, password_hash, role')
     .eq('username', username).maybeSingle();
 
   if (lookup.error) {
@@ -541,9 +641,24 @@ async function login(username, password) {
     return { ok: false, message: 'Sign-in is temporarily unavailable. Try again shortly.',
              code: userRef(session.error) };
   }
-  return { ok: true,
-           account: { id: account.id, username: account.username, role: account.role },
-           token: session.token };
+  return { ok: true, account: projectAccount(account), token: session.token };
+}
+
+/**
+ * The public shape of an account, and the ONLY shape anything downstream ever
+ * sees. Built column by column so a password hash, an internal flag or a
+ * column added by a future migration can never leak into a response, a log or
+ * a websocket message.
+ */
+function projectAccount(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    username: row.username,
+    role: row.role,
+    email: row.email || null,
+    emailVerified: Boolean(row.email_verified_at)
+  };
 }
 
 /* ---------- owner claim (atomic, via the DB RPC) ---------- */
@@ -596,5 +711,6 @@ module.exports = {
   client, hashToken, parseCookies, isSecure,
   getSessionAccount, sessionCookie, clearSessionCookie,
   register, login, destroySession, claimOwner,
+  schemaHasEmail, projectAccount, validEmail, _resetEmailProbe,
   describeError, redact
 };

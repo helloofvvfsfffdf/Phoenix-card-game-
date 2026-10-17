@@ -199,6 +199,78 @@
     $('online-feedback').textContent = message;
   }
 
+  /* ------------------------------------------------------------------ */
+  /* The ban screen                                                      */
+  /*                                                                     */
+  /* Everything it shows comes from the server's public projection of the */
+  /* restriction: a headline, a scope, a reason, whether it is permanent, */
+  /* when it expires, and - for a network or device restriction - the     */
+  /* warning that somebody ELSE on this connection may be affected.       */
+  /* It never receives, and therefore never renders, an address, a device */
+  /* token, an internal id, or the name of any other player.              */
+  /* ------------------------------------------------------------------ */
+
+  let banShown = false;
+
+  function showBanScreen(ban) {
+    const overlay = $('ban-overlay');
+    if (!overlay || !ban) return;
+    banShown = true;
+
+    $('ban-headline').textContent = ban.headline || 'YOU HAVE BEEN BANNED FROM PHOENIX';
+
+    const status = $('ban-status');
+    if (ban.permanent) {
+      status.textContent = 'PERMANENT';
+      status.classList.remove('is-temporary');
+    } else {
+      status.textContent = ban.expiresAt
+        ? 'UNTIL ' + formatWhen(ban.expiresAt).toUpperCase()
+        : 'TEMPORARY';
+      status.classList.add('is-temporary');
+    }
+
+    $('ban-reason').textContent = ban.reason
+      ? 'Reason: ' + ban.reason
+      : 'No reason was recorded.';
+    $('ban-issued').textContent = ban.issuedAt
+      ? 'Issued ' + formatWhen(ban.issuedAt) + '.'
+      : '';
+    $('ban-expires').textContent = (!ban.permanent && ban.expiresAt)
+      ? 'This restriction lifts automatically ' + formatWhen(ban.expiresAt) +
+        ', or sooner if the owner lifts it.'
+      : '';
+
+    // The shared-household warning. Absent for a plain account restriction,
+    // present for a network or device one - and never softened.
+    const notice = $('ban-notice');
+    if (ban.notice) {
+      notice.textContent = ban.notice;
+      notice.hidden = false;
+    } else {
+      notice.hidden = true;
+    }
+
+    overlay.hidden = false;
+    if (window.PhoenixOpeningCinematic) window.PhoenixOpeningCinematic.stop();
+  }
+
+  function hideBanScreen() {
+    const overlay = $('ban-overlay');
+    if (overlay) overlay.hidden = true;
+    banShown = false;
+  }
+
+  /** "3 April 2026, 14:05" from an ISO string, or a plain relative hint. */
+  function formatWhen(iso) {
+    const at = new Date(iso);
+    if (!isFinite(at.getTime())) return String(iso);
+    return at.toLocaleString(undefined, {
+      day: 'numeric', month: 'long', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  }
+
   function send(data) {
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify(data));
@@ -251,6 +323,18 @@
 
       if (message.type === 'lobby') {
         renderLobbyList(message.rooms);
+        return;
+      } else if (message.type === 'banned') {
+        // The SERVER has decided this connection is restricted. Everything on
+        // the screen comes from its projection - no address, no other player,
+        // no internal id. There is no "dismiss and carry on" here: the socket
+        // is closed by the server, so play genuinely cannot continue.
+        showBanScreen(message.ban);
+        return;
+      } else if (message.type === 'banned-cleared') {
+        // A restriction was lifted while this player was sitting on the screen.
+        hideBanScreen();
+        feedback('Your restriction has been lifted. Welcome back to PHOENIX.');
         return;
       } else if (message.type === 'account') {
         // The server tells us who we are signed in as (set by the httpOnly
@@ -441,6 +525,10 @@
     // from the page, or absent from a server without announcements, this is a
     // no-op - the dashboard must never depend on it.
     if (window.PhoenixAnnouncements) window.PhoenixAnnouncements.refresh();
+    // Ban Management is a set of REST calls rather than a socket message, so
+    // it has to be asked for a fresh copy here too. Absent from the page this
+    // is a no-op, exactly like the announcements refresh above.
+    if (window.PhoenixModeration) window.PhoenixModeration.refresh();
     const panel = $('admin-panel');
     // Opened from the main menu: tuck the menu away so the dashboard is the page.
     if (PhoenixOnline.adminFromMenu && $('phoenix-menu')) {
@@ -1208,6 +1296,21 @@ function renderPlaying() {
     // Admin panel buttons
     const closeAllBtn = $('admin-close-all');
     if (closeAllBtn) closeAllBtn.onclick = () => send({ type: 'admin_shutdown_all' });
+
+    // The ban screen's CLOSE. It dismisses the panel and nothing else: the
+    // server has already closed the socket, so there is no game left behind
+    // it to return to, and closing the notice never un-bans anybody.
+    const banClose = $('ban-close');
+    if (banClose) banClose.onclick = () => {
+      hideBanScreen();
+      const online = $('online-screen');
+      if (online) online.hidden = true;
+      if ($('phoenix-menu')) $('phoenix-menu').hidden = false;
+      if ($('menu-feedback')) {
+        $('menu-feedback').textContent =
+          'Your access to PHOENIX is restricted. Only the owner can lift it.';
+      }
+    };
     const reopenBtn = $('admin-reopen');
     if (reopenBtn) reopenBtn.onclick = () => send({ type: 'admin_reopen' });
     const lockBtn = $('admin-lock');
