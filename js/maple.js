@@ -49,7 +49,7 @@
    * Legendary Phoenix is included. It ends the match outright and is about as far
    * from nice as a card gets.
    */
-  var NOT_NICE = ['zombie', 'knife', 'steal', 'trick', 'alvin', 'phoenix'];
+  var NOT_NICE = ['zombie', 'knife', 'steal', 'trick', 'alvin', 'phoenix', 'rps'];
 
   /** How long Sweet Tooth lasts, counted from the round it fires in. */
   var ROUNDS = 3;

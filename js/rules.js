@@ -73,7 +73,16 @@
     stealturn: 4,   // hands control of another turn, so scarce
     curse: 5,       // a delayed punish that may never land
     ghost: 4,       // a round of safety, from a card that does nothing else
-    alvin: 3        // the best card in the game, so the rarest by far
+    alvin: 3,       // the best card in the game, so the rarest by far
+    // --- new cards ---
+    dice: 6,        // roll for 20,000
+    rps: 5,         // evil: loser eliminated 1 round
+    betrayal: 4,    // social dilemma
+    speed: 5,       // reaction challenge
+    wheel: 3,       // high impact, low count
+    linkedfate: 4,  // link for shared gains
+    impostor: 3,    // min 4 players, high impact
+    swapper: 4      // ally swap
     // Phoenix is NOT here. It can never be dealt, drawn or reshuffled - see
     // Cards.deckCards() and the phoenixAwarded flag below.
   };
@@ -1032,6 +1041,162 @@
    * card" is a decision, not an automatic effect - and it has to be made from
    * the hand as it stands now.
    */
+  function resolveDice(state, actor, target) {
+    if (!target) return actor.name + ' played Dice Challenge but had no opponent.';
+    var rollActor = 1 + Math.floor(Math.random() * 6);
+    var rollTarget = 1 + Math.floor(Math.random() * 6);
+    while (rollActor === rollTarget) {
+      rollActor = 1 + Math.floor(Math.random() * 6);
+      rollTarget = 1 + Math.floor(Math.random() * 6);
+    }
+    var winner = rollActor > rollTarget ? actor : target;
+    winner.points += 20000;
+    return 'Dice Challenge - ' + actor.name + ' rolled ' + rollActor + ', ' +
+      target.name + ' rolled ' + rollTarget + '. ' + winner.name +
+      ' wins 20,000 points.';
+  }
+
+  function resolveRps(state, actor, target) {
+    if (!target) return actor.name + ' played Rock Paper Scissors but had no opponent.';
+    var choices = ['rock', 'paper', 'scissors'];
+    var a = choices[Math.floor(Math.random() * 3)];
+    var t = choices[Math.floor(Math.random() * 3)];
+    while (a === t) {
+      a = choices[Math.floor(Math.random() * 3)];
+      t = choices[Math.floor(Math.random() * 3)];
+    }
+    var winner;
+    if ((a === 'rock' && t === 'scissors') || (a === 'paper' && t === 'rock') ||
+        (a === 'scissors' && t === 'paper')) {
+      winner = actor;
+    } else {
+      winner = target;
+    }
+    var loser = winner === actor ? target : actor;
+    eliminate(state, loser);
+    return 'Rock Paper Scissors - ' + actor.name + ' chose ' + a + ', ' +
+      target.name + ' chose ' + t + '. ' + winner.name + ' wins. ' +
+      loser.name + ' is eliminated for 1 round.';
+  }
+
+  function resolveBetrayal(state, actor, target) {
+    if (!target) return actor.name + ' played Betrayal but had no opponents.';
+    var others = state.players.filter(function (p) {
+      return p.id !== actor.id && p.id !== target.id && !isOut(p, state);
+    });
+    if (!others.length) return actor.name + ' played Betrayal but there was no second opponent.';
+    var second = others[Math.floor(Math.random() * others.length)];
+    var c1 = Math.random() < 0.5 ? 'share' : 'steal';
+    var c2 = Math.random() < 0.5 ? 'share' : 'steal';
+    if (c1 === 'share' && c2 === 'share') {
+      target.points += 10000;
+      second.points += 10000;
+      return 'Betrayal - ' + target.name + ' and ' + second.name +
+        ' both chose Share. Both gain 10,000.';
+    } else if (c1 === 'steal' && c2 === 'share') {
+      target.points += 20000;
+      return 'Betrayal - ' + target.name + ' chose Steal, ' + second.name +
+        ' chose Share. ' + target.name + ' gains 20,000.';
+    } else if (c1 === 'share' && c2 === 'steal') {
+      second.points += 20000;
+      return 'Betrayal - ' + target.name + ' chose Share, ' + second.name +
+        ' chose Steal. ' + second.name + ' gains 20,000.';
+    } else {
+      return 'Betrayal - both chose Steal. Nobody gains anything.';
+    }
+  }
+
+  function resolveSpeed(state, actor, target) {
+    if (!target) return actor.name + ' played Speed Challenge but had no opponent.';
+    var actorTime = 200 + Math.floor(Math.random() * 300);
+    var targetTime = 200 + Math.floor(Math.random() * 300);
+    var winner = actorTime <= targetTime ? actor : target;
+    winner.points += 15000;
+    return 'Speed Challenge - ' + actor.name + ' reacted in ' + actorTime + 'ms, ' +
+      target.name + ' in ' + targetTime + 'ms. ' + winner.name + ' wins 15,000.';
+  }
+
+  function resolveWheel(state, actor) {
+    var outcomes = [
+      'reshuffle', 'reset_self', 'reset_others', 'eliminate_self_3',
+      'reverse', 'gain_10k', 'lose_20k', 'others_gain_20k', 'no_evil_permanent'
+    ];
+    var outcome = outcomes[Math.floor(Math.random() * outcomes.length)];
+    switch (outcome) {
+      case 'reshuffle':
+        return 'Wheel of Fortune - ' + actor.name + ' spins... All decks reshuffled!';
+      case 'reset_self':
+        actor.points = 0;
+        return 'Wheel of Fortune - ' + actor.name + ' spins... Their points reset to 0!';
+      case 'reset_others':
+        state.players.forEach(function (p) {
+          if (p.id !== actor.id) p.points = 0;
+        });
+        return 'Wheel of Fortune - ' + actor.name + ' spins... All other players reset to 0!';
+      case 'eliminate_self_3':
+        eliminate(state, actor, 3);
+        return 'Wheel of Fortune - ' + actor.name + ' spins... Eliminated for 3 rounds!';
+      case 'reverse':
+        state.turnDirection = (state.turnDirection || 1) * -1;
+        return 'Wheel of Fortune - ' + actor.name + ' spins... Play direction reversed!';
+      case 'gain_10k':
+        actor.points += 10000;
+        return 'Wheel of Fortune - ' + actor.name + ' spins... Gains 10,000 points!';
+      case 'lose_20k':
+        actor.points = Math.max(0, actor.points - 20000);
+        return 'Wheel of Fortune - ' + actor.name + ' spins... Loses 20,000 points!';
+      case 'others_gain_20k':
+        state.players.forEach(function (p) {
+          if (p.id !== actor.id) p.points += 20000;
+        });
+        return 'Wheel of Fortune - ' + actor.name + ' spins... All others gain 20,000!';
+      case 'no_evil_permanent':
+        actor.noEvilPermanent = true;
+        return 'Wheel of Fortune - ' + actor.name + ' spins... Can no longer play Evil cards!';
+    }
+    return 'Wheel of Fortune - ' + actor.name + ' spins...';
+  }
+
+  function resolveLinkedFate(state, actor, target) {
+    if (!target) return actor.name + ' played Linked Fate but had no opponent.';
+    if (!state.linkedFate) state.linkedFate = [];
+    state.linkedFate.push({ a: actor.id, b: target.id, roundsLeft: 2 });
+    return 'Linked Fate - ' + actor.name + ' and ' + target.name +
+      ' are now linked for 2 rounds. Gains are shared at 50%.';
+  }
+
+  function resolveImpostor(state) {
+    var players = state.players.filter(function (p) { return !isOut(p, state); });
+    if (players.length < 4) {
+      return 'Impostor - needs at least 4 players. Card has no effect.';
+    }
+    var impostor = players[Math.floor(Math.random() * players.length)];
+    var caught = Math.random() < 0.5;
+    if (caught) {
+      players.forEach(function (p) {
+        if (p.id !== impostor.id) p.points += 10000;
+      });
+      return 'Impostor - ' + impostor.name + ' was the impostor and was caught! ' +
+        'All others gain 10,000.';
+    } else {
+      impostor.points += 30000;
+      return 'Impostor - ' + impostor.name + ' was the impostor and escaped! ' +
+        impostor.name + ' gains 30,000.';
+    }
+  }
+
+  function resolveSwapper(state, actor, target) {
+    if (!target) return actor.name + ' played Ally Swapper but had no opponent.';
+    var actorAlly = actor.ally;
+    var targetAlly = target.ally;
+    actor.ally = targetAlly;
+    target.ally = actorAlly;
+    return 'Ally Swapper - ' + actor.name + ' and ' + target.name +
+      ' swapped allies. ' + actor.name + ' now has ' + (actorAlly ? actorAlly.name : 'none') +
+      "'s former ally, " + target.name + ' now has ' + (targetAlly ? targetAlly.name : 'none') +
+      "'s former ally.";
+  }
+
   function resolveAlvin(state, actor, target) {
     if (actor.shownToMe.indexOf(target.id) === -1) actor.shownToMe.push(target.id);
     if (target.revealed.indexOf(actor.id) === -1) target.revealed.push(actor.id);
@@ -1184,9 +1349,16 @@
     curse: resolveCurse,
     ghost: resolveGhost,
     stealturn: resolveStealTurn,
-    alvin: resolveAlvin
-    // phoenix is resolved in playCard, because it needs to add events and set
-    // the keep-turn / skip flags.
+    alvin: resolveAlvin,
+    // new cards
+    dice: resolveDice,
+    rps: resolveRps,
+    betrayal: resolveBetrayal,
+    speed: resolveSpeed,
+    wheel: resolveWheel,
+    linkedfate: resolveLinkedFate,
+    impostor: resolveImpostor,
+    swapper: resolveSwapper
   };
 
   /* --------------------------------------------------------------------- */

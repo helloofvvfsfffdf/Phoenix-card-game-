@@ -340,6 +340,11 @@ function playGameToEnd(game, limit) {
  * needs, and the deck gets its own suite below.
  */
 function give(state, seat, cardId) {
+  // Take the card out of the deck so the total count stays honest - otherwise
+  // `ensure` would quietly create a card and every "accounted for" assertion
+  // would be off by one.
+  var deckAt = state.deck.indexOf(cardId);
+  if (deckAt !== -1) state.deck.splice(deckAt, 1);
   state.hands[state.players[seat].id].push(cardId);
   return cardId;
 }
@@ -940,15 +945,17 @@ test('the legendary card is deliberately absent from the composition', function 
 
 suite('Cards');
 
-test('the game uses exactly fourteen cards', function () {
-  equal(Cards.CARDS.length, 14);
+test('the game uses exactly twenty-two cards', function () {
+  equal(Cards.CARDS.length, 22);
 });
 
-test('the fourteen cards are exactly the ones specified', function () {
+test('the twenty-two cards are exactly the ones specified', function () {
   var names = Cards.CARDS.map(function (c) { return c.name; });
   equal(names.join(' | '), '+10,000 Points | Knife | Hunter | Zombie | Steal Points' +
     ' | Judge | Reveal Deck | Skip Everyone | Phoenix' +
-    ' | Trick | Steal a Turn | Curse | Ghost | Alvin');
+    ' | Trick | Steal a Turn | Curse | Ghost | Alvin' +
+    ' | Dice Challenge | Rock Paper Scissors | Betrayal | Speed Challenge' +
+    ' | Wheel of Fortune | Linked Fate | Impostor | Ally Swapper');
 });
 
 test('card ids are all lowercase, so resolve() always finds them', function () {
@@ -962,9 +969,9 @@ test('card ids are all lowercase, so resolve() always finds them', function () {
   });
 });
 
-test('the aimed cards are the eight that ask for a player', function () {
+test('the aimed cards are the fourteen that ask for a player', function () {
   var needs = Cards.CARDS.filter(function (c) { return c.needsTarget; }).map(function (c) { return c.id; });
-  equal(needs.join(','), 'knife,zombie,steal,reveal,trick,stealturn,curse,alvin');
+  equal(needs.join(','), 'knife,zombie,steal,reveal,trick,stealturn,curse,alvin,dice,rps,betrayal,speed,linkedfate,swapper');
 });
 
 test('the two cards that hand back a choice say so', function () {
@@ -982,8 +989,8 @@ test('Alvin brings artwork, and only Alvin', function () {
     'and it is drawn as a ginger cat');
 });
 
-test('Zombie, Knife, Steal Points, Trick and Alvin are evil', function () {
-  equal(Cards.EVIL_CARDS.join(','), 'zombie,knife,steal,trick,alvin');
+test('Zombie, Knife, Steal Points, Trick, Alvin and Rock Paper Scissors are evil', function () {
+  equal(Cards.EVIL_CARDS.join(','), 'zombie,knife,steal,trick,alvin,rps');
   Cards.CARDS.forEach(function (c) {
     equal(Cards.isEvil(c.id), Cards.EVIL_CARDS.indexOf(c.id) !== -1,
       c.id + ' evil status is consistent');

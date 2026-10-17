@@ -35,7 +35,7 @@
    * dismantling the table rather than moving points, which is the same kind of
    * move as Knife and Zombie rather than a scoring swing.
    */
-  var EVIL_CARDS = ['zombie', 'knife', 'steal', 'trick', 'alvin'];
+  var EVIL_CARDS = ['zombie', 'knife', 'steal', 'trick', 'alvin', 'rps'];
 
   var CARDS = [
     {
@@ -250,6 +250,97 @@
         '<path d="M44 37 L57 34"/><path d="M44 40 L57 41"/>' +
         '</g>' +
         '</svg>'
+    },
+    {
+      id: 'dice',
+      name: 'Dice Challenge',
+      short: 'Dice',
+      glyph: '\u{1F3B2}',
+      tone: 'dice',
+      needsTarget: true,
+      blurb: 'Roll against an opponent for 20,000 points.',
+      rule: 'Choose an opponent. Both roll a six-sided die. The higher roll wins 20,000 points. Ties reroll.',
+      targetNote: 'Pick one opponent. You both roll; highest wins 20,000.'
+    },
+    {
+      id: 'rps',
+      name: 'Rock Paper Scissors',
+      short: 'RPS',
+      glyph: '\u270A',
+      tone: 'rps',
+      needsTarget: true,
+      blurb: 'Loser is eliminated for one round.',
+      rule: 'Choose an opponent. Both secretly pick Rock, Paper or Scissors. The loser is eliminated for one round. Ties repeat. An evil card.',
+      targetNote: 'Pick one opponent. Secret picks, loser eliminated 1 round.',
+      reflected: false
+    },
+    {
+      id: 'betrayal',
+      name: 'Betrayal',
+      short: 'Betray',
+      glyph: '\u{1F3AD}',
+      tone: 'betrayal',
+      needsTarget: true,
+      blurb: 'Two opponents choose Share or Steal.',
+      rule: 'Choose two opponents. Both secretly choose Share or Steal. Share/Share: both get 10,000. Steal/Share: stealer gets 20,000. Steal/Steal: both get 0. Neutral.',
+      targetNote: 'Pick two opponents. They each choose Share or Steal secretly.',
+      needsTwoTargets: true
+    },
+    {
+      id: 'speed',
+      name: 'Speed Challenge',
+      short: 'Speed',
+      glyph: '\u26A1',
+      tone: 'speed',
+      needsTarget: true,
+      blurb: 'React fastest to win 15,000 points.',
+      rule: 'Choose an opponent. Both react to a GO signal. The faster player wins 15,000 points. False starts are penalised.',
+      targetNote: 'Pick one opponent. Fastest reaction wins 15,000.'
+    },
+    {
+      id: 'wheel',
+      name: 'Wheel of Fortune',
+      short: 'Wheel',
+      glyph: '\u{1F3A1}',
+      tone: 'wheel',
+      needsTarget: false,
+      blurb: 'Spin for one of nine outcomes.',
+      rule: 'Spin a wheel for one of nine random outcomes: reshuffle all decks, reset your points, reset others points, eliminate you 3 rounds, reverse play, +10,000 to you, -20,000 to you, +20,000 to all others, or ban you from Evil cards permanently.',
+      targetNote: 'No target: the wheel decides.'
+    },
+    {
+      id: 'linkedfate',
+      name: 'Linked Fate',
+      short: 'Linked',
+      glyph: '\u{1F517}',
+      tone: 'linkedfate',
+      needsTarget: true,
+      blurb: 'Link with an opponent for shared gains.',
+      rule: 'Choose an opponent. Both are linked for 2 rounds. Whenever either gains points, the other gets 50% of that gain. The link never causes losses.',
+      targetNote: 'Pick one opponent. You share point gains for 2 rounds.'
+    },
+    {
+      id: 'impostor',
+      name: 'Impostor',
+      short: 'Impostor',
+      glyph: '\u{1F575}',
+      tone: 'impostor',
+      needsTarget: false,
+      needsMinPlayers: 4,
+      blurb: 'Find the impostor among the players.',
+      rule: 'Minimum 4 players. One player is randomly chosen as the impostor and given a different word. Everyone gives clues, then votes. If caught, non-impostors get 10,000. If not, impostor gets 30,000.',
+      targetNote: 'No target: needs 4+ players. One becomes the impostor.'
+    },
+    {
+      id: 'swapper',
+      name: 'Ally Swapper',
+      short: 'Swap',
+      glyph: '\u{1F504}',
+      tone: 'swapper',
+      needsTarget: true,
+      blurb: 'Swap allies with an opponent.',
+      rule: 'Choose an opponent. Your ally and theirs swap places immediately. Points are unchanged.',
+      targetNote: 'Pick one opponent. Your allies swap.'
     }
   ];
 
