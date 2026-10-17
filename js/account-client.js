@@ -504,6 +504,12 @@
     if (serverBtn) {
       serverBtn.hidden = available && !(account && account.role === 'owner');
     }
+
+    // Keep Settings synchronized even when it was opened through a keyboard
+    // shortcut, the match Settings button, or another screen rather than the
+    // main-menu button. The renderer is also called after login and after a
+    // session refresh, so the account row cannot be missed.
+    renderSettingsAccount();
   }
 
   /* ---------- wiring ---------- */
