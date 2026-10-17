@@ -364,7 +364,7 @@
     $('verify-code-form').onsubmit = function (event) {
       event.preventDefault();
       var code = ($('verify-code').value || '').replace(/\D/g, '');
-      if (code.length !== 6) { verifyFeedback('Enter the six-digit code.'); return; }
+      if (code.length < 6 || code.length > 10) { verifyFeedback('Enter the verification code from the email.'); return; }
       verifyBusy(true);
       verifyFeedback('Checking…', true);
       post('/api/account/email/verify', { code: code })

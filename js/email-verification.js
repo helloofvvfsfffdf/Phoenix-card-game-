@@ -35,7 +35,7 @@ const CODE_TTL_SEC = 10 * 60;       // when a code stops being accepted
 const RESEND_COOLDOWN_SEC = 60;     // gap before another code may be asked for
 const MAX_ATTEMPTS = 5;             // wrong codes tried against one code
 const MAX_SENDS_PER_HOUR = 6;       // codes per address per rolling hour
-const CODE_LENGTH = 6;
+const CODE_LENGTH = 8;
 
 // Deliberately permissive: the OTP, not a regular expression, is what proves
 // ownership. Only shape enough to stop obvious junk reaching Supabase.
@@ -154,7 +154,7 @@ function isEmail(raw) {
 }
 
 function isCode(raw) {
-  return new RegExp('^\\d{' + CODE_LENGTH + '}$').test(normalizeCode(raw));
+  return /^\d{6,10}$/.test(normalizeCode(raw));
 }
 
 /** Seconds until `iso`, never negative. */
@@ -433,7 +433,7 @@ async function verifyCode(account, rawCode) {
 
   const code = normalizeCode(rawCode);
   if (!isCode(code)) {
-    return { ok: false, message: 'Enter the six-digit code.' };
+    return { ok: false, message: 'Enter the verification code from the email.' };
   }
 
   // Already proven: verification is over, and no code is accepted again.
