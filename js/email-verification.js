@@ -90,11 +90,12 @@ let _otp = null;
  */
 function otp() {
   if (_otp) return _otp;
-  const client = Auth.client();
+  const client = Auth.freshClient();
   if (!client || !client.auth || typeof client.auth.signInWithOtp !== 'function') {
     throw new Error('Supabase Auth (email OTP) is not available on this client.');
   }
-  return client.auth;
+  _otp = client.auth;
+  return _otp;
 }
 
 /** Swap the OTP implementation. Tests only. */
@@ -464,13 +465,20 @@ async function verifyCode(account, rawCode) {
 
   // Ask Supabase. This is the only authority on whether the code was right.
   let otpError = null;
+  let verifyResult = null;
   try {
-    const result = await otp().verifyOtp({ email: row.email, token: code, type: 'email' });
-    otpError = result && result.error ? result.error : null;
+    verifyResult = await otp().verifyOtp({ email: row.email, token: code, type: 'email' });
+    otpError = verifyResult && verifyResult.error ? verifyResult.error : null;
   } catch (err) {
     console.error('[PHOENIX email] verifyOtp threw -> ' + Auth.describeError(err));
     otpError = { message: 'transport' };
   }
+
+  // verifyOtp sets a user session on the shared Supabase client. If we leave
+  // it there, every subsequent database write runs as that authenticated user
+  // instead of the service role and fails with 42501. Clear it now, before
+  // any privileged write, so the client is back to service-role state.
+  try { await Auth.client().auth.signOut({ scope: 'local' }); } catch (e) { /* best effort */ }
 
   if (otpError) {
     console.error('[PHOENIX email] verifyOtp failed -> ' + describeOtpError(otpError));

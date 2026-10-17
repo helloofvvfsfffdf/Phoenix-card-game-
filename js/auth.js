@@ -128,6 +128,15 @@ function client() {
   return _supabase;
 }
 
+/** A fresh client that is never shared with auth operations. DB writes use this
+ *  so a session set by verifyOtp can never pollute privileged queries. */
+function freshClient() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
+}
+
 /* ---------- safe diagnostics ------------------------------------------------
  * Auth failures used to be swallowed into one generic sentence, which made a
  * broken database indistinguishable from a typo'd password. The MESSAGE shown
@@ -726,7 +735,7 @@ async function claimOwner(accountId, setupKey) {
 module.exports = {
   SESSION_COOKIE, SESSION_TTL_SEC,
   isConfigured, probe,
-  client, hashToken, parseCookies, isSecure,
+  client, freshClient, hashToken, parseCookies, isSecure,
   getSessionAccount, sessionCookie, clearSessionCookie,
   register, login, destroySession, claimOwner,
   schemaHasEmail, projectAccount, validEmail, _resetEmailProbe,
