@@ -392,7 +392,7 @@ async function sendCode(account, email, ip) {
     attempts: 0,
     sent_count: freshWindow ? 1 : Number(existing.sent_count) + 1,
     window_started: freshWindow ? new Date(now).toISOString() : existing.window_started,
-    requested_ip: ip || null
+    requested_ip: ip ? ip.text : null
   });
   if (!saved.ok) {
     // The code is already on its way but there is nowhere to check it against,

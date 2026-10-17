@@ -110,7 +110,7 @@ create table if not exists public.email_verifications (
 alter table public.email_verifications enable row level security;
 
 revoke all on public.email_verifications from anon, public;
-grant select on public.email_verifications to service_role;
+grant select, insert, update, delete on public.email_verifications to service_role;
 
 -- ---------------------------------------------------------------------------
 -- 4. Lock the account columns away from clients
@@ -141,14 +141,20 @@ drop policy if exists email_verifications_owner_read on public.email_verificatio
 -- ---------------------------------------------------------------------------
 create or replace function public.purge_finished_email_verifications()
 returns integer
-language sql
+language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  n integer;
+begin
   delete from public.email_verifications v
   using public.accounts a
   where a.id = v.account_id
     and a.email_verified_at is not null;
+  get diagnostics n = row_count;
+  return n;
+end;
 $$;
 
 revoke all on function public.purge_finished_email_verifications() from public;
