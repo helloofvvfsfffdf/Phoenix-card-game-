@@ -94,18 +94,23 @@ async function schemaHasEmail() {
   // so the probe is retried before a negative result is believed. A column
   // that genuinely does not exist fails every attempt the same way and is
   // still cached as false - the retry only waits out the transient case.
-  const ATTEMPTS = 3;
+  const ATTEMPTS = 5;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     try {
       const { error } = await client().from('accounts')
         .select('email, email_verified_at').limit(1);
-      _emailColumns = !error;
+      if (!error) { _emailColumns = true; return true; }
+      console.error('[PHOENIX email] schema probe attempt ' + attempt + '/' + ATTEMPTS +
+        ' failed -> ' + (error.code || '') + ' ' + (error.message || error));
+      _emailColumns = false;
     } catch (err) {
+      console.error('[PHOENIX email] schema probe attempt ' + attempt + '/' + ATTEMPTS +
+        ' threw -> ' + (err && err.message ? err.message : err));
       _emailColumns = false;
     }
     if (_emailColumns) return true;
     if (attempt < ATTEMPTS) {
-      await new Promise(resolve => setTimeout(resolve, 750));
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
   return _emailColumns;
