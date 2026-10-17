@@ -331,7 +331,10 @@
         // is closed by the server, so play genuinely cannot continue.
         showBanScreen(message.ban);
         return;
-      } else if (message.type === 'banned-cleared') {
+      } else if (message.type === 'interact-ack') {
+        feedback('Decision recorded. Waiting for the other player…');
+        return;
+            } else if (message.type === 'banned-cleared') {
         // A restriction was lifted while this player was sitting on the screen.
         hideBanScreen();
         feedback('Your restriction has been lifted. Welcome back to PHOENIX.');
