@@ -1050,7 +1050,7 @@
    * the hand as it stands now.
    */
   function resolveDice(state, actor, target) {
-    if (!target) return actor.name + ' played Dice Challenge but had no opponent.';
+    if (!actor || !target) return (actor ? actor.name : 'Actor') + ' played Dice Challenge — need a target.';
     var rollActor = 1 + Math.floor(Math.random() * 6);
     var rollTarget = 1 + Math.floor(Math.random() * 6);
     while (rollActor === rollTarget) {
@@ -1058,9 +1058,9 @@
       rollTarget = 1 + Math.floor(Math.random() * 6);
     }
     var winner = rollActor > rollTarget ? actor : target;
-    winner.points += 20000;
-    return 'Dice Challenge - ' + actor.name + ' rolled ' + rollActor + ', ' +
-      target.name + ' rolled ' + rollTarget + '. ' + winner.name +
+    if (winner && typeof winner.points === 'number') winner.points += 20000;
+    return 'Dice Challenge — ' + actor.name + ' rolled ' + rollActor + ', ' +
+      target.name + ' rolled ' + rollTarget + '. ' + (winner ? winner.name : 'Winner') +
       ' wins 20,000 points.';
   }
 
