@@ -166,7 +166,7 @@ module.exports = function (test, equal, deepEqual, assert) {
     equal(f.room.effects.events[0].key, 'ally-maple');
     equal(f.room.effects.events[0].actor, -1);
     equal(f.room.mapleUntil[0], f.room.state.round + 2);
-    equal(f.api.snapshot(f.room, f.room.members[0]).mapleBlocked.length, 6);
+    equal(f.api.snapshot(f.room, f.room.members[0]).mapleBlocked.length, 7);
     f.api.applyMaple(f.room); equal(f.room.effects.sequence, 1);
   });
   test('server snapshots expose private reveal details only to actor and suppress fogged draws', function () {

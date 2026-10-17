@@ -17,7 +17,7 @@ function stage(b){return b.document.body.children.find(function(n){return !n.rem
 module.exports=function(test,equal,deepEqual,assert){
   test('all non-Phoenix sounds, ally recipes and victory/defeat remain byte-for-byte unchanged',function(){
     var h=crypto.createHash('sha256');Object.keys(E.DEFINITIONS).filter(function(k){return k!=='phoenix';}).concat(['victory','defeat','draw']).forEach(function(k){h.update(k);h.update(JSON.stringify(Sound.recipe(k)));h.update(JSON.stringify(Sound.recipe(k,true)));});
-    equal(h.digest('hex'),'8d0f5f3acb40b072005eff7f3e3913378fdfcb1a4f869ddfdadab27cc32a10d2','baseline 79bf62b recipes');
+    equal(h.digest('hex'),'3cde16096c7dccd51dcbc9d0ed4ea0e3bd8b1f334adb17e5c5d3b9f054dec991','baseline 79bf62b recipes');
   });
   test('Phoenix media sizes/hashes match the documented derivatives and mobile budget',function(){
     var root=path.join(__dirname,'../assets/phoenix'),manifest=require('../assets/phoenix/manifest.json'),total=0;

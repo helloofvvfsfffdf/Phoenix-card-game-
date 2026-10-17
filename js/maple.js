@@ -51,7 +51,9 @@
    */
   var NOT_NICE = ['zombie', 'knife', 'steal', 'trick', 'alvin', 'phoenix', 'rps'];
 
-  /** How long Sweet Tooth lasts, counted from the round it fires in. */
+  // The evil card ids. Duplicated here because maple.js has no dependency on
+  // cards.js; keep in sync with EVIL_CARDS in cards.js.
+  var EVIL_CARDS = ['zombie', 'knife', 'steal', 'trick', 'alvin', 'rps', 'phoenix'];
   var ROUNDS = 3;
 
   /** Chance of firing on any given round, as a percentage for crypto.randomInt. */
@@ -81,6 +83,11 @@
 
   /** The card ids `seat` may not play right now, in catalogue order. */
   function blocked(room, seat) {
+    var player = room && room.state && room.state.players ? room.state.players[seat] : null;
+    if (player && player.noEvilPermanent) {
+      // Wheel of Fortune permanently banned this player from Evil cards.
+      return EVIL_CARDS.slice();
+    }
     return isRestricted(room, seat) ? NOT_NICE.slice() : [];
   }
 
@@ -150,7 +157,12 @@
     if (roll * 100 >= CHANCE_PERCENT) return null;
 
     var targets = room.members.filter(function (m) {
-      return !Rules.isOut(s.players[m.seat], s);
+      var p = s.players[m.seat];
+      if (!p || Rules.isOut(p, s)) return false;
+      // Wheel of Fortune permanently banned this player from Evil cards, so
+      // Maple's restriction would be redundant - she skips them.
+      if (p.noEvilPermanent) return false;
+      return true;
     });
     if (!targets.length) return null;
 
