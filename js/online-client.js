@@ -315,6 +315,20 @@
       $('online-actions').replaceChildren();
     };
 
+    // Handle tab visibility changes to prevent timer desync
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        // Tab lost focus - browser will throttle timers
+        // The server interaction timer will auto-resolve on timeout
+      } else {
+        // Tab regained focus - request fresh state to resync
+        if (socket && socket.readyState === WebSocket.OPEN && state && state.started) {
+          // Request a state refresh by sending a no-op
+          socket.send(JSON.stringify({ type: 'ping' }));
+        }
+      }
+    });
+
     socket.onmessage = event => {
       let message;
       try {
