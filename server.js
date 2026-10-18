@@ -1149,6 +1149,10 @@ function finishInteraction(room) {
     clearTimeout(room.interactionTimer);
     room.interactionTimer = null;
   }
+  if (room.countdownTimer) {
+    clearTimeout(room.countdownTimer);
+    room.countdownTimer = null;
+  }
 
   if (result && result.events) recordEvents(room, result.events);
 
@@ -3037,7 +3041,17 @@ async function handle(ws, data) {
         // Both ready - start countdown phase
         pi.phase = 'countdown';
         pi.roundData.goDelay = 1000 + Math.floor(Math.random() * 2000); // 1-3 second delay
-        pi.roundData.goTime = Date.now() + 3000 + pi.roundData.goDelay; // 3 sec countdown + random delay
+        const countdownDuration = 3000; // 3 second countdown
+        pi.roundData.goTime = Date.now() + countdownDuration + pi.roundData.goDelay;
+        
+        // Schedule transition to react phase after countdown + delay
+        if (pi.countdownTimer) clearTimeout(pi.countdownTimer);
+        pi.countdownTimer = setTimeout(function() {
+          if (room.pendingInteraction !== pi) return;
+          pi.phase = 'react';
+          broadcast(room);
+        }, countdownDuration + pi.roundData.goDelay);
+        
         broadcast(room);
         return;
       } else if (phaseKey === 'react') {
@@ -3049,6 +3063,7 @@ async function handle(ws, data) {
           return;
         }
         // Both reacted - resolve
+        if (pi.countdownTimer) clearTimeout(pi.countdownTimer);
         finishInteraction(room);
         return;
       }
