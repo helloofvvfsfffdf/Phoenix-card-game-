@@ -3275,6 +3275,10 @@ async function handle(ws, data) {
       // Set up participants based on card type.
       if (cardId === 'rps' || cardId === 'speed' || cardId === 'dice' || cardId === 'linkedfate' || cardId === 'swapper') {
         room.pendingInteraction.participants = [id, targetId];
+      } else if (cardId === 'wheel') {
+        // Wheel affects all players, no target needed
+        const eligible = s.players.filter(p => !Rules.isOut(p, s));
+        room.pendingInteraction.participants = eligible.map(p => p.id);
       } else if (cardId === 'betrayal') {
         const others = s.players.filter(p => p.id !== id && !Rules.isOut(p, s));
         room.pendingInteraction.participants = [others[0].id, others[1].id];
