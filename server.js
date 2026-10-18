@@ -3013,6 +3013,8 @@ async function handle(ws, data) {
     // Also store in flat structure for all interactive cards (resolve functions read from flat)
     if (!pi.decisions.main) pi.decisions.main = {};
     pi.decisions.main[playerId] = decision;
+    // Also store at top level for resolver compatibility (resolvers read pi.decisions[playerId])
+    pi.decisions[playerId] = decision;
     pi.submittedAt[playerId] = Date.now();
 
     // Handle multi-phase interactions
