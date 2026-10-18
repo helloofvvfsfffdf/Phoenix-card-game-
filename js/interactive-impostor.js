@@ -41,9 +41,9 @@
     document.getElementById('impostor-feedback').textContent = 'Clue submitted. Waiting for others…';
   }
 
-  function submitVote(name) {
+  function submitVote(votedId) {
     if (!window.ws || window.ws.readyState !== 1) return;
-    window.ws.send(JSON.stringify({ type: 'interact', decision: 'vote:' + name }));
+    window.ws.send(JSON.stringify({ type: 'interact', decision: 'vote:' + votedId }));
     document.getElementById('impostor-feedback').textContent = 'Vote cast. Waiting for results…';
   }
 
@@ -54,7 +54,7 @@
     wordsDiv.innerHTML = '<strong>Your word: </strong>' + word + (impostor ? ' <span style="color:#ff6b6b">(IMPOSTOR)</span>' : '');
   }
 
-  function showCluePhase(participants) {
+  function showCluePhase() {
     var cluesDiv = document.getElementById('impostor-clues');
     cluesDiv.innerHTML = '<h3>Give a clue about your word:</h3>' +
       '<input type="text" id="impostor-clue-input" placeholder="Enter your clue" style="width:100%;padding:0.5rem;margin:0.5rem 0;">' +
@@ -116,22 +116,59 @@
       return;
     }
 
-    // Phase: clues
+    // Phase: clues (waiting/main/clues)
     if (pi.phase === 'clues' || pi.phase === 'waiting' || pi.phase === 'main') {
       // Show my word if available
       if (pi.roundData && pi.roundData.wordPair && pi.roundData.impostorId) {
         var impostor = pi.roundData.impostorId === myId;
         var myWord = impostor ? pi.roundData.wordPair.impostor : pi.roundData.wordPair.main;
-        showWords(myWord, impostor);
+        var wordsDiv = document.getElementById('impostor-words');
+        wordsDiv.innerHTML = '<strong>Your word: </strong>' + myWord + (impostor ? ' <span style="color:#ff6b6b">(IMPOSTOR)</span>' : '');
       }
       // Show clue input
-      showCluePhase(pi.participants);
+      var cluesDiv = document.getElementById('impostor-clues');
+      cluesDiv.innerHTML = '<h3>Give a clue about your word:</h3>' +
+        '<input type="text" id="impostor-clue-input" placeholder="Enter your clue" style="width:100%;padding:0.5rem;margin:0.5rem 0;">' +
+        '<button type="button" id="impostor-submit-clue" class="primary">Submit Clue</button>';
+      document.getElementById('impostor-submit-clue').onclick = function () {
+        var input = document.getElementById('impostor-clue-input');
+        if (input.value.trim()) {
+          if (window.ws && window.ws.readyState === 1) {
+            window.ws.send(JSON.stringify({ type: 'interact', decision: 'clue:' + input.value.trim() }));
+          }
+          input.disabled = true;
+          document.getElementById('impostor-submit-clue').disabled = true;
+          document.getElementById('impostor-feedback').textContent = 'Clue submitted. Waiting for others…';
+        }
+      };
       return;
     }
 
     // Phase: vote
     if (pi.phase === 'vote') {
-      showVotePhase(pi.participants);
+      var voteDiv = document.getElementById('impostor-vote');
+      var others = pi.participants.filter(function (id) { return id !== myId; });
+      var buttons = others.map(function (id) {
+        var name = 'Player';
+        if (window.PhoenixOnline && window.PhoenixOnline.getState) {
+          var state = window.PhoenixOnline.getState();
+          if (state && state.players) {
+            var p = state.players.find(function (pl) { return pl.id === id; });
+            if (p) name = p.name;
+          }
+        }
+        return '<button type="button" class="impostor-vote-btn" data-vote="' + id + '">Vote ' + name + '</button>';
+      }).join(' ');
+      voteDiv.innerHTML = '<h3>Vote for the Impostor:</h3>' + buttons;
+      voteDiv.querySelectorAll('.impostor-vote-btn').forEach(function (btn) {
+        btn.onclick = function () {
+          if (window.ws && window.ws.readyState === 1) {
+            window.ws.send(JSON.stringify({ type: 'interact', decision: 'vote:' + this.dataset.vote }));
+          }
+          voteDiv.querySelectorAll('.impostor-vote-btn').forEach(function (b) { b.disabled = true; });
+          document.getElementById('impostor-feedback').textContent = 'Vote cast. Waiting for results…';
+        };
+      });
       return;
     }
   }
@@ -143,10 +180,14 @@
     isImpostor = false;
   }
 
-  window.PhoenixImpostorInteractive = { 
-    build: build, 
-    close: close, 
+  window.PhoenixImpostorInteractive = {
+    build: build,
+    close: close,
     onState: onState,
-    submitVote: submitVote 
+    submitVote: function(votedId) {
+      if (window.ws && window.ws.readyState === 1) {
+        window.ws.send(JSON.stringify({ type: 'interact', decision: 'vote:' + votedId }));
+      }
+    }
   };
 })();

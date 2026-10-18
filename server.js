@@ -1951,7 +1951,14 @@ function snapshot(room, member) {
         })(),
         createdAt: room.pendingInteraction.createdAt,
         timeoutMs: room.pendingInteraction.timeoutMs,
-        phase: room.pendingInteraction.phase || 'main'
+        phase: room.pendingInteraction.phase || 'main',
+        // Include roundData for client display (dice rolls, wheel outcome, impostor words, etc.)
+        roundData: room.pendingInteraction.roundData || null,
+        // Actor info for cards that need it
+        actorId: room.pendingInteraction.actorId || null,
+        actorSeat: room.pendingInteraction.actorSeat || null,
+        targetId: room.pendingInteraction.targetId || null,
+        targetIds: room.pendingInteraction.targetIds || null
       }
     : null;
   const mine = Rules.SEATS[member.seat].id;
