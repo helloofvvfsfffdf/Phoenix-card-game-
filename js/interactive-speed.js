@@ -18,8 +18,11 @@
     overlay.innerHTML =
       '<div class="interactive-shell" role="dialog" aria-modal="true" aria-label="Speed Challenge">' +
       '  <h2>Speed Challenge</h2>' +
+      '  <div class="speed-visual" id="speed-visual">' +
+      '    <div class="speed-light" id="speed-light" aria-hidden="true"></div>' +
+      '    <div class="speed-timer" id="speed-timer" aria-live="polite">0ms</div>' +
+      '  </div>' +
       '  <p id="speed-status">Press Ready when both players are prepared.</p>' +
-      '  <div id="speed-countdown" class="speed-countdown" hidden></div>' +
       '  <button type="button" id="speed-ready-btn" class="primary">Ready!</button>' +
       '  <button type="button" id="speed-go-btn" class="danger" hidden aria-label="GO!">GO!</button>' +
       '  <p id="speed-feedback" aria-live="polite"></p>' +
@@ -31,7 +34,6 @@
     document.getElementById('speed-ready-btn').onclick = submitReady;
     document.getElementById('speed-go-btn').onclick = submitReaction;
 
-    // Get my player ID from the current state
     if (window.PhoenixOnline && window.PhoenixOnline.getState) {
       var state = window.PhoenixOnline.getState();
       if (state && state.players && state.seat !== undefined) {
@@ -52,25 +54,22 @@
     var goBtn = document.getElementById('speed-go-btn');
     var statusEl = document.getElementById('speed-status');
     var feedbackEl = document.getElementById('speed-feedback');
+    var light = document.getElementById('speed-light');
 
-    countdownEl.hidden = false;
-    goBtn.hidden = true;
-    feedbackEl.textContent = '';
+    if (light) light.classList.add('speed-light-waiting');
 
     var count = 3;
     function tick() {
       if (count > 0) {
-        countdownEl.textContent = count;
-        countdownEl.className = 'speed-countdown';
-        // Force reflow for animation
-        void countdownEl.offsetWidth;
-        countdownEl.className = 'speed-countdown animate';
+        statusEl.textContent = count;
+        if (window.gsap) {
+          window.gsap.fromTo(statusEl, {scale: 0.5, opacity: 0}, {scale: 1, opacity: 1, duration: 0.3, ease: 'power2.out'});
+        }
         count--;
         setTimeout(tick, 1000);
       } else {
-        // Random delay before GO signal (1-3 seconds)
+        statusEl.textContent = 'Get ready…';
         var delay = 1000 + Math.random() * 2000;
-        countdownEl.textContent = 'Get ready…';
         setTimeout(showGoSignal, delay);
       }
     }
@@ -82,26 +81,28 @@
     var goBtn = document.getElementById('speed-go-btn');
     var statusEl = document.getElementById('speed-status');
     var feedbackEl = document.getElementById('speed-feedback');
+    var light = document.getElementById('speed-light');
+
+    if (light) {
+      light.classList.remove('speed-light-waiting');
+      light.classList.add('speed-light-go');
+    }
 
     countdownEl.hidden = true;
     goBtn.hidden = false;
     statusEl.textContent = 'GO! Press NOW!';
     feedbackEl.textContent = '';
 
-    // Record server time for latency compensation
     goTime = Date.now();
     reactionStarted = true;
 
-    // Visual/audio cue
-    goBtn.classList.add('go-active');
-    if (window.PhoenixEffects) {
-      window.PhoenixEffects.play('speed-go');
+    if (window.gsap) {
+      window.gsap.fromTo(goBtn, {scale: 0.8}, {scale: 1, duration: 0.2, ease: 'back.out(2)'});
     }
   }
 
   function submitReaction() {
     if (!reactionStarted) {
-      // False start!
       reactionStarted = false;
       document.getElementById('speed-go-btn').hidden = true;
       document.getElementById('speed-status').textContent = 'False start! You reacted too early.';
@@ -120,6 +121,10 @@
     document.getElementById('speed-status').textContent = 'You reacted in ' + reactionTime + 'ms.';
     document.getElementById('speed-feedback').textContent = 'Waiting for opponent…';
 
+    if (window.gsap) {
+      window.gsap.to(document.getElementById('speed-status'), {color: '#00ff88', duration: 0.3, yoyo: true, repeat: 1});
+    }
+
     if (window.ws && window.ws.readyState === 1) {
       window.ws.send(JSON.stringify({ type: 'interact', decision: 'time:' + reactionTime }));
     }
@@ -134,12 +139,11 @@
     var goBtn = document.getElementById('speed-go-btn');
     var feedbackEl = document.getElementById('speed-feedback');
     var readyBtn = document.getElementById('speed-ready-btn');
+    var light = document.getElementById('speed-light');
 
-    // Check if I've submitted
-    var mySubmitted = pi.submitted && pi.submitted.includes(myId);
+    var mySubmitted = pi.decisions && pi.decisions.main && pi.decisions.main[myId];
 
     if (pi.phase === 'countdown' || (pi.submitted && pi.submitted.length === 1 && !mySubmitted)) {
-      // Opponent is ready, waiting for me
       if (!mySubmitted && readyBtn && !readyBtn.hidden) {
         statusEl.textContent = 'Opponent is ready. Press Ready!';
       }
@@ -147,14 +151,12 @@
     }
 
     if (pi.submitted && pi.submitted.length === 2) {
-      // Both ready - start countdown if not already started
       if (!reactionStarted && !countdownEl.hidden === false && goBtn.hidden) {
         startCountdown();
       }
       return;
     }
 
-    // Check for GO phase
     if (pi.roundData && pi.roundData.goSignal) {
       if (!reactionStarted && goBtn.hidden) {
         showGoSignal();
@@ -162,7 +164,6 @@
       return;
     }
 
-    // Result phase
     if (msg.events) {
       var resultEvent = msg.events.find(function (e) {
         return e.type === 'result' && e.cardId === 'speed';
@@ -174,6 +175,9 @@
         feedbackEl.textContent = resultEvent.text || 'Speed Challenge resolved.';
         if (myReactionTime !== null) {
           feedbackEl.textContent += ' Your time: ' + myReactionTime + 'ms.';
+        }
+        if (window.gsap) {
+          window.gsap.to(feedbackEl, {color: '#00ff88', duration: 0.5, yoyo: true, repeat: 1});
         }
         setTimeout(function () { close(); }, 6000);
       }

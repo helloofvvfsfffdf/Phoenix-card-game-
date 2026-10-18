@@ -4,6 +4,10 @@
   var overlay = null;
   var myRoll = null;
   var myId = null;
+  var die = null;
+  var transitions = [];
+  var PIPS = {1:[4],2:[0,8],3:[0,4,8],4:[0,2,6,8],5:[0,2,4,6,8],6:[0,2,3,5,6,8]};
+  var ROTATIONS = {1:{x:0,y:0},2:{x:0,y:-90},3:{x:-90,y:0},4:{x:90,y:0},5:{x:0,y:90},6:{x:0,y:180}};
 
   function build() {
     if (overlay && document.body.contains(overlay)) {
@@ -18,9 +22,13 @@
       '  <h2>Dice Challenge</h2>' +
       '  <p>Both players roll a six-sided die. Higher roll wins 20,000 points.</p>' +
       '  <div id="dice-visual" class="dice-visual">' +
-      '    <span class="dice-face" id="dice-my" aria-label="Your roll">🎲</span>' +
+      '    <div class="dice-stage" id="dice-stage-my">' +
+      '      <div class="dice-cube" id="dice-cube-my" aria-label="Your roll"></div>' +
+      '    </div>' +
       '    <span id="dice-vs">VS</span>' +
-      '    <span class="dice-face" id="dice-opponent" aria-label="Opponent roll">🎲</span>' +
+      '    <div class="dice-stage" id="dice-stage-opponent">' +
+      '      <div class="dice-cube" id="dice-cube-opponent" aria-label="Opponent roll"></div>' +
+      '    </div>' +
       '  </div>' +
       '  <p id="dice-feedback" aria-live="polite">Press Roll to roll the die.</p>' +
       '  <button id="dice-roll-btn" type="button" class="primary">Roll</button>' +
@@ -28,6 +36,10 @@
       '</div>';
     document.body.appendChild(overlay);
     overlay.hidden = false;
+
+    // Build die faces for both cubes
+    buildDieFaces('dice-cube-my');
+    buildDieFaces('dice-cube-opponent');
 
     document.getElementById('dice-roll-btn').onclick = submitRoll;
 
@@ -40,22 +52,101 @@
     }
   }
 
+  function buildDieFaces(cubeId) {
+    var cube = document.getElementById(cubeId);
+    if (!cube) return;
+    cube.innerHTML = '';
+    for (var value = 1; value <= 6; value++) {
+      var face = document.createElement('div');
+      face.className = 'dice-die-face';
+      face.dataset.face = String(value);
+      PIPS[value].forEach(function(pos) {
+        var pip = document.createElement('i');
+        pip.className = 'dice-die-pip';
+        pip.style.gridColumn = String(pos % 3 + 1);
+        pip.style.gridRow = String(Math.floor(pos / 3) + 1);
+        face.appendChild(pip);
+      });
+      cube.appendChild(face);
+    }
+  }
+
   function submitRoll() {
     if (!window.ws || window.ws.readyState !== 1) return;
     window.ws.send(JSON.stringify({ type: 'interact', decision: 'roll' }));
-    document.getElementById('dice-roll-btn').disabled = true;
-    document.getElementById('dice-roll-btn').textContent = 'Rolling…';
+    var rollBtn = document.getElementById('dice-roll-btn');
+    rollBtn.disabled = true;
+    rollBtn.textContent = 'Rolling…';
     document.getElementById('dice-feedback').textContent = 'Rolling… waiting for opponent.';
   }
 
-  function showRoll(roll) {
-    var myFace = document.getElementById('dice-my');
-    if (myFace) myFace.textContent = '⚀⚁⚂⚃⚄⚅'.charAt(roll - 1);
+  function animateRoll(cubeId, value, name) {
+    var cube = document.getElementById(cubeId);
+    if (!cube || !window.gsap) {
+      // Fallback: just show the result face
+      var faces = cube.querySelectorAll('.dice-die-face');
+      faces.forEach(function(f) { f.classList.remove('is-result'); });
+      var resultFace = cube.querySelector('.dice-die-face[data-face="' + value + '"]');
+      if (resultFace) resultFace.classList.add('is-result');
+      return;
+    }
+
+    var rotation = ROTATIONS[value];
+    window.gsap.set(cube, {rotationX: -160, rotationY: -200, rotationZ: -25, y: -12, scale: 0.65});
+
+    var timeline = window.gsap.timeline({
+      onComplete: function() {
+        // Mark result face
+        var faces = cube.querySelectorAll('.dice-die-face');
+        faces.forEach(function(f) { f.classList.remove('is-result'); });
+        var resultFace = cube.querySelector('.dice-die-face[data-face="' + value + '"]');
+        if (resultFace) resultFace.classList.add('is-result');
+      }
+    });
+
+    timeline.to(cube, {
+      rotationX: 720 + rotation.x,
+      rotationY: 720 + rotation.y,
+      rotationZ: 360,
+      y: 0,
+      scale: 1,
+      duration: 1.05,
+      ease: 'power3.out'
+    }, 0)
+    .call(function() {
+      // Update feedback after animation
+      var feedback = document.getElementById('dice-feedback');
+      var oppCube = document.getElementById('dice-cube-opponent');
+      var myCube = document.getElementById('dice-cube-my');
+      var bothRolled = myCube.dataset.rolled && oppCube.dataset.rolled;
+      if (bothRolled) {
+        var myRoll = parseInt(myCube.dataset.rolled, 10);
+        var oppRoll = parseInt(oppCube.dataset.rolled, 10);
+        var winner = myRoll > oppRoll ? 'You win!' : (oppRoll > myRoll ? 'Opponent wins!' : 'Tie!');
+        feedback.textContent = 'You rolled ' + myRoll + ', opponent rolled ' + oppRoll + '. ' + winner;
+        document.getElementById('dice-roll-btn').hidden = true;
+        setTimeout(function () { close(); }, 6000);
+      }
+    }, null, 1.05)
+    .to(cube, {scale: 1.06, duration: 0.12, repeat: 1, yoyo: true}, 1.05);
+
+    transitions.push({tween: timeline, finish: function() {}});
+    return timeline;
   }
 
-  function showOpponentRoll(roll) {
-    var oppFace = document.getElementById('dice-opponent');
-    if (oppFace) oppFace.textContent = '⚀⚁⚂⚃⚄⚅'.charAt(roll - 1);
+  function showRoll(myValue, oppValue) {
+    var myCube = document.getElementById('dice-cube-my');
+    var oppCube = document.getElementById('dice-cube-opponent');
+    myCube.dataset.rolled = myValue;
+    oppCube.dataset.rolled = oppValue;
+
+    // Animate my roll
+    animateRoll('dice-cube-my', myValue, 'You');
+
+    // Animate opponent roll with slight delay
+    setTimeout(function() {
+      animateRoll('dice-cube-opponent', oppValue, 'Opponent');
+    }, 300);
   }
 
   function onState(msg) {
@@ -64,34 +155,27 @@
     var pi = msg.pendingInteraction;
     var feedback = document.getElementById('dice-feedback');
     var rollBtn = document.getElementById('dice-roll-btn');
-    var myFace = document.getElementById('dice-my');
-    var oppFace = document.getElementById('dice-opponent');
 
-    // Check if I've submitted
-    var mySubmitted = pi.decisions && pi.decisions.main && pi.decisions.main[myId];
-
+    // Check if result is available
     if (pi.roundData && pi.roundData.rolls) {
-      // Both rolls are in - show results
       var myRoll = pi.roundData.rolls[myId];
       var otherId = pi.participants.find(function (id) { return id !== myId; });
       var theirRoll = otherId ? pi.roundData.rolls[otherId] : null;
 
-      if (myRoll) showRoll(myRoll);
-      if (theirRoll) showOpponentRoll(theirRoll);
-
       if (myRoll && theirRoll) {
-        var winner = myRoll > theirRoll ? 'You win!' : (theirRoll > myRoll ? 'Opponent wins!' : 'Tie!');
-        feedback.textContent = 'You rolled ' + myRoll + ', opponent rolled ' + theirRoll + '. ' + winner;
+        showRoll(myRoll, theirRoll);
         rollBtn.hidden = true;
-        setTimeout(function () { close(); }, 6000);
       }
       return;
     }
 
+    // Check if I've submitted
+    var mySubmitted = pi.decisions && pi.decisions.main && pi.decisions.main[myId];
+
     if (mySubmitted && !rollBtn.disabled) {
       rollBtn.disabled = true;
       rollBtn.textContent = 'Rolling…';
-      feedback.textContent = 'Waiting for opponent to roll…';
+      feedback.textContent = 'Rolling… waiting for opponent.';
     } else if (!mySubmitted && rollBtn.disabled) {
       rollBtn.disabled = false;
       rollBtn.textContent = 'Roll';
@@ -101,6 +185,9 @@
 
   function close() {
     if (overlay) { overlay.hidden = true; overlay.remove(); overlay = null; }
+    transitions.forEach(function(r) { if (r.tween) r.tween.kill(); if (r.finish) r.finish(); });
+    transitions = [];
+    die = null;
     myRoll = null;
   }
 

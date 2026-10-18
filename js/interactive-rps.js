@@ -2,8 +2,8 @@
 (function () {
   'use strict';
   var overlay = null;
-  var submitted = false;
   var choiceMade = null;
+  var transitions = [];
 
   function build() {
     if (overlay && document.body.contains(overlay)) {
@@ -38,16 +38,21 @@
   }
 
   function submitChoice(choice) {
-    if (submitted) return;
-    submitted = true;
+    if (!window.ws || window.ws.readyState !== 1) return;
     choiceMade = choice;
     document.getElementById('rps-rock').disabled = true;
     document.getElementById('rps-paper').disabled = true;
     document.getElementById('rps-scissors').disabled = true;
     document.getElementById('rps-status').textContent = 'Choice locked. Waiting for opponent…';
 
-    if (typeof window.ws !== 'undefined' && window.ws.readyState === 1) {
-      window.ws.send(JSON.stringify({ type: 'interact', decision: choice }));
+    window.ws.send(JSON.stringify({ type: 'interact', decision: choice }));
+
+    // Animate the chosen button
+    if (window.gsap) {
+      var btn = document.querySelector('#rps-' + choice);
+      if (btn) {
+        window.gsap.to(btn, {scale: 1.1, duration: 0.1, yoyo: true, repeat: 1, ease: 'power2.out'});
+      }
     }
   }
 
@@ -55,35 +60,41 @@
     var reveal = document.getElementById('rps-reveal');
     if (!reveal) return;
     reveal.hidden = false;
+
+    var emoji = {rock: '✊', paper: '✋', scissors: '✌'};
     reveal.querySelector('.rps-both').innerHTML =
-      '<span class="rps-pill rps-actor">You: ' + (choiceMade || '?') + '</span>' +
-      '<span class="rps-pill rps-target">Opponent: ' + pick2 + '</span>';
+      '<span class="rps-pill rps-actor">' + (emoji[choiceMade] || '?') + ' ' + (choiceMade || '?') + '</span>' +
+      '<span class="rps-pill rps-target">' + (emoji[pick2] || '?') + ' ' + pick2 + '</span>';
+
     document.getElementById('rps-result').textContent = result || 'Result revealed.';
+
+    // Animate reveal
+    if (window.gsap) {
+      var both = reveal.querySelector('.rps-both');
+      window.gsap.from(both.children, {opacity: 0, y: 20, duration: 0.4, stagger: 0.1, ease: 'power2.out'});
+    }
+
+    setTimeout(function () { close(); }, 6000);
   }
 
   function onState(message) {
-    // The server broadcasts the resolved interaction through the state snapshot.
-    // We listen for the interaction result being present.
     if (message.pendingInteraction && message.pendingInteraction.type === 'rps') {
       // Still waiting.
       return;
     }
-    // If the interaction is cleared and we have a result event, reveal.
     if (message.events) {
       var resultEvent = message.events.find(function (e) {
         return e.type === 'result' && e.cardId === 'rps';
       });
       if (resultEvent) {
         revealBoth(choiceMade || '?', '?', resultEvent.text);
-        // Auto-dismiss after viewing.
-        setTimeout(function () { close(); }, 6000);
       }
     }
   }
 
   function close() {
     if (overlay) { overlay.hidden = true; overlay.remove(); overlay = null; }
-    submitted = false; choiceMade = null;
+    choiceMade = null;
   }
 
   window.PhoenixRpsInteractive = { build: build, close: close, onState: onState, submitChoice: submitChoice };
