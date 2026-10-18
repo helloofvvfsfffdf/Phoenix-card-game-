@@ -1040,39 +1040,50 @@ function resolveLinkedFateInteraction(room, pi) {
 function resolveImpostorInteraction(room, pi) {
   const s = room.state;
   const players = s.players.filter(p => !Rules.isOut(p, s));
-  const impostor = players[Math.floor(Math.random() * players.length)];
-  const words = [
-    { main: 'Coffee', impostor: 'Tea' },
-    { main: 'Cat', impostor: 'Dog' },
-    { main: 'Pizza', impostor: 'Burger' },
-    { main: 'Summer', impostor: 'Winter' },
-    { main: 'Ocean', impostor: 'Mountain' },
-    { main: 'Book', impostor: 'Movie' },
-    { main: 'Apple', impostor: 'Orange' },
-    { main: 'Car', impostor: 'Bike' }
-  ];
-  const wordPair = words[Math.floor(Math.random() * words.length)];
+  const impostorId = pi.roundData.impostorId;
+  const wordPair = pi.roundData.wordPair;
+  const votes = pi.roundData.votes || {};
 
-  // Assign words
-  players.forEach(p => {
-    p.impostorWord = (p.id === impostor.id) ? wordPair.impostor : wordPair.main;
+  // Count votes
+  const voteCounts = {};
+  Object.values(votes).forEach(votedId => {
+    voteCounts[votedId] = (voteCounts[votedId] || 0) + 1;
   });
-  impostor.isImpostor = true;
 
-  pi.roundData.impostorId = impostor.id;
-  pi.roundData.wordPair = wordPair;
-  pi.phase = 'clues';
+  // Find most voted player
+  let mostVotedId = null;
+  let maxVotes = 0;
+  Object.entries(voteCounts).forEach(([id, count]) => {
+    if (count > maxVotes) {
+      maxVotes = count;
+      mostVotedId = id;
+    }
+  });
 
-  // For now, auto-resolve with random voting (full implementation needs multi-phase)
-  // This is a placeholder - full implementation would collect clues then votes
-  const caught = Math.random() < 0.5;
+  // Tie goes to random among tied
+  const tiedIds = Object.entries(voteCounts).filter(([, count]) => count === maxVotes).map(([id]) => id);
+  if (tiedIds.length > 1) {
+    mostVotedId = tiedIds[Math.floor(Math.random() * tiedIds.length)];
+  }
+
+  const impostor = s.players.find(p => p.id === impostorId);
+  const votedOut = s.players.find(p => p.id === mostVotedId);
+
   let text;
-  if (caught) {
-    players.forEach(p => { if (p.id !== impostor.id) p.points += 10000; });
+  if (mostVotedId === impostorId) {
+    // Impostor was caught
+    players.forEach(p => { if (p.id !== impostorId) p.points += 10000; });
     text = 'Impostor - ' + impostor.name + ' was the impostor and was caught! All others gain 10,000.';
   } else {
-    impostor.points += 30000;
-    text = 'Impostor - ' + impostor.name + ' was the impostor and escaped! ' + impostor.name + ' gains 30,000.';
+    // Wrong person voted out (or tie)
+    if (votedOut) {
+      impostor.points += 30000;
+      text = 'Impostor - ' + impostor.name + ' was the impostor and escaped! ' + impostor.name + ' gains 30,000.';
+    } else {
+      // No votes (shouldn't happen with timeout fallback)
+      impostor.points += 30000;
+      text = 'Impostor - ' + impostor.name + ' was the impostor and escaped! ' + impostor.name + ' gains 30,000.';
+    }
   }
 
   // Clear impostor data
@@ -3094,6 +3105,11 @@ async function handle(ws, data) {
           broadcast(room);
           return;
         }
+        // Store clues in roundData
+        if (!pi.roundData.clues) pi.roundData.clues = {};
+        pi.participants.forEach(p => {
+          pi.roundData.clues[p] = pi.decisions[cluesKey][p];
+        });
         // Move to voting phase
         pi.phase = 'vote';
         broadcast(room);
@@ -3105,6 +3121,14 @@ async function handle(ws, data) {
           broadcast(room);
           return;
         }
+        // Store votes in roundData
+        if (!pi.roundData.votes) pi.roundData.votes = {};
+        pi.participants.forEach(p => {
+          const vote = pi.decisions.vote[p];
+          if (vote && vote.startsWith('vote:')) {
+            pi.roundData.votes[p] = vote.substring(5);
+          }
+        });
         finishInteraction(room);
         return;
       }
@@ -3218,8 +3242,9 @@ async function handle(ws, data) {
         return error(ws, 'Choose a valid opponent.');
       }
       if (cardId === 'impostor') {
-        const eligible = s.players.filter(p => p.id !== id && !Rules.isOut(p, s));
-        if (eligible.length < 3) {
+        // Impostor needs at least 4 players total (actor + 3 others)
+        const eligible = s.players.filter(p => !Rules.isOut(p, s));
+        if (eligible.length < 4) {
           return error(ws, 'Impostor needs at least 4 players total.');
         }
       }
@@ -3255,6 +3280,33 @@ async function handle(ws, data) {
       } else if (cardId === 'impostor') {
         const eligible = s.players.filter(p => !Rules.isOut(p, s));
         room.pendingInteraction.participants = eligible.map(p => p.id);
+
+        // Assign words immediately and store in roundData for client display
+        const impostorIdx = Math.floor(Math.random() * eligible.length);
+        const impostor = eligible[impostorIdx];
+        const words = [
+          { main: 'Coffee', impostor: 'Tea' },
+          { main: 'Cat', impostor: 'Dog' },
+          { main: 'Pizza', impostor: 'Burger' },
+          { main: 'Summer', impostor: 'Winter' },
+          { main: 'Ocean', impostor: 'Mountain' },
+          { main: 'Book', impostor: 'Movie' },
+          { main: 'Apple', impostor: 'Orange' },
+          { main: 'Car', impostor: 'Bike' }
+        ];
+        const wordPair = words[Math.floor(Math.random() * words.length)];
+
+        // Store words for each player in roundData
+        const playerWords = {};
+        eligible.forEach(p => {
+          playerWords[p.id] = (p.id === impostor.id) ? wordPair.impostor : wordPair.main;
+        });
+
+        room.pendingInteraction.roundData.impostorId = impostor.id;
+        room.pendingInteraction.roundData.wordPair = wordPair;
+        room.pendingInteraction.roundData.playerWords = playerWords;
+        room.pendingInteraction.roundData.clues = {};
+        room.pendingInteraction.roundData.votes = {};
       } else if (cardId === 'wheel') {
         const eligible = s.players.filter(p => !Rules.isOut(p, s));
         room.pendingInteraction.participants = eligible.map(p => p.id);
