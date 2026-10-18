@@ -35,7 +35,26 @@
   function halt(){clearTimeout(tourTimer);if(timeline)timeline.kill();timeline=null;if(ticking){gsap.ticker.remove(render);ticking=false;}if(context)context.stopAll();handles=[];paused=false;$('pause').textContent='Pause';}
   function clearCanvas(){if(gl&&!gl.isContextLost()){gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);}}
   function purge(){for(const [id,effect] of cache){if(cache.size<=2)break;if(id!==current.id){context.releaseEffect(effect);cache.delete(id);}}}
-  function load(id){if(cache.has(id))return Promise.resolve(cache.get(id));if(loads.has(id))return loads.get(id);let effect;const p=new Promise((resolve,reject)=>{effect=context.loadEffect('assets/card-cinematics/'+id+'.efk',1,()=>{loads.delete(id);if(released){context.releaseEffect(effect);resolve(null);return;}cache.set(id,effect);purge();resolve(effect);},(reason,url)=>{loads.delete(id);if(effect)context.releaseEffect(effect);reject(Error(url+': '+reason));});});loads.set(id,p);return p;}
+  // Cards that have actual .efk binaries in assets/card-cinematics/
+// The 8 new cards lack .efk binaries - cinematics disabled until files exist.
+const HAS_EFK = {
+  bonus:true, knife:true, hunter:true, zombie:true, steal:true, judge:true, reveal:true,
+  skipall:true, trick:true, stealturn:true, curse:true, ghost:true, alvin:true, phoenix:true
+};
+
+function load(id){
+  if(!HAS_EFK[id]) return Promise.resolve(null);
+  if(cache.has(id))return Promise.resolve(cache.get(id));
+  if(loads.has(id))return loads.get(id);
+  let effect;const p=new Promise((resolve,reject)=>{
+    effect=context.loadEffect('assets/card-cinematics/'+id+'.efk',1,()=>{
+      loads.delete(id);if(released){context.releaseEffect(effect);resolve(null);return;}
+      cache.set(id,effect);purge();resolve(effect);
+    },(reason,url)=>{
+      loads.delete(id);if(effect)context.releaseEffect(effect);reject(Error(url+': '+reason));
+    });
+  });loads.set(id,p);return p;
+}
   function spawn(effect){if(!context||!effect||reduced()||!ready)return;const handle=context.play(effect,0,0,0);if(handle){handles.push(handle);diagnostics.launches++;diagnostics.peakHandles=Math.max(diagnostics.peakHandles,handles.length);}}
   function render(){if(!context||!ready||!timeline||paused||document.hidden)return;try{const t=timeline.time(),dt=Math.max(0,Math.min(.05,t-lastTime));lastTime=t;frameMs+=dt;const fps=$('quality').value==='low'?24:30;if(frameMs<1/fps)return;context.update(Math.min(frameMs,.1)*60);frameMs=0;const r=$('stage').getBoundingClientRect(),limit=$('quality').value==='high'?1440:$('quality').value==='low'?800:1120,ratio=Math.min(devicePixelRatio||1,$('quality').value==='high'?1.5:1.25,limit/Math.max(r.width,r.height)),w=Math.max(1,Math.round(r.width*ratio)),h=Math.max(1,Math.round(r.height*ratio));if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}gl.viewport(0,0,w,h);clearCanvas();const distance=Math.max(30,22/(.728*w/h)),focusY=(innerWidth<=720?-.16:-.08)*.728*distance;context.setProjectionPerspective(40,w/h,.1,200);context.setCameraLookAt(0,focusY,distance,0,focusY,0,0,1,0);context.draw();frames++;}catch(error){ready=false;report(error);if(ticking){gsap.ticker.remove(render);ticking=false;}}}
   function text(id,value){$(id).textContent=value;}

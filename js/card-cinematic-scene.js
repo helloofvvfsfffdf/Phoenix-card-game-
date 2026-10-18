@@ -7,7 +7,18 @@
   /* dramatic v2: per-card caption cue (item 5 baseline) - phoenix never uses this */
   var CAPTION_AT={bonus:1.6,knife:1,hunter:1.3,zombie:1.3,steal:1.7,judge:1.5,reveal:1.5,skipall:1,trick:1.6,stealturn:1.4,curse:1.1,ghost:1.4,alvin:1.3};
   function cardId(key){return key==='alvin-burn'?'alvin':key==='curse-trigger'?'curse':key==='hunter-block'?'hunter':key;}
-  function supports(key){return !!(root.PhoenixCardCinematicCatalog&&root.PhoenixCardCinematicCatalog[cardId(key)]);}
+  // Cards that have actual .efk binaries in assets/card-cinematics/
+// The 8 new cards (dice, rps, betrayal, speed, wheel, linkedfate, impostor, swapper)
+ // are in the catalog but lack .efk binaries - cinematics disabled until files exist.
+var HAS_EFK = {
+  bonus:true, knife:true, hunter:true, zombie:true, steal:true, judge:true, reveal:true,
+  skipall:true, trick:true, stealturn:true, curse:true, ghost:true, alvin:true, phoenix:true
+};
+
+function supports(key){
+  var id = cardId(key);
+  return !!(root.PhoenixCardCinematicCatalog && root.PhoenixCardCinematicCatalog[id] && HAS_EFK[id]);
+}
   function dispose(r){if(!r||r.disposed)return;r.disposed=true;r.context.stopAll();r.effects.forEach(function(e){r.context.releaseEffect(e);});r.effects.clear();root.effekseer.releaseContext(r.context);if(r.holder)r.holder.remove();else r.canvas.remove();}
   function prepare(){
     if(preparation)return preparation;var version=epoch;

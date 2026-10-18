@@ -50,12 +50,18 @@
     var api={section:section,mount:mount,hero:hero,heroWrap:heroWrap,halo:halo,card:card,message:message,canvas:canvas,gl:gl,context:context,effects:effects,embers:embers,shards:shards,
       dom:mount.querySelector('.cd-dom'),aurora:mount.querySelector('.cd-aurora'),rays:mount.querySelector('.cd-rays'),shock:mount.querySelector('.cd-shock'),shockEcho:mount.querySelector('.cd-shock-echo'),
       flash:mount.querySelector('.cd-flash'),vignette:mount.querySelector('.cd-vignette'),tint:mount.querySelector('.cd-tint')};
-    api.load=function(id){
-      if(effects.has(id))return Promise.resolve(effects.get(id));if(loads.has(id))return loads.get(id);
-      if(!context)return Promise.reject(Error('no webgl'));
-      var effect,p=new Promise(function(resolve,reject){effect=context.loadEffect('assets/card-cinematics/'+id+'.efk',1,function(){loads.delete(id);effects.set(id,effect);resolve(effect);},function(reason,url){loads.delete(id);if(effect)context.releaseEffect(effect);reject(Error(url+': '+reason));});});
-      loads.set(id,p);return p;
-    };
+    const HAS_EFK = {
+  bonus:true, knife:true, hunter:true, zombie:true, steal:true, judge:true, reveal:true,
+  skipall:true, trick:true, stealturn:true, curse:true, ghost:true, alvin:true, phoenix:true
+};
+
+api.load = function(id){
+  if(!HAS_EFK[id]) return Promise.reject(Error('No .efk binary for ' + id));
+  if(effects.has(id))return Promise.resolve(effects.get(id));if(loads.has(id))return loads.get(id);
+  if(!context)return Promise.reject(Error('no webgl'));
+  var effect,p=new Promise(function(resolve,reject){effect=context.loadEffect('assets/card-cinematics/'+id+'.efk',1,function(){loads.delete(id);effects.set(id,effect);resolve(effect);},function(reason,url){loads.delete(id);if(effect)context.releaseEffect(effect);reject(Error(url+': '+reason));});});
+  loads.set(id,p);return p;
+};
     api.stop=function(){if(tl){tl.kill();tl=null;}if(handle&&handle.stop)handle.stop();handle=null;if(context)context.stopAll();last=0;acc=0;};
     api.render=function(){
       if(!context||!gl||!tl)return;
