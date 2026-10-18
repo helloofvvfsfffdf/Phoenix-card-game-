@@ -300,6 +300,7 @@
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     socket = new WebSocket(protocol + '//' + location.host);
+    window.ws = socket;
 
     socket.onopen = callback;
     socket.onerror = () =>
@@ -309,6 +310,7 @@
       if (window.PhoenixCinematics) window.PhoenixCinematics.resetNetwork('disconnect');
       if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.reset();
       state = null;
+      window.ws = null;
       feedback('Disconnected from the server. Reload to reconnect.');
       $('online-actions').replaceChildren();
     };
@@ -377,28 +379,38 @@
         feedback('');
         render();
         if (message.pendingInteraction) {
-      const pi = message.pendingInteraction;
-      if (pi.type === 'rps' && window.PhoenixRpsInteractive) {
-        window.PhoenixRpsInteractive.build();
-      } else if (pi.type === 'betrayal' && window.PhoenixBetrayalInteractive) {
-        window.PhoenixBetrayalInteractive.build();
-      } else if (pi.type === 'speed' && window.PhoenixSpeedInteractive) {
-        window.PhoenixSpeedInteractive.build();
-      } else if (pi.type === 'wheel' && window.PhoenixWheelInteractive) {
-        window.PhoenixWheelInteractive.build();
-      } else if (pi.type === 'dice' || pi.type === 'linkedfate' || pi.type === 'impostor' || pi.type === 'swapper') {
-        // Non-secret cards that need a visual result; show basic status.
-        feedback('Interactive card active: ' + (pi.type || 'unknown'));
-      }
-    }
-    if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.observe(previous, message);
-        if (message.pendingInteraction) {
-        var pi = message.pendingInteraction;
-        if (pi.type === 'rps' && window.PhoenixRpsInteractive) window.PhoenixRpsInteractive.build();
-        else if (pi.type === 'betrayal' && window.PhoenixBetrayalInteractive) window.PhoenixBetrayalInteractive.build();
-        else if (pi.type === 'speed' && window.PhoenixSpeedInteractive) window.PhoenixSpeedInteractive.build();
-        else if (pi.type === 'wheel' && window.PhoenixWheelInteractive) window.PhoenixWheelInteractive.build();
-      }
+          var pi = message.pendingInteraction;
+          var interactiveModules = {
+            rps: 'PhoenixRpsInteractive',
+            betrayal: 'PhoenixBetrayalInteractive',
+            speed: 'PhoenixSpeedInteractive',
+            wheel: 'PhoenixWheelInteractive',
+            dice: 'PhoenixDiceInteractive',
+            linkedfate: 'PhoenixLinkedFateInteractive',
+            impostor: 'PhoenixImpostorInteractive',
+            swapper: 'PhoenixSwapperInteractive'
+          };
+          var interactiveModule = interactiveModules[pi.type];
+          if (interactiveModule && window[interactiveModule] &&
+              typeof window[interactiveModule].build === 'function') {
+            window[interactiveModule].build();
+          }
+        } else {
+          // The interaction is over: make sure no interactive overlay is left
+          // on screen, otherwise it would look like the game had frozen.
+          [
+            'PhoenixRpsInteractive', 'PhoenixBetrayalInteractive',
+            'PhoenixSpeedInteractive', 'PhoenixWheelInteractive',
+            'PhoenixDiceInteractive', 'PhoenixLinkedFateInteractive',
+            'PhoenixImpostorInteractive', 'PhoenixSwapperInteractive'
+          ].forEach(function (name) {
+            var mod = window[name];
+            if (mod && typeof mod.close === 'function') {
+              try { mod.close(); } catch (e) { /* overlay already gone */ }
+            }
+          });
+        }
+        if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.observe(previous, message);
         if (window.PhoenixCinematics) window.PhoenixCinematics.consume(message.effects);
         if (window.PhoenixCinematics) window.PhoenixCinematics.match(message);
       }
@@ -492,6 +504,7 @@
 
     if (socket) socket.close();
     socket = null;
+    window.ws = null;
     state = null;
     $('online-screen').hidden = true;
     $('phoenix-menu').hidden = false;

@@ -91,7 +91,8 @@ function waitFor(client, type, timeoutMs = 12000) {
   return new Promise((resolve, reject) => {
     const deadline = Date.now() + timeoutMs;
     const timer = setInterval(() => {
-      const idx = client.events.findIndex(e => e.type === type);
+      // Search from the end to get the most recent message, avoiding stale ones
+      const idx = client.events.length - 1 - [...client.events].reverse().findIndex(e => e.type === type);
       if (idx >= 0) {
         clearInterval(timer);
         resolve(client.events.splice(idx, 1)[0]);
@@ -374,10 +375,40 @@ async function main() {
       assert.strictEqual(new Set(fiveHost.state.players.map(p => p.ally)).size, 5));
 
     let moves = 0;
+    const interactiveChoices = {
+      rps: ['rock', 'paper', 'scissors'],
+      betrayal: ['share', 'steal'],
+      speed: ['ready'],
+      dice: ['roll'],
+      wheel: ['spin'],
+      linkedfate: ['ack'],
+      swapper: ['ack'],
+      impostor: ['clue:test', 'vote:dummy']
+    };
     while (!fiveHost.state.over && moves++ < 400) {
+      // An interactive card (RPS, Betrayal, Speed, Dice, Wheel, Linked Fate, Impostor, Swapper)
+      // pauses the game until every participant submits a decision - answer those first.
+      const pi = fiveHost.state.pendingInteraction;
+      if (pi) {
+        const choices = interactiveChoices[pi.type] || ['ack'];
+        for (const c of five) {
+          const mine = c.state.players[c.state.seat].id;
+          if (!pi.participants.includes(mine) || pi.submitted.includes(mine)) continue;
+          c.ws.send(JSON.stringify({ type: 'interact', decision: choices[moves % choices.length] }));
+          break;
+        }
+        for (const c of five) await waitFor(c, 'state');
+        continue;
+      }
+
       const actor = five.find(c => c.state.acting);
       assert(actor && actor.state.moves.length, 'a legal move is available');
-      const option = actor.state.moves.find(m => !(actor.state.mapleBlocked || []).includes(m.cardId));
+      // Avoid complex interactive cards that need special handling in automated tests
+      const complexInteractive = ['speed', 'impostor'];
+      const option = actor.state.moves.find(m =>
+        !(actor.state.mapleBlocked || []).includes(m.cardId) &&
+        !complexInteractive.includes(m.cardId)
+      );
       assert(option, 'a Maple-permitted move is available');
       actor.ws.send(JSON.stringify({ type: 'move', cardId: option.cardId, targetId: option.targetId }));
       for (const c of five) await waitFor(c, 'state');

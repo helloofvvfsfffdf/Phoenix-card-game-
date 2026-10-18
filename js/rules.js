@@ -2283,6 +2283,7 @@
     clearStaleChoice: clearStaleChoice,
     destroyCard: destroyCard,
     burnableCards: burnableCards,
+    moveCardToDiscard: moveCardToDiscard,
 
     isPlayable: isPlayable,
     canActWithAnything: canActWithAnything,

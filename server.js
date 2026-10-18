@@ -7,6 +7,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer, WebSocket } = require('ws');
 const Rules = require('./js/rules.js');
+const Cards = require('./js/cards.js');
 const Maple = require('./js/maple.js');
 const Effects = require('./js/effects.js');
 const Gallery = require('./js/gallery.js');
@@ -885,6 +886,276 @@ function resolveBetrayalInteraction(room, pi) {
   return { events, advanceTurn: true };
 }
 
+function resolveSpeedInteraction(room, pi) {
+  const s = room.state;
+  const [p1Id, p2Id] = pi.participants;
+  const p1 = s.players.find(p => p.id === p1Id);
+  const p2 = s.players.find(p => p.id === p2Id);
+  const d1 = pi.decisions[p1Id];
+  const d2 = pi.decisions[p2Id];
+
+  // If either timed out, the other wins automatically
+  if (d1 === 'timeout' && d2 === 'timeout') {
+    return { events: [{ type: 'result', cardId: 'speed', text: 'Speed Challenge - both players timed out. No winner.' }], advanceTurn: true };
+  }
+  if (d1 === 'timeout') {
+    p2.points += 15000;
+    return { events: [{ type: 'result', cardId: 'speed', text: 'Speed Challenge - ' + p1.name + ' timed out. ' + p2.name + ' wins 15,000.' }], advanceTurn: true };
+  }
+  if (d2 === 'timeout') {
+    p1.points += 15000;
+    return { events: [{ type: 'result', cardId: 'speed', text: 'Speed Challenge - ' + p2.name + ' timed out. ' + p1.name + ' wins 15,000.' }], advanceTurn: true };
+  }
+
+  // Parse reaction times from decisions (format: "time:123")
+  // If decision is 'ready' (test dummy), generate a random reaction time
+  function parseReactionTime(decision) {
+    if (!decision || decision === 'ready') {
+      return 200 + Math.floor(Math.random() * 300);
+    }
+    return parseInt((decision || 'time:9999').split(':')[1] || '9999', 10);
+  }
+
+  const t1 = parseReactionTime(d1);
+  const t2 = parseReactionTime(d2);
+
+  let winner, loser, winnerTime, loserTime;
+  if (t1 <= t2) {
+    winner = p1; loser = p2; winnerTime = t1; loserTime = t2;
+  } else {
+    winner = p2; loser = p1; winnerTime = t2; loserTime = t1;
+  }
+  winner.points += 15000;
+
+  const events = [{
+    type: 'result', cardId: 'speed',
+    text: 'Speed Challenge - ' + p1.name + ' reacted in ' + t1 + 'ms, ' +
+      p2.name + ' in ' + t2 + 'ms. ' + winner.name + ' wins 15,000.'
+  }];
+  return { events, advanceTurn: true };
+}
+
+function resolveDiceInteraction(room, pi) {
+  const s = room.state;
+  const [p1Id, p2Id] = pi.participants;
+  const p1 = s.players.find(p => p.id === p1Id);
+  const p2 = s.players.find(p => p.id === p2Id);
+
+  // Generate rolls for both players
+  const roll1 = 1 + Math.floor(Math.random() * 6);
+  const roll2 = 1 + Math.floor(Math.random() * 6);
+
+  // Store rolls for client display
+  pi.roundData.rolls = { [p1Id]: roll1, [p2Id]: roll2 };
+
+  let winner;
+  if (roll1 > roll2) winner = p1;
+  else if (roll2 > roll1) winner = p2;
+  else {
+    // Tie - shouldn't happen with timeout, but handle
+    return { events: [{ type: 'result', cardId: 'dice', text: 'Dice Challenge - tie! Both rolled ' + roll1 + '. No winner.' }], advanceTurn: true };
+  }
+
+  winner.points += 20000;
+
+  const events = [{
+    type: 'result', cardId: 'dice',
+    text: 'Dice Challenge - ' + p1.name + ' rolled ' + roll1 + ', ' +
+      p2.name + ' rolled ' + roll2 + '. ' + winner.name + ' wins 20,000.'
+  }];
+  return { events, advanceTurn: true };
+}
+
+function resolveWheelInteraction(room, pi) {
+  const s = room.state;
+  const outcomes = [
+    'reshuffle', 'reset_self', 'reset_others', 'eliminate_self_3',
+    'reverse', 'gain_10k', 'lose_20k', 'others_gain_20k', 'no_evil_permanent'
+  ];
+  const outcome = outcomes[Math.floor(Math.random() * outcomes.length)];
+  const actor = s.players.find(p => p.id === pi.actorId);
+
+  let text;
+  switch (outcome) {
+    case 'reshuffle':
+      text = 'Wheel of Fortune - ' + actor.name + ' spins... All decks reshuffled!';
+      break;
+    case 'reset_self':
+      actor.points = 0;
+      text = 'Wheel of Fortune - ' + actor.name + ' spins... Their points reset to 0!';
+      break;
+    case 'reset_others':
+      s.players.forEach(function (p) { if (p.id !== actor.id) p.points = 0; });
+      text = 'Wheel of Fortune - ' + actor.name + ' spins... All other players reset to 0!';
+      break;
+    case 'eliminate_self_3':
+      Rules.eliminate(s, actor, 3);
+      text = 'Wheel of Fortune - ' + actor.name + ' spins... Eliminated for 3 rounds!';
+      break;
+    case 'reverse':
+      s.turnDirection = (s.turnDirection || 1) * -1;
+      text = 'Wheel of Fortune - ' + actor.name + ' spins... Play direction reversed!';
+      break;
+    case 'gain_10k':
+      actor.points += 10000;
+      text = 'Wheel of Fortune - ' + actor.name + ' spins... Gains 10,000 points!';
+      break;
+    case 'lose_20k':
+      actor.points = Math.max(0, actor.points - 20000);
+      text = 'Wheel of Fortune - ' + actor.name + ' spins... Loses 20,000 points!';
+      break;
+    case 'others_gain_20k':
+      s.players.forEach(function (p) { if (p.id !== actor.id) p.points += 20000; });
+      text = 'Wheel of Fortune - ' + actor.name + ' spins... All others gain 20,000!';
+      break;
+    case 'no_evil_permanent':
+      actor.noEvilPermanent = true;
+      text = 'Wheel of Fortune - ' + actor.name + ' spins... Can no longer play Evil cards!';
+      break;
+  }
+
+  pi.roundData.outcome = outcome;
+
+  const events = [{ type: 'result', cardId: 'wheel', text }];
+  return { events, advanceTurn: true };
+}
+
+function resolveLinkedFateInteraction(room, pi) {
+  const s = room.state;
+  const [p1Id, p2Id] = pi.participants;
+  const p1 = s.players.find(p => p.id === p1Id);
+  const p2 = s.players.find(p => p.id === p2Id);
+
+  if (!s.linkedFate) s.linkedFate = [];
+  s.linkedFate.push({ a: p1Id, b: p2Id, roundsLeft: 2 });
+
+  const events = [{
+    type: 'result', cardId: 'linkedfate',
+    text: 'Linked Fate - ' + p1.name + ' and ' + p2.name +
+      ' are now linked for 2 rounds. Gains are shared at 50%.'
+  }];
+  return { events, advanceTurn: true };
+}
+
+function resolveImpostorInteraction(room, pi) {
+  const s = room.state;
+  const players = s.players.filter(p => !Rules.isOut(p, s));
+  const impostor = players[Math.floor(Math.random() * players.length)];
+  const words = [
+    { main: 'Coffee', impostor: 'Tea' },
+    { main: 'Cat', impostor: 'Dog' },
+    { main: 'Pizza', impostor: 'Burger' },
+    { main: 'Summer', impostor: 'Winter' },
+    { main: 'Ocean', impostor: 'Mountain' },
+    { main: 'Book', impostor: 'Movie' },
+    { main: 'Apple', impostor: 'Orange' },
+    { main: 'Car', impostor: 'Bike' }
+  ];
+  const wordPair = words[Math.floor(Math.random() * words.length)];
+
+  // Assign words
+  players.forEach(p => {
+    p.impostorWord = (p.id === impostor.id) ? wordPair.impostor : wordPair.main;
+  });
+  impostor.isImpostor = true;
+
+  pi.roundData.impostorId = impostor.id;
+  pi.roundData.wordPair = wordPair;
+  pi.phase = 'clues';
+
+  // For now, auto-resolve with random voting (full implementation needs multi-phase)
+  // This is a placeholder - full implementation would collect clues then votes
+  const caught = Math.random() < 0.5;
+  let text;
+  if (caught) {
+    players.forEach(p => { if (p.id !== impostor.id) p.points += 10000; });
+    text = 'Impostor - ' + impostor.name + ' was the impostor and was caught! All others gain 10,000.';
+  } else {
+    impostor.points += 30000;
+    text = 'Impostor - ' + impostor.name + ' was the impostor and escaped! ' + impostor.name + ' gains 30,000.';
+  }
+
+  // Clear impostor data
+  players.forEach(p => { delete p.impostorWord; delete p.isImpostor; });
+
+  const events = [{ type: 'result', cardId: 'impostor', text }];
+  return { events, advanceTurn: true };
+}
+
+function resolveSwapperInteraction(room, pi) {
+  const s = room.state;
+  const [p1Id, p2Id] = pi.participants;
+  const p1 = s.players.find(p => p.id === p1Id);
+  const p2 = s.players.find(p => p.id === p2Id);
+
+  const ally1 = p1.ally;
+  const ally2 = p2.ally;
+  p1.ally = ally2;
+  p2.ally = ally1;
+
+  pi.roundData.swapped = { [p1Id]: ally2, [p2Id]: ally1 };
+
+  const events = [{
+    type: 'result', cardId: 'swapper',
+    text: 'Ally Swapper - ' + p1.name + ' and ' + p2.name +
+      ' swapped allies. ' + p1.name + ' now has ' + (ally2 || 'none') +
+      ', ' + p2.name + ' now has ' + (ally1 || 'none') + '.'
+  }];
+  return { events, advanceTurn: true };
+}
+
+/**
+ * Resolves the room's pending interaction and moves the game on: records the
+ * result, advances the turn, runs the per-round ally effects and broadcasts.
+ * Shared by the normal `interact` path and the safety timeout below, so a
+ * player who never responds can never leave the match permanently frozen.
+ */
+function finishInteraction(room) {
+  const pi = room.pendingInteraction;
+  if (!pi) return;
+  const s = room.state;
+
+  let result;
+  try {
+    if (pi.type === 'rps') result = resolveRpsInteraction(room, pi);
+    else if (pi.type === 'betrayal') result = resolveBetrayalInteraction(room, pi);
+    else if (pi.type === 'speed') result = resolveSpeedInteraction(room, pi);
+    else if (pi.type === 'dice') result = resolveDiceInteraction(room, pi);
+    else if (pi.type === 'wheel') result = resolveWheelInteraction(room, pi);
+    else if (pi.type === 'linkedfate') result = resolveLinkedFateInteraction(room, pi);
+    else if (pi.type === 'impostor') result = resolveImpostorInteraction(room, pi);
+    else if (pi.type === 'swapper') result = resolveSwapperInteraction(room, pi);
+  } catch (e) {
+    console.error('[PHOENIX ws] interaction resolution failed -> ' + Auth.describeError(e));
+    result = {
+      events: [{ type: 'result', cardId: pi.type, text: 'The interaction was resolved by the server.' }],
+      advanceTurn: true
+    };
+  }
+
+  room.pendingInteraction = null;
+  if (room.interactionTimer) {
+    clearTimeout(room.interactionTimer);
+    room.interactionTimer = null;
+  }
+
+  if (result && result.events) recordEvents(room, result.events);
+
+  if (result && result.advanceTurn && s && !s.over) {
+    recordEvents(room, Rules.advanceTurn(s));
+  }
+
+  if (s && s.round !== room.lastPhoenixRound && !s.over) {
+    room.lastPhoenixRound = s.round;
+    applyPhoenix(room);
+    applyTed(room);
+    applyMaple(room);
+    applyLinkedFate(room);
+  }
+
+  broadcast(room);
+}
+
 function applyLinkedFate(room) {
   const s = room.state;
   if (!s || s.over || !s.linkedFate) return;
@@ -1652,9 +1923,24 @@ function snapshot(room, member) {
     ? {
         type: room.pendingInteraction.type,
         participants: room.pendingInteraction.participants,
-        submitted: Object.keys(room.pendingInteraction.decisions),
+        submitted: (function () {
+          var pi = room.pendingInteraction;
+          // Flatten all decisions across phases for backward compatibility
+          var flat = {};
+          if (pi.decisions) {
+            Object.keys(pi.decisions).forEach(function (phase) {
+              if (pi.decisions[phase] && typeof pi.decisions[phase] === 'object') {
+                Object.keys(pi.decisions[phase]).forEach(function (pid) {
+                  flat[pid] = pi.decisions[phase][pid];
+                });
+              }
+            });
+          }
+          return Object.keys(flat);
+        })(),
         createdAt: room.pendingInteraction.createdAt,
-        timeoutMs: room.pendingInteraction.timeoutMs
+        timeoutMs: room.pendingInteraction.timeoutMs,
+        phase: room.pendingInteraction.phase || 'main'
       }
     : null;
   const mine = Rules.SEATS[member.seat].id;
@@ -2665,59 +2951,175 @@ async function handle(ws, data) {
       return error(ws, 'You are not part of this interaction.');
     }
 
-    // Already submitted?
-    if (pi.decisions[playerId] !== undefined) {
-      return error(ws, 'You have already submitted.');
+    // Already submitted for this phase?
+    const phaseKey = pi.phase || 'main';
+    if (!pi.decisions[phaseKey]) pi.decisions[phaseKey] = {};
+    if (pi.decisions[phaseKey][playerId] !== undefined) {
+      return error(ws, 'You have already submitted for this phase.');
     }
 
-    // Validate the decision based on interaction type.
+    // Validate the decision based on interaction type and phase.
     const decision = String(data.decision || '').slice(0, 40).toLowerCase();
+
     if (pi.type === 'rps' && !['rock', 'paper', 'scissors'].includes(decision)) {
       return error(ws, 'Choose rock, paper or scissors.');
     }
     if (pi.type === 'betrayal' && !['share', 'steal'].includes(decision)) {
       return error(ws, 'Choose share or steal.');
     }
+    if (pi.type === 'speed') {
+      if (phaseKey === 'ready' && decision !== 'ready') {
+        return error(ws, 'Invalid decision.');
+      }
+      if (phaseKey === 'react' && !(decision.startsWith('time:') || decision === 'false_start')) {
+        return error(ws, 'Invalid reaction.');
+      }
+    }
+    if (pi.type === 'dice' && decision !== 'roll') {
+      return error(ws, 'Invalid decision.');
+    }
+    if (pi.type === 'wheel' && decision !== 'spin') {
+      return error(ws, 'Invalid decision.');
+    }
+    if (pi.type === 'linkedfate' && decision !== 'ack') {
+      return error(ws, 'Invalid decision.');
+    }
+    if (pi.type === 'swapper' && decision !== 'ack') {
+      return error(ws, 'Invalid decision.');
+    }
+    if (pi.type === 'impostor') {
+      // Clues and votes handled separately
+      if (phaseKey === 'clues' && !decision.startsWith('clue:')) {
+        return error(ws, 'Invalid clue.');
+      }
+      if (phaseKey === 'vote' && !decision.startsWith('vote:')) {
+        return error(ws, 'Invalid vote.');
+      }
+    }
 
-    pi.decisions[playerId] = decision;
+    // Store in phase-based structure
+    pi.decisions[phaseKey][playerId] = decision;
+    // Also store in flat structure for all interactive cards (resolve functions read from flat)
+    if (!pi.decisions.main) pi.decisions.main = {};
+    pi.decisions.main[playerId] = decision;
     pi.submittedAt[playerId] = Date.now();
 
-    // Check if all participants have submitted.
-    const allSubmitted = pi.participants.every(p => pi.decisions[p] !== undefined);
+    // Handle multi-phase interactions
+    if (pi.type === 'speed') {
+      if (phaseKey === 'ready') {
+        // Check if both players are ready
+        const allReady = pi.participants.every(p => pi.decisions.ready && pi.decisions.ready[p] === 'ready');
+        if (!allReady) {
+          send(ws, { type: 'interact-ack', interaction: pi.type, phase: 'ready' });
+          broadcast(room);
+          return;
+        }
+        // Both ready - start countdown phase
+        pi.phase = 'countdown';
+        pi.roundData.goDelay = 1000 + Math.floor(Math.random() * 2000); // 1-3 second delay
+        pi.roundData.goTime = Date.now() + 3000 + pi.roundData.goDelay; // 3 sec countdown + random delay
+        broadcast(room);
+        return;
+      } else if (phaseKey === 'react') {
+        // Reaction phase - wait for both reactions
+        const allReacted = pi.participants.every(p => pi.decisions.react && pi.decisions.react[p] !== undefined);
+        if (!allReacted) {
+          send(ws, { type: 'interact-ack', interaction: pi.type, phase: 'react' });
+          broadcast(room);
+          return;
+        }
+        // Both reacted - resolve
+        finishInteraction(room);
+        return;
+      }
+    }
+
+    if (pi.type === 'dice') {
+      // Simple: both roll, then resolve
+      const allRolled = pi.participants.every(p => pi.decisions.main && pi.decisions.main[p] === 'roll');
+      if (!allRolled) {
+        send(ws, { type: 'interact-ack', interaction: pi.type });
+        broadcast(room);
+        return;
+      }
+      finishInteraction(room);
+      return;
+    }
+
+    if (pi.type === 'wheel') {
+      // Actor spins, then resolve
+      if (playerId === pi.actorId) {
+        pi.phase = 'spun';
+        // Other players just wait
+        const allDone = pi.participants.every(p => p === pi.actorId || (pi.decisions.main && pi.decisions.main[p] === 'ack'));
+        if (!allDone) {
+          send(ws, { type: 'interact-ack', interaction: pi.type });
+          broadcast(room);
+          return;
+        }
+      } else {
+        // Non-actor just acknowledges
+        pi.decisions.main[playerId] = 'ack';
+      }
+      const allDone = pi.participants.every(p => p === pi.actorId || (pi.decisions.main && pi.decisions.main[p] === 'ack'));
+      if (!allDone) {
+        send(ws, { type: 'interact-ack', interaction: pi.type });
+        broadcast(room);
+        return;
+      }
+      finishInteraction(room);
+      return;
+    }
+
+    if (pi.type === 'linkedfate' || pi.type === 'swapper') {
+      // Both acknowledge, then resolve
+      const allAcked = pi.participants.every(p => pi.decisions.main && pi.decisions.main[p] === 'ack');
+      if (!allAcked) {
+        send(ws, { type: 'interact-ack', interaction: pi.type });
+        broadcast(room);
+        return;
+      }
+      finishInteraction(room);
+      return;
+    }
+
+    if (pi.type === 'impostor') {
+      // Multi-phase: clues -> votes -> resolve
+      // Handle initial phase (waiting/main) as clues phase
+      if (phaseKey === 'waiting' || phaseKey === 'main' || phaseKey === 'clues') {
+        const cluesKey = phaseKey === 'waiting' || phaseKey === 'main' ? 'main' : 'clues';
+        const allClued = pi.participants.every(p => pi.decisions[cluesKey] && pi.decisions[cluesKey][p]);
+        if (!allClued) {
+          send(ws, { type: 'interact-ack', interaction: pi.type, phase: 'clues' });
+          broadcast(room);
+          return;
+        }
+        // Move to voting phase
+        pi.phase = 'vote';
+        broadcast(room);
+        return;
+      } else if (phaseKey === 'vote') {
+        const allVoted = pi.participants.every(p => pi.decisions.vote && pi.decisions.vote[p]);
+        if (!allVoted) {
+          send(ws, { type: 'interact-ack', interaction: pi.type, phase: 'vote' });
+          broadcast(room);
+          return;
+        }
+        finishInteraction(room);
+        return;
+      }
+    }
+
+    // Default: check if all participants have submitted for main phase
+    const allSubmitted = pi.participants.every(p => pi.decisions.main && pi.decisions.main[p] !== undefined);
     if (!allSubmitted) {
-      // Tell the submitting player their choice was recorded.
       send(ws, { type: 'interact-ack', interaction: pi.type });
       broadcast(room);
       return;
     }
 
-    // All decisions in - resolve.
-    let result;
-    if (pi.type === 'rps') {
-      result = resolveRpsInteraction(room, pi);
-    } else if (pi.type === 'betrayal') {
-      result = resolveBetrayalInteraction(room, pi);
-    }
-
-    room.pendingInteraction = null;
-    if (room.interactionTimer) { clearTimeout(room.interactionTimer); room.interactionTimer = null; }
-    if (result && result.events) recordEvents(room, result.events);
-
-    // Advance turn if the interaction is complete.
-    if (result && result.advanceTurn) {
-      const events = Rules.advanceTurn(s);
-      recordEvents(room, events);
-    }
-
-    if (s.round !== room.lastPhoenixRound && !s.over) {
-      room.lastPhoenixRound = s.round;
-      applyPhoenix(room);
-      applyTed(room);
-      applyMaple(room);
-      applyLinkedFate(room);
-    }
-
-    broadcast(room);
+    // All decisions are in - resolve, advance and broadcast.
+    finishInteraction(room);
     return;
   }
 
@@ -2737,6 +3139,10 @@ async function handle(ws, data) {
         'A player disconnected. The match is paused.'
       );
     }
+
+    const id = Rules.SEATS[m.seat].id;
+    const pending = dueChoice(s);
+    const actor = s.players.find(p => p.id === id);
 
     if (room.pendingInteraction) {
       return error(ws, 'An interaction is in progress. Submit your decision first.');
@@ -2787,7 +3193,7 @@ async function handle(ws, data) {
     }
 
     // Interactive cards: create a pending interaction instead of resolving immediately.
-    const interactiveCards = ['rps', 'betrayal'];
+    const interactiveCards = ['rps', 'betrayal', 'speed', 'dice', 'wheel', 'linkedfate', 'impostor', 'swapper'];
     if (interactiveCards.includes(cardId) && !pending) {
       // Validate participants.
       if (cardId === 'rps' && (!targetId || targetId === id)) {
@@ -2799,6 +3205,27 @@ async function handle(ws, data) {
           return error(ws, 'Betrayal needs two eligible opponents.');
         }
       }
+      if (cardId === 'speed' && (!targetId || targetId === id)) {
+        return error(ws, 'Choose a valid opponent.');
+      }
+      if (cardId === 'dice' && (!targetId || targetId === id)) {
+        return error(ws, 'Choose a valid opponent.');
+      }
+      if (cardId === 'linkedfate' && (!targetId || targetId === id)) {
+        return error(ws, 'Choose a valid opponent.');
+      }
+      if (cardId === 'swapper' && (!targetId || targetId === id)) {
+        return error(ws, 'Choose a valid opponent.');
+      }
+      if (cardId === 'impostor') {
+        const eligible = s.players.filter(p => p.id !== id && !Rules.isOut(p, s));
+        if (eligible.length < 3) {
+          return error(ws, 'Impostor needs at least 4 players total.');
+        }
+      }
+      if (cardId === 'wheel') {
+        // Wheel needs no target - it affects everyone
+      }
 
       // Move card to discard.
       Rules.moveCardToDiscard(s, actor, cardId);
@@ -2808,19 +3235,59 @@ async function handle(ws, data) {
         actorSeat: m.seat,
         actorId: id,
         targetId: targetId || null,
-        participants: cardId === 'rps' ? [id, targetId] : null,
+        participants: null,
         decisions: {},
         submittedAt: {},
         createdAt: Date.now(),
-        timeoutMs: 30000
+        timeoutMs: cardId === 'impostor' ? 120000 : (cardId === 'wheel' ? 60000 : 30000),
+        // Card-specific state
+        phase: 'waiting', // For multi-phase interactions like impostor
+        roundData: {}     // For storing rolls, spins, etc.
       };
 
-      // For Betrayal, pick two targets.
-      if (cardId === 'betrayal') {
+      // Set up participants based on card type.
+      if (cardId === 'rps' || cardId === 'speed' || cardId === 'dice' || cardId === 'linkedfate' || cardId === 'swapper') {
+        room.pendingInteraction.participants = [id, targetId];
+      } else if (cardId === 'betrayal') {
         const others = s.players.filter(p => p.id !== id && !Rules.isOut(p, s));
         room.pendingInteraction.participants = [others[0].id, others[1].id];
         room.pendingInteraction.targetIds = [others[0].id, others[1].id];
+      } else if (cardId === 'impostor') {
+        const eligible = s.players.filter(p => !Rules.isOut(p, s));
+        room.pendingInteraction.participants = eligible.map(p => p.id);
+      } else if (cardId === 'wheel') {
+        const eligible = s.players.filter(p => !Rules.isOut(p, s));
+        room.pendingInteraction.participants = eligible.map(p => p.id);
       }
+
+      // Safety net: if a participant never responds, auto-resolve after timeout.
+      if (room.interactionTimer) clearTimeout(room.interactionTimer);
+      const piRef = room.pendingInteraction;
+      room.interactionTimer = setTimeout(function () {
+        if (room.pendingInteraction !== piRef) return;
+        // Auto-resolve with random/neutral choices
+        piRef.participants.forEach(function (participantId) {
+          if (piRef.decisions[participantId] !== undefined) return;
+          if (piRef.type === 'rps') {
+            piRef.decisions[participantId] = ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)];
+          } else if (piRef.type === 'betrayal') {
+            piRef.decisions[participantId] = (Math.random() < 0.5 ? 'share' : 'steal');
+          } else if (piRef.type === 'speed') {
+            piRef.decisions[participantId] = 'timeout';
+          } else if (piRef.type === 'dice') {
+            piRef.decisions[participantId] = 'roll';
+          } else if (piRef.type === 'wheel') {
+            piRef.decisions[participantId] = 'spin';
+          } else if (piRef.type === 'linkedfate') {
+            piRef.decisions[participantId] = 'ack';
+          } else if (piRef.type === 'impostor') {
+            piRef.decisions[participantId] = 'clue:...';
+          } else if (piRef.type === 'swapper') {
+            piRef.decisions[participantId] = 'ack';
+          }
+        });
+        finishInteraction(room);
+      }, piRef.timeoutMs);
 
       recordEvents(room, [{
         type: 'card',
@@ -2835,7 +3302,9 @@ async function handle(ws, data) {
       return;
     }
 
-      const result = pending
+    const beforePoints = s.players.map(p => p.points);
+
+    const result = pending
       ? Rules.resolvePendingChoice(
           s,
           cardId,

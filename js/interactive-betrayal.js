@@ -3,6 +3,10 @@
   'use strict';
   var overlay = null;
   function build() {
+    if (overlay && document.body.contains(overlay)) {
+      overlay.hidden = false;
+      return;
+    }
     overlay = document.createElement('div');
     overlay.className = 'interactive-overlay betrayal-overlay';
     overlay.id = 'betrayal-overlay';
