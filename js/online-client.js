@@ -65,7 +65,7 @@
   }
   const interactiveModules = {
     rps: 'PhoenixRpsInteractive', betrayal: 'PhoenixBetrayalInteractive',
-    speed: 'PhoenixSpeedInteractive', wheel: 'PhoenixWheelInteractive',
+    speed: 'PhoenixSpeedInteractive', wheel: 'PhoenixWheelInteractive', wheelofmisfortune: 'PhoenixWheelInteractive',
     dice: 'PhoenixDiceInteractive', linkedfate: 'PhoenixLinkedFateInteractive',
     impostor: 'PhoenixImpostorInteractive', swapper: 'PhoenixSwapperInteractive'
   };

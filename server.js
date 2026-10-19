@@ -3336,7 +3336,7 @@ async function handle(ws, data) {
     if (pi.type === 'dice' && decision !== 'roll') {
       return error(ws, 'Invalid decision.');
     }
-    if (pi.type === 'wheel' && decision !== 'spin') {
+    if ((pi.type === 'wheel' || pi.type === 'wheelofmisfortune') && decision !== 'spin') {
       return error(ws, 'Invalid decision.');
     }
     if (pi.type === 'linkedfate' && decision !== 'ack') {

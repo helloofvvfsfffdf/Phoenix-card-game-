@@ -39,12 +39,15 @@
       overlay.hidden = false;
       return;
     }
+    const isMisfortune = (window.PhoenixOnline && window.PhoenixOnline.getState) && 
+      window.PhoenixOnline.getState() && window.PhoenixOnline.getState().pendingInteraction &&
+      window.PhoenixOnline.getState().pendingInteraction.type === 'wheelofmisfortune';
     overlay = document.createElement('div');
     overlay.className = 'interactive-overlay wheel-overlay';
     overlay.id = 'wheel-overlay';
     overlay.innerHTML =
-      '<div class="interactive-shell" role="dialog" aria-modal="true" aria-label="Wheel of Fortune">' +
-      '  <h2>Wheel of Fortune</h2>' +
+      '<div class="interactive-shell" role="dialog" aria-modal="true" aria-label="' + (isMisfortune ? 'Wheel of Misfortune' : 'Wheel of Fortune') + '">' +
+      '  <h2>' + (isMisfortune ? 'Wheel of Misfortune' : 'Wheel of Fortune') + '</h2>' +
       wheelMarkup() +
       '  <button type="button" id="wheel-spin" class="primary">Spin the Wheel</button>' +
       outcomeListMarkup() +
@@ -75,7 +78,7 @@
   }
 
   function onState(msg) {
-    if (!msg.pendingInteraction || msg.pendingInteraction.type !== 'wheel') return;
+    if (!msg.pendingInteraction || (msg.pendingInteraction.type !== 'wheel' && msg.pendingInteraction.type !== 'wheelofmisfortune')) return;
 
     var pi = msg.pendingInteraction;
     var spinBtn = document.getElementById('wheel-spin');
@@ -84,7 +87,7 @@
 
     if (msg.events) {
       var resultEvent = msg.events.find(function (e) {
-        return e.type === 'result' && e.cardId === 'wheel';
+        return e.type === 'result' && (e.cardId === 'wheel' || e.cardId === 'wheelofmisfortune');
       });
       if (resultEvent) {
         feedback.textContent = resultEvent.text || 'Wheel result.';
