@@ -125,7 +125,7 @@
 
     ['menu-cards'].forEach(function (id) {
       $(id).addEventListener('click', function () {
-        $('menu-feedback').textContent = 'This section is coming in a future build.';
+        window.location.href = 'card-effects.html';
       });
     });
     ['btn-new', 'btn-play-again'].forEach(function (id) {
