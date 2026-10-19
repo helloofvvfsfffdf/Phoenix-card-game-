@@ -63,7 +63,7 @@
 
     var emoji = {rock: '✊', paper: '✋', scissors: '✌'};
     reveal.querySelector('.rps-both').innerHTML =
-      '<span class="rps-pill rps-actor">' + (emoji[choiceMade] || '?') + ' ' + (choiceMade || '?') + '</span>' +
+      '<span class="rps-pill rps-actor">' + (emoji[pick1] || '?') + ' ' + pick1 + '</span>' +
       '<span class="rps-pill rps-target">' + (emoji[pick2] || '?') + ' ' + pick2 + '</span>';
 
     document.getElementById('rps-result').textContent = result || 'Result revealed.';
@@ -74,12 +74,11 @@
       window.gsap.from(both.children, {opacity: 0, y: 20, duration: 0.4, stagger: 0.1, ease: 'power2.out'});
     }
 
-    setTimeout(function () { close(); }, 6000);
   }
 
   function onState(message) {
     if (message.pendingInteraction && message.pendingInteraction.type === 'rps') {
-      // Still waiting.
+      document.getElementById('rps-status').textContent = message.pendingInteraction.roundData.message || 'Make your secret choice.';
       return;
     }
     if (message.events) {
@@ -87,7 +86,9 @@
         return e.type === 'result' && e.cardId === 'rps';
       });
       if (resultEvent) {
-        revealBoth(choiceMade || '?', '?', resultEvent.text);
+        var choices = message.lastInteractionResult.roundData.choices || {};
+        var ids = message.lastInteractionResult.participants;
+        revealBoth(choices[ids[0]] || '?', choices[ids[1]] || '?', resultEvent.text);
       }
     }
   }

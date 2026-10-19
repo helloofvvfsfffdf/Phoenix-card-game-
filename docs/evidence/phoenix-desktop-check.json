@@ -1,0 +1,114 @@
+{
+  "mode": "desktop",
+  "baseUrl": "http://127.0.0.1:4320",
+  "viewport": {
+    "width": 1440,
+    "height": 1080,
+    "deviceScaleFactor": 1,
+    "mobile": false
+  },
+  "taps": [],
+  "screenshots": [
+    "C:\\Users\\Joshua Hopkins\\AppData\\Local\\Temp\\opencode\\phoenix-desktop-harness.png",
+    "C:\\Users\\Joshua Hopkins\\AppData\\Local\\Temp\\opencode\\phoenix-desktop-menu.png"
+  ],
+  "harnessPage": {
+    "innerWidth": 1414,
+    "innerHeight": 987,
+    "scrollWidth": 1414,
+    "runWidth": 139,
+    "runHeight": 52,
+    "frameWidth": 380
+  },
+  "cards": {
+    "passed": 470,
+    "failed": 0,
+    "total": 470,
+    "failures": [],
+    "frameWidth": 380
+  },
+  "pageErrorsAfterFlows": [],
+  "menu": {
+    "innerWidth": 1414,
+    "scrollWidth": 1399,
+    "buttons": [
+      {
+        "label": "▶ SINGLE PLAYER CREATOR ",
+        "width": 370,
+        "height": 75,
+        "left": 84,
+        "right": 454
+      },
+      {
+        "label": "⚗ MULTIPLAYER TESTING LO",
+        "width": 370,
+        "height": 75,
+        "left": 84,
+        "right": 454
+      },
+      {
+        "label": "♟ MULTIPLAYER PRIVATE RO",
+        "width": 370,
+        "height": 75,
+        "left": 84,
+        "right": 454
+      },
+      {
+        "label": "▦ GALLERY PRIVATE · INVI",
+        "width": 370,
+        "height": 75,
+        "left": 84,
+        "right": 454
+      },
+      {
+        "label": "👑 BADGES COLLECTION · F",
+        "width": 370,
+        "height": 75,
+        "left": 84,
+        "right": 454
+      },
+      {
+        "label": "📣 ANNOUNCEMENTS OFFICIA",
+        "width": 370,
+        "height": 75,
+        "left": 84,
+        "right": 454
+      },
+      {
+        "label": "🏆 LEADERBOARD PLAYERS R",
+        "width": 370,
+        "height": 75,
+        "left": 84,
+        "right": 454
+      },
+      {
+        "label": "▣ CARD COLLECTION COMING",
+        "width": 370,
+        "height": 75,
+        "left": 84,
+        "right": 454
+      },
+      {
+        "label": "✦ CARD CINEMATICS WATCH ",
+        "width": 370,
+        "height": 75,
+        "left": 84,
+        "right": 454
+      },
+      {
+        "label": "⚙ SETTINGS MUSIC, SOUND ",
+        "width": 370,
+        "height": 75,
+        "left": 84,
+        "right": 454
+      },
+      {
+        "label": "🔒 OWNER DASHBOARD SERVE",
+        "width": 370,
+        "height": 75,
+        "left": 84,
+        "right": 454
+      }
+    ]
+  }
+}

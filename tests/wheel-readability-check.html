@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wheel label readability — visual check only</title>
+<link rel="stylesheet" href="../css/styles.css">
+<link rel="stylesheet" href="../css/interactive.css">
+<style>
+body { margin:0; padding:16px; background:#101625; color:#fff; font:16px system-ui; }
+.readability-panels { display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start; }
+iframe { border:1px solid #68738a; height:900px; max-width:100%; }
+#checks { white-space:pre-wrap; }
+</style>
+<main id="preview">
+<h1>Wheel label readability</h1>
+<p>Visual preview only. No match, WebSocket, scoring or gameplay is simulated.</p>
+<details><summary>Layout check results</summary><pre id="checks">Checking desktop and narrow layouts…</pre></details>
+<div class="readability-panels">
+  <section><h2>Desktop panel · 560px</h2><iframe title="Desktop Wheel labels" width="560" data-src="?panel=1"></iframe></section>
+  <section><h2>Narrow panel · 320px</h2><iframe title="Narrow Wheel labels" width="320" data-src="?panel=1"></iframe></section>
+</div>
+</main>
+<script src="../js/interactive-wheel.js"></script>
+<script>
+if (new URLSearchParams(location.search).has('panel')) {
+  document.getElementById('preview').remove();
+  PhoenixWheelInteractive.build();
+} else {
+  document.querySelectorAll('iframe').forEach(frame => { frame.src = frame.dataset.src; });
+  function waitForPanels() {
+    return new Promise((resolve, reject) => {
+      const deadline = Date.now() + 10000;
+      const timer = setInterval(() => {
+        const frames = [...document.querySelectorAll('iframe')];
+        if (frames.every(f => f.contentDocument.querySelectorAll('.wheel-outcomes li').length === 9)) {
+          clearInterval(timer); resolve(frames);
+        } else if (Date.now() > deadline) { clearInterval(timer); reject(new Error('Preview panels did not load')); }
+      }, 20);
+    });
+  }
+  function luminance(rgb) {
+    const values = rgb.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => {
+      v /= 255; return v <= .04045 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4);
+    });
+    return .2126 * values[0] + .7152 * values[1] + .0722 * values[2];
+  }
+  window.wheelReadabilityPromise = waitForPanels().then(async frames => {
+    const results = [];
+    for (const frame of frames) {
+      const w = frame.contentWindow, d = frame.contentDocument;
+      const shell = d.querySelector('.interactive-shell');
+      const wheel = d.querySelector('.wheel-graphic');
+      const labels = [...d.querySelectorAll('.wheel-segment')];
+      const legend = d.querySelector('.wheel-outcomes');
+      const items = [...legend.children];
+      const rects = labels.map(label => label.getBoundingClientRect());
+      const overlaps = rects.some((a, i) => rects.slice(i + 1).some(b =>
+        Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
+        Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1));
+      const style = w.getComputedStyle(items[0]);
+      const a = luminance(style.color), b = luminance(style.backgroundColor);
+      const contrast = (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+      const checks = {
+        nine_matching_outcomes: labels.length === 9 && items.length === 9 && labels.every((label, i) => label.dataset.outcome === items[i].dataset.outcome),
+        no_horizontal_panel_overflow: shell.scrollWidth <= shell.clientWidth + 1,
+        no_label_overlap_at_rest: !overlaps,
+        no_clipped_label_text: labels.every(label => label.scrollWidth <= label.clientWidth + 1),
+        full_labels_at_least_16px: items.every(item => parseFloat(w.getComputedStyle(item).fontSize) >= 16),
+        full_label_contrast_at_least_7_to_1: contrast >= 7,
+        pointer_outside_rotating_wheel: !wheel.contains(d.querySelector('.wheel-pointer'))
+      };
+      wheel.classList.add('wheel-spinning');
+      await new Promise(resolve => w.requestAnimationFrame(() => w.requestAnimationFrame(resolve)));
+      checks.legend_stays_upright_during_visual_spin = w.getComputedStyle(legend).transform === 'none';
+      wheel.classList.remove('wheel-spinning');
+      results.push({ width: w.innerWidth, contrast: Number(contrast.toFixed(2)), checks });
+    }
+    const passed = results.flatMap(r => Object.values(r.checks)).filter(Boolean).length;
+    const failed = results.flatMap(r => Object.values(r.checks)).filter(value => !value).length;
+    const report = { scope: 'Visual layout only, desktop/narrow iframe widths; not device or gameplay verification', passed, failed, results };
+    window.wheelReadabilityResult = report;
+    document.getElementById('checks').textContent = JSON.stringify(report, null, 2);
+    return report;
+  }).catch(error => {
+    window.wheelReadabilityResult = { failed: 1, error: error.message };
+    document.getElementById('checks').textContent = error.message;
+  });
+}
+</script>
+</html>

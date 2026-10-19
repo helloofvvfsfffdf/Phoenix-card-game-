@@ -42,7 +42,8 @@
     var api={section:section,mount:mount,halo:halo,hero:hero,card:card,message:message,canvas:canvas,gl:gl,context:context,effects:effects};
     const HAS_EFK = {
   bonus:true, knife:true, hunter:true, zombie:true, steal:true, judge:true, reveal:true,
-  skipall:true, trick:true, stealturn:true, curse:true, ghost:true, alvin:true, phoenix:true
+  skipall:true, trick:true, stealturn:true, curse:true, ghost:true, alvin:true, phoenix:true,
+  dice:true, rps:true, betrayal:true, speed:true, wheel:true, linkedfate:true, impostor:true, swapper:true
 };
 
 api.load = function(id){

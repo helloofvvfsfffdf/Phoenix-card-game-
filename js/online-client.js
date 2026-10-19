@@ -42,6 +42,105 @@
 
   let socket = null;
   let state = null;
+  const resumeStorageKey = 'phoenix-online-resume:' + (location.pathname || '/') + (location.search || '');
+  let resumeSession = null;
+  let reconnectTimer = null;
+  let reconnectAttempts = 0;
+  let intentionalLeave = false;
+  try { resumeSession = JSON.parse(sessionStorage.getItem(resumeStorageKey) || 'null'); } catch (_) {}
+
+  function saveResume(value) {
+    resumeSession = value;
+    try { sessionStorage.setItem(resumeStorageKey, JSON.stringify(value)); } catch (_) {}
+  }
+  function retryResume() {
+    clearTimeout(reconnectTimer);
+    if (!resumeSession || intentionalLeave || banShown) return;
+    if (reconnectAttempts >= 10) { feedback('Could not reconnect. Reload this tab to retry your saved seat.'); return; }
+    const delay = Math.min(5000, 500 * Math.pow(2, reconnectAttempts++));
+    reconnectTimer = setTimeout(() => {
+      if (!resumeSession || intentionalLeave) return;
+      connect(() => send({ type: 'resume', ...resumeSession }));
+    }, delay);
+  }
+  const interactiveModules = {
+    rps: 'PhoenixRpsInteractive', betrayal: 'PhoenixBetrayalInteractive',
+    speed: 'PhoenixSpeedInteractive', wheel: 'PhoenixWheelInteractive',
+    dice: 'PhoenixDiceInteractive', linkedfate: 'PhoenixLinkedFateInteractive',
+    impostor: 'PhoenixImpostorInteractive', swapper: 'PhoenixSwapperInteractive'
+  };
+  let activeInteractionModule = null;
+  let interactionKey = null;
+  let resultTimer = null;
+  let showingResult = false;
+
+  function updateInteraction(message) {
+    if (message && message.paused) {
+      const previous = activeInteractionModule && window[activeInteractionModule];
+      if (previous && previous.close) previous.close();
+      clearTimeout(resultTimer);
+      activeInteractionModule = null;
+      showingResult = false;
+      return;
+    }
+    const pi = message && message.pendingInteraction;
+    const name = pi && interactiveModules[pi.type];
+    const result = message && message.lastInteractionResult;
+    if (!pi && activeInteractionModule && result && interactionKey === result.createdAt && !showingResult) {
+      showingResult = true;
+      const previous = window[activeInteractionModule];
+      const view = { ...message, events: result.events,
+        pendingInteraction: ['rps', 'betrayal'].includes(result.type) ? null : result };
+      if (previous && previous.onState) previous.onState(view);
+      document.querySelectorAll('.interactive-overlay button, .interactive-overlay input').forEach(el => { el.disabled = true; });
+      const dismiss = () => {
+        clearTimeout(resultTimer);
+        if (previous && previous.close) previous.close();
+        activeInteractionModule = null;
+        showingResult = false;
+      };
+      const shell = document.querySelector('.interactive-overlay .interactive-shell');
+      if (shell) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = 'Continue';
+        button.onclick = dismiss;
+        shell.appendChild(button);
+      }
+      resultTimer = setTimeout(dismiss, 6000);
+      return;
+    }
+    if (!pi && showingResult && message && message.phase === 'playing') return;
+    if (pi && interactionKey !== pi.createdAt && activeInteractionModule) {
+      const previous = window[activeInteractionModule];
+      if (previous && previous.close) previous.close();
+      activeInteractionModule = null;
+    }
+    if (activeInteractionModule && activeInteractionModule !== name) {
+      const previous = window[activeInteractionModule];
+      if (previous && typeof previous.close === 'function') previous.close();
+      activeInteractionModule = null;
+    }
+    if (!pi || interactionKey !== pi.createdAt) {
+      clearTimeout(resultTimer);
+      showingResult = false;
+    }
+    const mod = name && window[name];
+    if (mod && typeof mod.build === 'function') {
+      activeInteractionModule = name;
+      interactionKey = pi.createdAt;
+      mod.build();
+      if (typeof mod.onState === 'function') mod.onState(message);
+      if (pi.type === 'speed') return; // Speed owns its ready/countdown/reaction controls.
+      const myId = message.players[message.seat] && message.players[message.seat].id;
+      const eligible = (pi.participants || []).includes(myId) && (pi.type !== 'wheel' || pi.actorId === myId);
+      const locked = (pi.submitted || []).includes(myId);
+      document.querySelectorAll('.interactive-overlay button, .interactive-overlay input').forEach(el => {
+        el.disabled = !eligible || locked;
+        if (!eligible) el.hidden = true;
+      });
+    }
+  }
 
   /**
    * Everything the game already knows about one ally: name, title, description,
@@ -300,6 +399,8 @@
 
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     socket = new WebSocket(protocol + '//' + location.host);
+    const connection = socket;
+    intentionalLeave = false;
     window.ws = socket;
 
     socket.onopen = callback;
@@ -307,29 +408,21 @@
       feedback('Could not connect to the multiplayer server.');
 
     socket.onclose = () => {
+      if (socket !== connection) return;
+      if (state && state.phase === 'lobby') saveResume(null);
+      updateInteraction(null);
       if (window.PhoenixCinematics) window.PhoenixCinematics.resetNetwork('disconnect');
       if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.reset();
       state = null;
       window.ws = null;
-      feedback('Disconnected from the server. Reload to reconnect.');
+      socket = null;
+      feedback(resumeSession ? 'Connection lost. Reconnecting to your saved seat…' : 'Disconnected from the server. Enter the lobby to reconnect.');
       $('online-actions').replaceChildren();
+      retryResume();
     };
 
-    // Handle tab visibility changes to prevent timer desync
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        // Tab lost focus - browser will throttle timers
-        // The server interaction timer will auto-resolve on timeout
-      } else {
-        // Tab regained focus - request fresh state to resync
-        if (socket && socket.readyState === WebSocket.OPEN && state && state.started) {
-          // Request a state refresh by sending a no-op
-          socket.send(JSON.stringify({ type: 'ping' }));
-        }
-      }
-    });
-
     socket.onmessage = event => {
+      if (socket !== connection) return;
       let message;
       try {
         message = JSON.parse(event.data);
@@ -341,11 +434,18 @@
         renderLobbyList(message.rooms);
         return;
       } else if (message.type === 'banned') {
+        clearTimeout(reconnectTimer);
         // The SERVER has decided this connection is restricted. Everything on
         // the screen comes from its projection - no address, no other player,
         // no internal id. There is no "dismiss and carry on" here: the socket
         // is closed by the server, so play genuinely cannot continue.
         showBanScreen(message.ban);
+        return;
+      } else if (message.type === 'roomClosed') {
+        intentionalLeave = true;
+        clearTimeout(reconnectTimer);
+        saveResume(null);
+        feedback(message.message || 'Room closed.');
         return;
       } else if (message.type === 'interact-ack') {
         feedback('Decision recorded. Waiting for the other player…');
@@ -372,6 +472,10 @@
         renderAdminPanel();
         return;
       } else if (message.type === 'error') {
+        if (message.code === 'resume-invalid') {
+          clearTimeout(reconnectTimer);
+          saveResume(null);
+        } else if (message.code === 'resume-busy') retryResume();
         // The server refused play because this account still owes a verified
         // address. Open the screen that fixes it rather than making the player
         // find it - they were trying to play, so show what unblocks play.
@@ -390,46 +494,25 @@
       } else if (message.type === 'state') {
         const previous = state;
         state = message;
+        if (message.resumeToken) saveResume({ code: message.code, token: message.resumeToken });
+        reconnectAttempts = 0;
+        clearTimeout(reconnectTimer);
         feedback('');
         render();
-        if (message.pendingInteraction) {
-          var pi = message.pendingInteraction;
-          var interactiveModules = {
-            rps: 'PhoenixRpsInteractive',
-            betrayal: 'PhoenixBetrayalInteractive',
-            speed: 'PhoenixSpeedInteractive',
-            wheel: 'PhoenixWheelInteractive',
-            dice: 'PhoenixDiceInteractive',
-            linkedfate: 'PhoenixLinkedFateInteractive',
-            impostor: 'PhoenixImpostorInteractive',
-            swapper: 'PhoenixSwapperInteractive'
-          };
-          var interactiveModule = interactiveModules[pi.type];
-          if (interactiveModule && window[interactiveModule] &&
-              typeof window[interactiveModule].build === 'function') {
-            window[interactiveModule].build();
-          }
-        } else {
-          // The interaction is over: make sure no interactive overlay is left
-          // on screen, otherwise it would look like the game had frozen.
-          [
-            'PhoenixRpsInteractive', 'PhoenixBetrayalInteractive',
-            'PhoenixSpeedInteractive', 'PhoenixWheelInteractive',
-            'PhoenixDiceInteractive', 'PhoenixLinkedFateInteractive',
-            'PhoenixImpostorInteractive', 'PhoenixSwapperInteractive'
-          ].forEach(function (name) {
-            var mod = window[name];
-            if (mod && typeof mod.close === 'function') {
-              try { mod.close(); } catch (e) { /* overlay already gone */ }
-            }
-          });
-        }
+        updateInteraction(message);
         if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.observe(previous, message);
         if (window.PhoenixCinematics) window.PhoenixCinematics.consume(message.effects);
         if (window.PhoenixCinematics) window.PhoenixCinematics.match(message);
       }
     };
   }
+
+  // One listener, not another copy after every socket reconnect.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    if (socket && socket.readyState === WebSocket.OPEN && state && state.started) send({ type: 'ping' });
+    else if (!socket && resumeSession) retryResume();
+  });
 
   /**
    * Shows one of the two multiplayer modes on the ONLINE MULTIPLAYER screen.
@@ -474,6 +557,7 @@
     // (unit-test harnesses load this file on its own), fall back to opening
     // the lobby directly so nothing is blocked.
     const openLobby = function () {
+      if (window.PhoenixOpeningCinematic) window.PhoenixOpeningCinematic.stop();
       $('phoenix-menu').hidden = true;
       $('ally-picker').hidden = true;
       $('online-screen').hidden = false;
@@ -489,7 +573,7 @@
       // created or joined: the server pushes a lobby snapshot on connect, and
       // that is what fills the PUBLIC LOBBY BROWSER. Without this a visitor sees
       // an empty list until they already try to create or join something.
-      connect(() => {});
+      connect(() => { if (resumeSession) send({ type: 'resume', ...resumeSession }); });
     };
 
     if (window.PhoenixAccount && window.PhoenixAccount.requireLogin) {
@@ -500,6 +584,10 @@
   }
 
   function leave() {
+    intentionalLeave = true;
+    clearTimeout(reconnectTimer);
+    saveResume(null);
+    updateInteraction(null);
     if (window.PhoenixCinematics) window.PhoenixCinematics.resetNetwork('leave');
     if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.reset();
 
@@ -1148,7 +1236,11 @@ function renderPlaying() {
 
     renderSeats();
 
-    if (s.phase === 'lobby') renderLobby();
+    if (s.paused) {
+      $('online-phase').textContent = 'MATCH PAUSED — waiting for disconnected players to reconnect';
+      $('online-actions').replaceChildren(el('p', '', 'Match paused. Cards and timers resume when every player reconnects. The reconnect window is 10 minutes; an unfinished match awards no win.'));
+    }
+    else if (s.phase === 'lobby') renderLobby();
     else if (s.phase === 'turnDice' || s.phase === 'allyDice') renderDice();
     else if (s.phase === 'draft') renderDraft();
     else renderPlaying();
@@ -1391,7 +1483,14 @@ function renderPlaying() {
       PhoenixOnline.adminRooms = null;
       if ($('menu-feedback')) $('menu-feedback').textContent = '';
     };
+    // A refresh restores only this tab's secret saved seat. It does not join by
+    // name or bypass the normal account/verification gate on the server.
+    if (resumeSession) {
+      const ready = window.PhoenixAccount && window.PhoenixAccount.refresh
+        ? window.PhoenixAccount.refresh() : Promise.resolve();
+      ready.then(() => { if (resumeSession) enter(); }).catch(() => {});
+    }
   });
 
-  window.PhoenixOnline = { enter, leave, join, openAdmin };
+  window.PhoenixOnline = { enter, leave, join, openAdmin, getState: () => state };
 })();

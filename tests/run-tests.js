@@ -866,7 +866,12 @@ test('the deck is reshuffled from the discard when it runs out', function () {
 });
 
 test('a long game reshuffles rather than running out', function () {
-  var s = newGame({ seed: 31, rounds: 20 });
+  // Long enough to exhaust any deck: five players take about five turns each
+  // round, so ceil(deckSize / 4) rounds draws well past the whole stock at
+  // least once. The old fixed 20 rounds stopped short once the eight
+  // interactive cards grew the deck from 75 to 109 cards.
+  var rounds = Math.ceil(Rules.deckSize() / 4);
+  var s = newGame({ seed: 31, rounds: rounds });
   var guard = 0;
   while (!s.over && guard++ < 600) {
     var result = stepOnce(s);
@@ -875,7 +880,7 @@ test('a long game reshuffles rather than running out', function () {
       if (p.enabled) assert(Rules.handSize(s, p.id) >= 0, p.name + ' has a sane hand');
     });
   }
-  equal(s.over, true, 'a 20-round game completes');
+  equal(s.over, true, 'a ' + rounds + '-round game completes');
   greater(s.reshuffles, 0, 'and the discard was recycled at least once');
 });
 

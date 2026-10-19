@@ -34,6 +34,7 @@ const net = require('net');
 const path = require('path');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
+const { openState } = require('./helpers/legacy-account-fixture');
 
 const ROOT = path.join(__dirname, '..');
 const Moderation = require(path.join(ROOT, 'js', 'moderation.js'));
@@ -606,10 +607,12 @@ function startFakeSupabase() {
  */
 function startServer(supabaseUrl, extraEnv) {
   return freePort().then(port => {
-    const server = spawn(process.execPath, ['server.js'], {
+    const server = spawn(process.execPath, ['tests/helpers/plain-server.js'], {
       cwd: ROOT,
       env: Object.assign({}, process.env, {
         PORT: String(port),
+        PHOENIX_BIND_HOST: '127.0.0.1',
+        PHOENIX_STATE_FILE: openState('phoenix-security-'),
         PHOENIX_OWNER_PASSWORD: crypto.randomBytes(24).toString('hex'),
         PHOENIX_MODE_ACCESS_CODE: crypto.randomBytes(16).toString('hex'),
         PHOENIX_MAX_ROOMS: '50',

@@ -31,6 +31,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
+const legacyFixture = require('./helpers/legacy-account-fixture');
 
 const ROOT = path.join(__dirname, '..');
 const Badges = require(path.join(ROOT, 'js', 'badges.js'));
@@ -305,6 +306,7 @@ function startFakeSupabase() {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const p = url.pathname;
+    if (legacyFixture.rejectMissingEmailColumns(req, url, res)) return;
 
     /* ---- rpc/ensure_owner_badge ------------------------------------- */
     if (p === '/rest/v1/rpc/ensure_owner_badge' && req.method === 'POST') {
@@ -493,7 +495,7 @@ function startFakeSupabase() {
 
 function startApp(appPort, supaPort) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['server.js'], {
+    const child = spawn(process.execPath, ['tests/helpers/plain-server.js'], {
       cwd: ROOT,
       env: Object.assign({}, process.env, {
         PORT: String(appPort),
@@ -503,7 +505,8 @@ function startApp(appPort, supaPort) {
           Buffer.from(JSON.stringify({ role: 'service_role' })).toString('base64') + '.sig',
         PHOENIX_OWNER_PASSWORD: 'unused-owner-password-0123456789abcdef',
         PHOENIX_MODE_ACCESS_CODE: 'unused-access-code-1234567890',
-        PHOENIX_STATE_FILE: path.join(os.tmpdir(), 'phoenix-badge-' + Date.now() + '.json')
+        PHOENIX_BIND_HOST: '127.0.0.1',
+        PHOENIX_STATE_FILE: legacyFixture.openState('phoenix-badge-')
       }),
       stdio: ['ignore', 'pipe', 'pipe']
     });

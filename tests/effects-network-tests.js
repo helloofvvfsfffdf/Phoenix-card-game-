@@ -5,6 +5,8 @@ const net = require('net');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const WebSocket = require('ws');
 const Effects = require('../js/effects');
 
@@ -14,10 +16,15 @@ async function main() {
   const port = probe.address().port;
   await new Promise(resolve => probe.close(resolve));
   const password = crypto.randomBytes(24).toString('hex');
-  const server = spawn(process.execPath, ['server.js'], {
+  const tempRoot = process.platform === 'win32' ? path.join(process.env.LOCALAPPDATA, 'Temp', 'opencode') : os.tmpdir();
+  const temp = fs.mkdtempSync(path.join(tempRoot, 'phoenix-effects-'));
+  const stateFile = path.join(temp, 'state.json');
+  fs.writeFileSync(stateFile, JSON.stringify({ multiplayerOpen: true, creationLocked: false }));
+  const server = spawn(process.execPath, ['tests/helpers/plain-server.js'], {
     cwd: path.join(__dirname, '..'),
     env: { ...process.env, PORT: String(port), PHOENIX_OWNER_PASSWORD: password,
-      PHOENIX_MODE_ACCESS_CODE: crypto.randomBytes(16).toString('hex') },
+      PHOENIX_MODE_ACCESS_CODE: crypto.randomBytes(16).toString('hex'),
+      PHOENIX_STATE_FILE: stateFile, SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '' },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   const clients = [];

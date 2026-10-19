@@ -28,6 +28,7 @@
  *     node tests/announcement-tests.js
  */
 'use strict';
+const legacyFixture = require('./helpers/legacy-account-fixture');
 
 const assert = require('assert');
 const crypto = require('crypto');
@@ -172,6 +173,7 @@ function startFakeSupabase() {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const p = url.pathname;
+    if (legacyFixture.rejectMissingEmailColumns(req, url, res)) return;
 
     /* ---- accounts / sessions (so a real sign-in can happen) --------- */
     if (p === '/rest/v1/accounts') {
@@ -290,7 +292,7 @@ function startFakeSupabase() {
 
 function startApp(appPort, supaPort) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['server.js'], {
+    const child = spawn(process.execPath, ['tests/helpers/plain-server.js'], {
       cwd: ROOT,
       env: Object.assign({}, process.env, {
         PORT: String(appPort),
@@ -300,7 +302,8 @@ function startApp(appPort, supaPort) {
           Buffer.from(JSON.stringify({ role: 'service_role' })).toString('base64') + '.sig',
         PHOENIX_OWNER_PASSWORD: 'unused-owner-password-0123456789abcdef',
         PHOENIX_MODE_ACCESS_CODE: 'unused-access-code-1234567890',
-        PHOENIX_STATE_FILE: path.join(os.tmpdir(), 'phoenix-announce-' + Date.now() + '.json')
+        PHOENIX_BIND_HOST: '127.0.0.1',
+        PHOENIX_STATE_FILE: legacyFixture.openState('phoenix-announce-')
       }),
       stdio: ['ignore', 'pipe', 'pipe']
     });

@@ -23,13 +23,6 @@
     wheel:{color:'#ff9500',title:'The wheel turns',motif:'A nine-segment wheel spins and lands on destiny.',duration:4.8,variants:['Spin','Nine outcomes'],caption:'NINE OUTCOMES · SERVER-AUTHORITATIVE RANDOMNESS'},
     linkedfate:{color:'#00ff88',title:'Bound together',motif:'A glowing chain connects two players across the table.',duration:4.0,variants:['Link','Shared gains'],caption:'LINKED FOR 2 ROUNDS · 50% GAIN SHARED · NO LOSSES'},
     impostor:{color:'#8e44ad',title:'Who is the impostor?',motif:'A single shadow among five players, hidden until the vote.',duration:5.0,variants:['Secret word','Clues','Vote','Reveal'],caption:'MIN 4 PLAYERS · CATCH: NON-IMPOSTORS +10,000 · ESCAPE: IMPOSTOR +30,000'},
-    swapper:{color:'#ff4081',title:'Switching sides',motif:'Two ally portraits swap places in a burst of light.',duration:3.8,variants:['Swap'],caption:'ALLIES SWAP · POINTS UNCHANGED'},
-    rps:{color:'#ff6b6b',title:'Rock, paper, scissors',motif:'Three elemental symbols clash and resolve.',duration:3.8,variants:['Secret pick','Reveal','Elimination'],caption:'LOSER ELIMINATED FOR 1 ROUND · TIES REPEAT'},
-    betrayal:{color:'#9b59b6',title:'The prisoner’s dilemma',motif:'Two masks face each other across a divide of light and shadow.',duration:4.2,variants:['Share','Steal'],caption:'SHARE/SHARE: BOTH +10,000 · STEAL/SHARE: STEALER +20,000 · STEAL/STEAL: NOTHING'},
-    speed:{color:'#00d4ff',title:'Lightning reflexes',motif:'A blazing GO signal splits the screen in two.',duration:3.4,variants:['Ready','GO','React'],caption:'FASTEST REACTION WINS 15,000 · FALSE STARTS PENALISED'},
-    wheel:{color:'#ff9500',title:'The wheel turns',motif:'A nine-segment wheel spins and lands on destiny.',duration:4.8,variants:['Spin','Nine outcomes'],caption:'NINE OUTCOMES · SERVER-AUTHORITATIVE RANDOMNESS'},
-    linkedfate:{color:'#00ff88',title:'Bound together',motif:'A glowing chain connects two players across the table.',duration:4.0,variants:['Link','Shared gains'],caption:'LINKED FOR 2 ROUNDS · 50% GAIN SHARED · NO LOSSES'},
-    impostor:{color:'#8e44ad',title:'Who is the impostor?',motif:'A single shadow among five players, hidden until the vote.',duration:5.0,variants:['Secret word','Clues','Vote','Reveal'],caption:'MIN 4 PLAYERS · CATCH: NON-IMPOSTORS +10,000 · ESCAPE: IMPOSTOR +30,000'},
     swapper:{color:'#ff4081',title:'Switching sides',motif:'Two ally portraits swap places in a burst of light.',duration:3.8,variants:['Swap'],caption:'ALLIES SWAP · POINTS UNCHANGED'}
   };
 }));

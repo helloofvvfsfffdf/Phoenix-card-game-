@@ -25,9 +25,13 @@ function probePort() {
   });
 }
 
-function startServer(stateFile) {
+function startServer(stateFile, openForTests = true) {
+  // Tests explicitly open only their own isolated instance. Production defaults closed.
+  if (openForTests && !fs.existsSync(stateFile)) {
+    fs.writeFileSync(stateFile, JSON.stringify({ multiplayerOpen: true, creationLocked: false }));
+  }
   return probePort().then(port => {
-    const server = spawn(process.execPath, ['server.js'], {
+    const server = spawn(process.execPath, ['tests/helpers/plain-server.js'], {
       cwd: path.join(__dirname, '..'),
       env: {
         ...process.env,
@@ -35,6 +39,8 @@ function startServer(stateFile) {
         PHOENIX_OWNER_PASSWORD: password,
         PHOENIX_MODE_ACCESS_CODE: crypto.randomBytes(16).toString('hex'),
         PHOENIX_STATE_FILE: stateFile,
+        SUPABASE_URL: '',
+        SUPABASE_SERVICE_ROLE_KEY: '',
         // Raised so the suite can hold several rooms open at once; the cap and
         // the per-IP create budget are still exercised by the server itself.
         PHOENIX_MAX_ROOMS: '50',
@@ -74,11 +80,14 @@ function stopServer(bundle) {
 function createClient(port) {
   const ws = new WebSocket('ws://127.0.0.1:' + port);
   const events = [];
-  const client = { ws, events, state: null, closed: false };
+  const client = { ws, events, state: null, closed: false, duplicateHands: 0 };
   ws.on('message', raw => {
     const message = JSON.parse(raw.toString());
     events.push(message);
-    if (message.type === 'state') client.state = message;
+    if (message.type === 'state') {
+      client.state = message;
+      if (new Set(message.hand).size !== message.hand.length) client.duplicateHands++;
+    }
   });
   ws.on('close', () => { client.closed = true; });
   return new Promise((resolve, reject) => {
@@ -91,8 +100,7 @@ function waitFor(client, type, timeoutMs = 12000) {
   return new Promise((resolve, reject) => {
     const deadline = Date.now() + timeoutMs;
     const timer = setInterval(() => {
-      // Search from the end to get the most recent message, avoiding stale ones
-      const idx = client.events.length - 1 - [...client.events].reverse().findIndex(e => e.type === type);
+      const idx = client.events.findIndex(e => e.type === type);
       if (idx >= 0) {
         clearInterval(timer);
         resolve(client.events.splice(idx, 1)[0]);
@@ -148,6 +156,14 @@ async function main() {
   let bundle = null;
   const stateFile = path.join(tempDir, 'state1.json');
   try {
+    bundle = await startServer(path.join(tempDir, 'fresh-closed.json'), false);
+    const closedVisitor = await connect(bundle.port);
+    closedVisitor.ws.send(JSON.stringify({ type: 'create', name: 'Maintenance probe', code: '' }));
+    const closedResponse = await waitFor(closedVisitor, 'error');
+    check('a fresh server refuses multiplayer until explicitly reopened', () =>
+      assert(/closed/i.test(closedResponse.message)));
+    closedVisitor.ws.close();
+    await stopServer(bundle);
     bundle = await startServer(stateFile);
     const port = bundle.port;
     console.log('\nPublic/private lobbies, host controls and owner administration');
@@ -403,11 +419,8 @@ async function main() {
 
       const actor = five.find(c => c.state.acting);
       assert(actor && actor.state.moves.length, 'a legal move is available');
-      // Avoid complex interactive cards that need special handling in automated tests
-      const complexInteractive = ['speed', 'impostor'];
       const option = actor.state.moves.find(m =>
-        !(actor.state.mapleBlocked || []).includes(m.cardId) &&
-        !complexInteractive.includes(m.cardId)
+        !(actor.state.mapleBlocked || []).includes(m.cardId)
       );
       assert(option, 'a Maple-permitted move is available');
       actor.ws.send(JSON.stringify({ type: 'move', cardId: option.cardId, targetId: option.targetId }));
@@ -415,6 +428,8 @@ async function main() {
     }
     check('a full five-player match plays to completion', () =>
       assert(fiveHost.state.over, 'match did not finish'));
+    check('every hand snapshot throughout the five-player match has unique card types', () =>
+      assert(five.every(client => client.duplicateHands === 0)));
 
     // ---- Optional invite codes (blank = public, custom = private) ----
     console.log('Optional invite codes');

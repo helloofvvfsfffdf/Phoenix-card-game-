@@ -258,7 +258,7 @@
       glyph: '\u{1F3B2}',
       tone: 'dice',
       needsTarget: true,
-      inLiveGame: true, // STAGE 3 RELEASE — interactive multiplayer complete
+      inLiveGame: true, // Released after the multiplayer, browser and real-device verification passes.
       blurb: 'Roll against an opponent for 20,000 points.',
       rule: 'Choose an opponent. Both roll a six-sided die. The higher roll wins 20,000 points. Ties reroll.',
       targetNote: 'Pick one opponent. You both roll; highest wins 20,000.'
@@ -270,7 +270,7 @@
       glyph: '\u270A',
       tone: 'rps',
       needsTarget: true,
-      inLiveGame: true, // STAGE 3 RELEASE — interactive multiplayer complete
+      inLiveGame: true, // Released after the multiplayer, browser and real-device verification passes.
       blurb: 'Loser is eliminated for one round.',
       rule: 'Choose an opponent. Both secretly pick Rock, Paper or Scissors. The loser is eliminated for one round. Ties repeat. An evil card.',
       targetNote: 'Pick one opponent. Secret picks, loser eliminated 1 round.',
@@ -283,7 +283,7 @@
       glyph: '\u{1F3AD}',
       tone: 'betrayal',
       needsTarget: true,
-      inLiveGame: true, // STAGE 3 RELEASE — interactive multiplayer complete
+      inLiveGame: true, // Released after the multiplayer, browser and real-device verification passes.
       blurb: 'Two opponents choose Share or Steal.',
       rule: 'Choose two opponents. Both secretly choose Share or Steal. Share/Share: both get 10,000. Steal/Share: stealer gets 20,000. Steal/Steal: both get 0. Neutral.',
       targetNote: 'Pick two opponents. They each choose Share or Steal secretly.',
@@ -296,7 +296,7 @@
       glyph: '\u26A1',
       tone: 'speed',
       needsTarget: true,
-      inLiveGame: true, // STAGE 3 RELEASE — interactive multiplayer complete
+      inLiveGame: true, // Released after the multiplayer, browser and real-device verification passes.
       blurb: 'React fastest to win 15,000 points.',
       rule: 'Choose an opponent. Both react to a GO signal. The faster player wins 15,000 points. False starts are penalised.',
       targetNote: 'Pick one opponent. Fastest reaction wins 15,000.'
@@ -308,7 +308,7 @@
       glyph: '\u{1F3A1}',
       tone: 'wheel',
       needsTarget: false,
-      inLiveGame: true, // STAGE 3 RELEASE — interactive multiplayer complete
+      inLiveGame: true, // Released after the multiplayer, browser and real-device verification passes.
       blurb: 'Spin for one of nine outcomes.',
       rule: 'Spin a wheel for one of nine random outcomes: reshuffle all decks, reset your points, reset others points, eliminate you 3 rounds, reverse play, +10,000 to you, -20,000 to you, +20,000 to all others, or ban you from Evil cards permanently.',
       targetNote: 'No target: the wheel decides.'
@@ -320,7 +320,7 @@
       glyph: '\u{1F517}',
       tone: 'linkedfate',
       needsTarget: true,
-      inLiveGame: true, // STAGE 3 RELEASE — interactive multiplayer complete
+      inLiveGame: true, // Released after the multiplayer, browser and real-device verification passes.
       blurb: 'Link with an opponent for shared gains.',
       rule: 'Choose an opponent. Both are linked for 2 rounds. Whenever either gains points, the other gets 50% of that gain. The link never causes losses.',
       targetNote: 'Pick one opponent. You share point gains for 2 rounds.'
@@ -332,7 +332,7 @@
       glyph: '\u{1F575}',
       tone: 'impostor',
       needsTarget: false,
-      inLiveGame: true, // STAGE 3 RELEASE — interactive multiplayer complete
+      inLiveGame: true, // Released after the multiplayer, browser and real-device verification passes.
       needsMinPlayers: 4,
       blurb: 'Find the impostor among the players.',
       rule: 'Minimum 4 players. One player is randomly chosen as the impostor and given a different word. Everyone gives clues, then votes. If caught, non-impostors get 10,000. If not, impostor gets 30,000.',
@@ -345,7 +345,7 @@
       glyph: '\u{1F504}',
       tone: 'swapper',
       needsTarget: true,
-      inLiveGame: true, // STAGE 3 RELEASE — interactive multiplayer complete
+      inLiveGame: true, // Released after the multiplayer, browser and real-device verification passes.
       blurb: 'Swap allies with an opponent.',
       rule: 'Choose an opponent. Your ally and theirs swap places immediately. Points are unchanged.',
       targetNote: 'Pick one opponent. Your allies swap.'

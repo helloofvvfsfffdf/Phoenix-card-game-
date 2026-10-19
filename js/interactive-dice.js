@@ -82,7 +82,8 @@
 
   function animateRoll(cubeId, value, name) {
     var cube = document.getElementById(cubeId);
-    if (!cube || !window.gsap) {
+    if (!cube) return;
+    if (!window.gsap) {
       // Fallback: just show the result face
       var faces = cube.querySelectorAll('.dice-die-face');
       faces.forEach(function(f) { f.classList.remove('is-result'); });
@@ -125,7 +126,6 @@
         var winner = myRoll > oppRoll ? 'You win!' : (oppRoll > myRoll ? 'Opponent wins!' : 'Tie!');
         feedback.textContent = 'You rolled ' + myRoll + ', opponent rolled ' + oppRoll + '. ' + winner;
         document.getElementById('dice-roll-btn').hidden = true;
-        setTimeout(function () { close(); }, 6000);
       }
     }, null, 1.05)
     .to(cube, {scale: 1.06, duration: 0.12, repeat: 1, yoyo: true}, 1.05);
@@ -144,9 +144,7 @@
     animateRoll('dice-cube-my', myValue, 'You');
 
     // Animate opponent roll with slight delay
-    setTimeout(function() {
-      animateRoll('dice-cube-opponent', oppValue, 'Opponent');
-    }, 300);
+    animateRoll('dice-cube-opponent', oppValue, 'Opponent');
   }
 
   function onState(msg) {
@@ -158,19 +156,21 @@
 
     // Check if result is available
     if (pi.roundData && pi.roundData.rolls) {
-      var myRoll = pi.roundData.rolls[myId];
-      var otherId = pi.participants.find(function (id) { return id !== myId; });
+      var displayId = pi.participants.includes(myId) ? myId : pi.participants[0];
+      var myRoll = pi.roundData.rolls[displayId];
+      var otherId = pi.participants.find(function (id) { return id !== displayId; });
       var theirRoll = otherId ? pi.roundData.rolls[otherId] : null;
 
       if (myRoll && theirRoll) {
         showRoll(myRoll, theirRoll);
+        feedback.textContent = msg.events && msg.events[0] ? msg.events[0].text : 'Dice rolled.';
         rollBtn.hidden = true;
       }
       return;
     }
 
     // Check if I've submitted
-    var mySubmitted = pi.decisions && pi.decisions.main && pi.decisions.main[myId];
+    var mySubmitted = (pi.submitted || []).includes(myId);
 
     if (mySubmitted && !rollBtn.disabled) {
       rollBtn.disabled = true;
@@ -179,7 +179,7 @@
     } else if (!mySubmitted && rollBtn.disabled) {
       rollBtn.disabled = false;
       rollBtn.textContent = 'Roll';
-      feedback.textContent = 'Press Roll to roll the die.';
+      feedback.textContent = pi.roundData.message || 'Press Roll to roll the die.';
     }
   }
 

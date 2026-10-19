@@ -65,14 +65,14 @@
       window.gsap.from(both.children, {opacity: 0, y: 20, duration: 0.4, stagger: 0.1, ease: 'power2.out'});
     }
 
-    setTimeout(() => { if (overlay) { overlay.hidden = true; overlay.remove(); overlay = null; } }, 6000);
   }
 
   function onState(msg) {
     if (msg.pendingInteraction && msg.pendingInteraction.type === 'betrayal') { return; }
     if (msg.events && msg.events.some(e => e.type === 'result' && e.cardId === 'betrayal')) {
       const text = msg.events.find(e => e.type === 'result' && e.cardId === 'betrayal').text;
-      revealBoth('share', 'steal', text); // We don't know their actual choices from text alone
+      const result = msg.lastInteractionResult;
+      revealBoth(result.roundData.choices[result.participants[0]], result.roundData.choices[result.participants[1]], text);
     }
   }
 

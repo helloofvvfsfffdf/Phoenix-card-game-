@@ -36,10 +36,11 @@
   function clearCanvas(){if(gl&&!gl.isContextLost()){gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);}}
   function purge(){for(const [id,effect] of cache){if(cache.size<=2)break;if(id!==current.id){context.releaseEffect(effect);cache.delete(id);}}}
   // Cards that have actual .efk binaries in assets/card-cinematics/
-// The 8 new cards lack .efk binaries - cinematics disabled until files exist.
+ // All 22 catalog cards now ship compiled originals.
 const HAS_EFK = {
   bonus:true, knife:true, hunter:true, zombie:true, steal:true, judge:true, reveal:true,
-  skipall:true, trick:true, stealturn:true, curse:true, ghost:true, alvin:true, phoenix:true
+  skipall:true, trick:true, stealturn:true, curse:true, ghost:true, alvin:true, phoenix:true,
+  dice:true, rps:true, betrayal:true, speed:true, wheel:true, linkedfate:true, impostor:true, swapper:true
 };
 
 function load(id){

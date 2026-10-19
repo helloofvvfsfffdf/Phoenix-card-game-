@@ -58,13 +58,12 @@
       if (resultEvent) {
         feedback.textContent = resultEvent.text || 'Allies swapped.';
         if (ackBtn) ackBtn.hidden = true;
-        setTimeout(function () { close(); }, 6000);
       }
       return;
     }
 
     // Check if I've submitted
-    var mySubmitted = pi.decisions && pi.decisions.main && pi.decisions.main[myId];
+    var mySubmitted = (pi.submitted || []).includes(myId);
     if (mySubmitted && ackBtn && !ackBtn.disabled) {
       ackBtn.disabled = true;
       ackBtn.textContent = 'Acknowledged';

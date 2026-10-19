@@ -1,3 +1,46 @@
+/* Shared shell: overlays must not fall below the match at the end of the page. */
+.interactive-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 16px;
+  background: rgba(5, 9, 18, .88);
+  color: #f7e5c0;
+  font-family: system-ui, sans-serif;
+}
+.interactive-overlay[hidden], .interactive-shell [hidden] { display: none !important; }
+.interactive-shell {
+  box-sizing: border-box;
+  width: min(100%, 560px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: clamp(16px, 4vw, 32px);
+  border: 1px solid #a68142;
+  border-radius: 18px;
+  background: #151b2d;
+  text-align: center;
+  box-shadow: 0 16px 64px #0009;
+}
+.interactive-shell h2 { color: #ffd16b; }
+.interactive-shell button {
+  min-height: 48px;
+  padding: 12px 18px;
+  margin: 4px;
+  border: 1px solid #f8d67e;
+  border-radius: 10px;
+  background: #d49b36;
+  color: #16110b;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.interactive-shell button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.interactive-shell button:disabled { opacity: .5; cursor: default; }
+
 /* === DICE CHALLENGE === */
 .dice-visual {
   display: flex;
@@ -8,9 +51,12 @@
 }
 
 .dice-stage {
+  /* The cube faces are translated by half the die size, so one variable keeps
+     the 3D geometry consistent when a phone-width frame shrinks the die. */
+  --dice-size: 100px;
   perspective: 600px;
-  width: 100px;
-  height: 100px;
+  width: var(--dice-size);
+  height: var(--dice-size);
 }
 
 .dice-cube {
@@ -24,8 +70,8 @@
 
 .dice-cube .dice-die-face {
   position: absolute;
-  width: 100px;
-  height: 100px;
+  width: var(--dice-size);
+  height: var(--dice-size);
   border-radius: 16px;
   background: linear-gradient(135deg, #fff8e8 0%, #f5e8c8 100%);
   border: 2px solid #dcb;
@@ -49,12 +95,12 @@
 }
 
 /* Face positions on cube */
-.dice-die-face[data-face="1"] { transform: rotateY(0deg) translateZ(50px); }
-.dice-die-face[data-face="6"] { transform: rotateY(180deg) translateZ(50px); }
-.dice-die-face[data-face="2"] { transform: rotateY(-90deg) translateZ(50px); }
-.dice-die-face[data-face="5"] { transform: rotateY(90deg) translateZ(50px); }
-.dice-die-face[data-face="3"] { transform: rotateX(90deg) translateZ(50px); }
-.dice-die-face[data-face="4"] { transform: rotateX(-90deg) translateZ(50px); }
+.dice-die-face[data-face="1"] { transform: rotateY(0deg) translateZ(calc(var(--dice-size) / 2)); }
+.dice-die-face[data-face="6"] { transform: rotateY(180deg) translateZ(calc(var(--dice-size) / 2)); }
+.dice-die-face[data-face="2"] { transform: rotateY(-90deg) translateZ(calc(var(--dice-size) / 2)); }
+.dice-die-face[data-face="5"] { transform: rotateY(90deg) translateZ(calc(var(--dice-size) / 2)); }
+.dice-die-face[data-face="3"] { transform: rotateX(90deg) translateZ(calc(var(--dice-size) / 2)); }
+.dice-die-face[data-face="4"] { transform: rotateX(-90deg) translateZ(calc(var(--dice-size) / 2)); }
 
 .dice-die-face.is-result {
   box-shadow: inset 0 2px 4px rgba(255,255,255,0.3), 0 0 20px rgba(255,215,0,0.8), 0 4px 12px rgba(0,0,0,0.3);
@@ -233,33 +279,53 @@
 }
 
 /* === WHEEL OF FORTUNE === */
+.wheel-stage {
+  position: relative;
+  width: min(100%, 336px);
+  margin: 24px auto 18px;
+}
+
 .wheel-graphic {
   position: relative;
-  width: 300px;
-  height: 300px;
-  margin: 1.5rem auto;
+  width: 100%;
+  aspect-ratio: 1;
+  box-sizing: border-box;
   border-radius: 50%;
   background: conic-gradient(
-    #ff6b6b 0deg 40deg,
-    #ffa500 40deg 80deg,
-    #ffd700 80deg 120deg,
-    #32cd32 120deg 160deg,
-    #00bfff 160deg 200deg,
-    #9370db 200deg 240deg,
-    #ff69b4 240deg 280deg,
-    #00ced1 280deg 320deg,
-    #ff6347 320deg 360deg
+    #a55426 0deg 40deg,
+    #533b86 40deg 80deg,
+    #204e67 80deg 120deg,
+    #843840 120deg 160deg,
+    #35614f 160deg 200deg,
+    #45662a 200deg 240deg,
+    #6e303e 240deg 280deg,
+    #234c77 280deg 320deg,
+    #683c70 320deg 360deg
   );
-  border: 4px solid #bfa;
-  box-shadow: 0 0 40px rgba(191,180,160,0.3), inset 0 0 40px rgba(0,0,0,0.3);
+  border: 6px solid #e1bd72;
+  box-shadow: 0 8px 28px #0007, inset 0 0 20px #0006;
   transition: transform 0.1s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+}
+
+.wheel-graphic::after {
+  content: '✦';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 16%;
+  aspect-ratio: 1;
+  border: 2px solid #e1bd72;
+  border-radius: 50%;
+  background: #151b2d;
+  color: #ffe5a3;
+  font-size: 26px;
 }
 
 .wheel-graphic.wheel-spinning {
-  animation: wheelSpin 0.1s linear infinite;
+  animation: wheelSpin 1.8s linear infinite;
 }
 
 @keyframes wheelSpin {
@@ -269,31 +335,82 @@
 
 .wheel-segment {
   position: absolute;
-  width: 50%;
-  height: 50%;
-  top: 0;
-  left: 50%;
-  transform-origin: 0 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 20px;
-  font-size: 0.85rem;
-  font-weight: bold;
+  width: 21%;
+  left: var(--label-x);
+  top: var(--label-y);
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 10px 1px 5px;
+  border-radius: 8px;
+  background: #090e19e8;
+  font-size: clamp(11px, 2.8vw, 13px);
+  line-height: 1.15;
+  font-weight: 800;
   color: #fff;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.8);
-  white-space: nowrap;
+  text-align: center;
+  text-shadow: none;
+  white-space: normal;
 }
 
-.wheel-segment.s1 { transform: rotate(0deg) skewY(-40deg); }
-.wheel-segment.s2 { transform: rotate(40deg) skewY(-40deg); }
-.wheel-segment.s3 { transform: rotate(80deg) skewY(-40deg); }
-.wheel-segment.s4 { transform: rotate(120deg) skewY(-40deg); }
-.wheel-segment.s5 { transform: rotate(160deg) skewY(-40deg); }
-.wheel-segment.s6 { transform: rotate(200deg) skewY(-40deg); }
-.wheel-segment.s7 { transform: rotate(240deg) skewY(-40deg); }
-.wheel-segment.s8 { transform: rotate(280deg) skewY(-40deg); }
-.wheel-segment.s9 { transform: rotate(320deg) skewY(-40deg); }
+.wheel-segment.s1 { --label-x: 63.7%; --label-y: 12.4%; }
+.wheel-segment.s2 { --label-x: 84.6%; --label-y: 30%; }
+.wheel-segment.s3 { --label-x: 89.4%; --label-y: 56.9%; }
+.wheel-segment.s4 { --label-x: 75.7%; --label-y: 80.6%; }
+.wheel-segment.s5 { --label-x: 50%; --label-y: 90%; }
+.wheel-segment.s6 { --label-x: 24.3%; --label-y: 80.6%; }
+.wheel-segment.s7 { --label-x: 10.6%; --label-y: 56.9%; }
+.wheel-segment.s8 { --label-x: 15.4%; --label-y: 30%; }
+.wheel-segment.s9 { --label-x: 36.3%; --label-y: 12.4%; }
+
+.wheel-segment-number {
+  position: absolute;
+  top: -8px;
+  left: -4px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffe5a3;
+  color: #151b2d;
+  font-size: 11px;
+}
+.wheel-caption { font-size: 15px; line-height: 1.4; color: #e4d2ad; }
+.wheel-outcomes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 8px;
+  padding: 0;
+  margin: 14px 0;
+  list-style: none;
+  text-align: left;
+}
+.wheel-outcomes li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid #66718a;
+  border-radius: 9px;
+  background: #0b1221;
+  color: #fff;
+  font-size: 16px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.wheel-outcome-number {
+  display: grid;
+  place-items: center;
+  flex: 0 0 24px;
+  min-height: 24px;
+  border-radius: 6px;
+  background: #e1bd72;
+  color: #151b2d;
+  font-weight: 800;
+}
 
 .wheel-segment.wheel-result {
   animation: wheelResultFlash 0.5s ease-out 3;
@@ -509,5 +626,162 @@
   .swapper-icon {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* ==========================================================================
+   Mobile and touch.
+
+   Every overlay must fit a phone-width frame (320–430px) without horizontal
+   scrolling, every control must stay a comfortable ≥44px tap target, and the
+   fixed overlay must respect notched-viewport safe areas. The browser fixtures
+   mount these same overlays inside ~335–380px frames, so these rules are
+   exercised by the eight-card browser checks — not only on real phones.
+   ========================================================================== */
+.interactive-overlay {
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Removes the 300ms double-tap-zoom delay from taps — a Speed reaction must
+   register on the first touch — and stops long-press from selecting labels. */
+.interactive-shell button,
+.interactive-shell input {
+  touch-action: manipulation;
+}
+
+.interactive-shell button {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Text fields get the same 44px tap target as buttons, and stay at ≥16px so
+   iOS does not zoom the viewport when the clue field is focused. */
+.interactive-shell input[type="text"] {
+  box-sizing: border-box;
+  min-height: 44px;
+}
+
+@media (max-width: 560px) {
+  .interactive-overlay {
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+      max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+
+  .interactive-shell {
+    width: 100%;
+    padding: 14px;
+  }
+
+  .interactive-shell h2 {
+    font-size: 1.35rem;
+    margin: 0 0 6px;
+  }
+
+  /* Dice: two 100px cubes plus the VS badge overflow a phone-width frame. */
+  .dice-stage {
+    --dice-size: 74px;
+  }
+
+  .dice-cube .dice-die-face {
+    padding: 7px;
+    gap: 5px;
+    border-radius: 10px;
+  }
+
+  .dice-die-face .dice-die-pip {
+    width: 10px;
+    height: 10px;
+  }
+
+  .dice-visual {
+    gap: 12px;
+    margin: 1.2rem 0;
+  }
+
+  #dice-vs {
+    font-size: 1.5rem;
+  }
+
+  /* Speed: the GO circle's desktop padding (20px/60px on a 160px box) builds
+     a 280×200 button that cannot fit a phone frame — keep it a real circle. */
+  .speed-visual {
+    width: 150px;
+    height: 150px;
+    margin: 1rem auto;
+  }
+
+  .speed-timer {
+    font-size: 2rem;
+  }
+
+  #speed-go-btn {
+    width: 124px;
+    height: 124px;
+    padding: 14px;
+    font-size: 1.5rem;
+  }
+
+  /* RPS (three fixed 164px choices) and Betrayal (two fixed 220px choices)
+     overflowed every phone; let the rows wrap and share the width instead. */
+  .rps-choices,
+  .betrayal-choices {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .rps-btn {
+    flex: 1 1 84px;
+    min-width: 0;
+    padding: 16px 8px;
+    font-size: 0.95rem;
+  }
+
+  .rps-btn span:first-child {
+    font-size: 2rem;
+  }
+
+  .betrayal-btn {
+    flex: 1 1 130px;
+    min-width: 0;
+    padding: 16px 12px;
+    font-size: 1.05rem;
+  }
+
+  .rps-both,
+  .betrayal-both {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .rps-pill {
+    padding: 12px 18px;
+    font-size: 1.05rem;
+  }
+
+  .betrayal-pill {
+    padding: 10px 16px;
+    font-size: 1rem;
+  }
+
+  /* Impostor: ballots read better stacked on a narrow screen, and the clue
+     field keeps the 44px height that prevents a cramped tap. */
+  #impostor-vote .impostor-vote-btn {
+    display: block;
+    width: 100%;
+    margin: 6px 0;
+  }
+
+  #impostor-clue-input {
+    min-height: 44px;
+  }
+
+  /* Linked Fate / Swapper: long player names wrap instead of pushing the row
+     past the frame edge. */
+  .linked-chain,
+  .swapper-animation {
+    flex-wrap: wrap;
+    gap: 10px;
   }
 }

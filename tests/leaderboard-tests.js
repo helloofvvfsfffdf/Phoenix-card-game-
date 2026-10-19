@@ -23,6 +23,7 @@
  *     node tests/leaderboard-tests.js
  */
 'use strict';
+const legacyFixture = require('./helpers/legacy-account-fixture');
 
 const assert = require('assert');
 const crypto = require('crypto');
@@ -191,6 +192,7 @@ function startFakeSupabase() {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const p = url.pathname;
+    if (legacyFixture.rejectMissingEmailColumns(req, url, res)) return;
 
     /* ---- accounts / sessions (so real signed-in sockets can happen) -- */
     if (p === '/rest/v1/accounts') {
@@ -326,7 +328,7 @@ function startFakeSupabase() {
 
 function startApp(appPort, supaPort) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ['server.js'], {
+    const child = spawn(process.execPath, ['tests/helpers/plain-server.js'], {
       cwd: ROOT,
       env: Object.assign({}, process.env, {
         PORT: String(appPort),
@@ -336,7 +338,12 @@ function startApp(appPort, supaPort) {
           Buffer.from(JSON.stringify({ role: 'service_role' })).toString('base64') + '.sig',
         PHOENIX_OWNER_PASSWORD: 'unused-owner-password-0123456789abcdef',
         PHOENIX_MODE_ACCESS_CODE: 'unused-access-code-1234567890',
-        PHOENIX_STATE_FILE: path.join(os.tmpdir(), 'phoenix-board-' + Date.now() + '.json')
+        PHOENIX_BIND_HOST: '127.0.0.1',
+        // Decisive natural-match retries retain completed/tied rooms until the
+        // normal grace cleanup. This suite tests wins, not room-limit policy.
+        PHOENIX_MAX_ROOMS: '50',
+        PHOENIX_CREATE_LIMIT: '200',
+        PHOENIX_STATE_FILE: legacyFixture.openState('phoenix-board-')
       }),
       stdio: ['ignore', 'pipe', 'pipe']
     });
@@ -385,9 +392,10 @@ function connect(port, cookie) {
   const ws = new WebSocket('ws://127.0.0.1:' + port, {
     headers: cookie ? { Cookie: cookie } : {}
   });
-  const client = { ws, state: null, seq: 0 };
+  const client = { ws, state: null, seq: 0, errors: [] };
   ws.on('message', raw => {
     const message = JSON.parse(raw.toString());
+    if (message.type === 'error') client.errors.push(message.message);
     if (message.type === 'state') {
       client.state = message;
       client.seq++;
@@ -409,10 +417,16 @@ function connect(port, cookie) {
  */
 function act(client, message, seats) {
   const marks = seats.map(c => c.seq);
+  const errors = client.errors.length;
   client.ws.send(JSON.stringify(message));
   return new Promise((resolve, reject) => {
     const deadline = Date.now() + 10000;
     const timer = setInterval(() => {
+      if (client.errors.length > errors) {
+        clearInterval(timer);
+        reject(new Error(JSON.stringify(message) + ': ' + client.errors.at(-1)));
+        return;
+      }
       if (seats.every((c, i) => c.seq > marks[i])) {
         clearInterval(timer);
         resolve();
@@ -476,7 +490,17 @@ async function playMatch(port, seats, rounds) {
   assert(winner, 'the snapshot names a winner');
 
   seats.forEach(c => c.ws.close());
-  return winner.name;
+  return host.state.players.filter(p => p.points === winner.points).length === 1 ? winner.name : null;
+}
+
+async function playDecisiveMatch(port, cookies, rounds) {
+  // Natural deals can tie. A tie is not a win for the first-ranked seat.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const seats = await Promise.all(cookies.map(cookie => connect(port, cookie)));
+    const winner = await playMatch(port, seats, rounds);
+    if (winner) return winner;
+  }
+  throw new Error('Eight natural matches tied; no decisive leaderboard fixture was produced');
 }
 
 function runStack() {
@@ -522,16 +546,22 @@ function runStack() {
 
       let winnerName = null;
       let winnerAccount = null;
+      async function waitForDump(predicate) {
+        const deadline = Date.now() + 8000;
+        let dump;
+        do {
+          dump = await fakeState.dump();
+          if (predicate(dump.body)) return dump;
+          await new Promise(resolve => setTimeout(resolve, 20));
+        } while (Date.now() < deadline);
+        throw new Error('The asynchronous win/badge ledger did not settle: ' + JSON.stringify(dump.body.wins));
+      }
 
       await test('a COMPLETE match between two signed-in players counts once', async () => {
-        const seats = [
-          await connect(appPort, session.alice),
-          await connect(appPort, session.bob)
-        ];
-        winnerName = await playMatch(appPort, seats, 6);
+        winnerName = await playDecisiveMatch(appPort, [session.alice, session.bob], 6);
         assert.ok(winnerName, 'someone won');
 
-        const dump = await fakeState.dump();
+        const dump = await waitForDump(body => body.wins.length >= 1);
         assert.strictEqual(dump.body.wins.length, 1,
           'the finished match produced exactly ONE win row, however many times ' +
           'the server broadcast after it ended');
@@ -542,7 +572,7 @@ function runStack() {
       });
 
       await test('the winner is handed MATCH WINNER, and the loser is not', async () => {
-        const dump = await fakeState.dump();
+        const dump = await waitForDump(body => body.grants.some(b => b.account_id === winnerAccount.id && b.badge_key === 'champion'));
         const other = dump.body.accounts.find(
           a => a.username !== winnerName && a.role === 'player');
 
@@ -569,12 +599,9 @@ function runStack() {
       });
 
       await test('THE OWNER IS NEVER ON THE BOARD, even after winning a match', async () => {
-        const seats = [
-          await connect(appPort, session.owner),
-          await connect(appPort, session.alice)
-        ];
         // Either of them may take it, and the rule has to hold both ways.
-        const matchTwoWinner = await playMatch(appPort, seats, 6);
+        const matchTwoWinner = await playDecisiveMatch(appPort, [session.owner, session.alice], 6);
+        await waitForDump(body => body.wins.length >= 1 + (matchTwoWinner === 'sovereign' ? 0 : 1));
 
         const r = await call(appPort, 'GET', '/api/leaderboard');
         const names = r.body.players.map(p => p.username);
@@ -622,10 +649,11 @@ function runStack() {
         assert.strictEqual(row.wins, before + 2,
           'every match this player won is counted, however many');
         assert.strictEqual(row.rank, 1);
-        assert.strictEqual(r.body.players.length, 1,
-          'and nobody with no wins has crept onto the board');
-
         const dump = await fakeState.dump();
+        const expectedNames = dump.body.accounts.filter(a => a.role !== 'owner' &&
+          dump.body.wins.some(w => w.account_id === a.id)).map(a => a.username).sort();
+        assert.deepStrictEqual(r.body.players.map(p => p.username).sort(), expectedNames,
+          'every player who actually won is ranked; owners and players with no wins are absent');
         assert.strictEqual(dump.body.wins
           .filter(w => w.account_id === winnerAccount.id).length, before + 2,
           'the rows are still in the table, one per match');

@@ -113,6 +113,70 @@
       "maxParticles": 84,
       "bytes": 83220,
       "sha256": "ed2a9dfff0f6198480f58df3a6d945718d72663dc0fbaa81548736dab4684cb7"
+    },
+    {
+      "id": "dice",
+      "url": "assets/card-cinematics/dice.efk",
+      "nodes": 80,
+      "maxParticles": 80,
+      "bytes": 79264,
+      "sha256": "dd3a5f7feeeec46dbeb5d273a839fe066a595f7dd7843a5d6fda7a400ae4f301"
+    },
+    {
+      "id": "rps",
+      "url": "assets/card-cinematics/rps.efk",
+      "nodes": 80,
+      "maxParticles": 80,
+      "bytes": 79306,
+      "sha256": "41b64235cfb77e12029bee226878c8665cc7b8e2f97f180aa12a728893ec7358"
+    },
+    {
+      "id": "betrayal",
+      "url": "assets/card-cinematics/betrayal.efk",
+      "nodes": 160,
+      "maxParticles": 160,
+      "bytes": 158350,
+      "sha256": "50251f1f8a24079decbedaf4a03bc7d5a8727536340dfabe1655d0baf716f758"
+    },
+    {
+      "id": "speed",
+      "url": "assets/card-cinematics/speed.efk",
+      "nodes": 106,
+      "maxParticles": 106,
+      "bytes": 104914,
+      "sha256": "833b955efe626ce7529f72b965cb6e1704e44bcce159e9afead6d3e645499b33"
+    },
+    {
+      "id": "wheel",
+      "url": "assets/card-cinematics/wheel.efk",
+      "nodes": 162,
+      "maxParticles": 162,
+      "bytes": 160404,
+      "sha256": "32fb102832afaa537e65e14bcd0105a9c618a844560e497c4d65a92f0c233d55"
+    },
+    {
+      "id": "linkedfate",
+      "url": "assets/card-cinematics/linkedfate.efk",
+      "nodes": 99,
+      "maxParticles": 99,
+      "bytes": 98118,
+      "sha256": "7f91bed32b2f0bd58ee6357955808a463973e7e9d627f2056bb4aefd8607fb35"
+    },
+    {
+      "id": "impostor",
+      "url": "assets/card-cinematics/impostor.efk",
+      "nodes": 104,
+      "maxParticles": 104,
+      "bytes": 103102,
+      "sha256": "5fb31d727faa0a49f4f452066ce6c34a1465444577498582ca405f7e876766d9"
+    },
+    {
+      "id": "swapper",
+      "url": "assets/card-cinematics/swapper.efk",
+      "nodes": 121,
+      "maxParticles": 121,
+      "bytes": 119772,
+      "sha256": "1ce0fbd64f34053b5d4bf9d40017ac587ee000359ab7580e5f96996671c22a3e"
     }
   ],
   "textures": [

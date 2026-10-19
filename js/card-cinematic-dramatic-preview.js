@@ -11,10 +11,10 @@
 (function(root){
   'use strict';
   var CATALOG=root.PhoenixCardCinematicCatalog,ART=root.PhoenixCardCinematicArt,CARDS=root.PhoenixCards;
-  var IDS=['bonus','knife','hunter','zombie','steal','judge','reveal','skipall','phoenix','trick','stealturn','curse','ghost','alvin'];
+  var IDS=['bonus','knife','hunter','zombie','steal','judge','reveal','skipall','phoenix','trick','stealturn','curse','ghost','alvin','dice','rps','betrayal','speed','wheel','linkedfate','impostor','swapper'];
   var PHOENIX='phoenix';
   /* item 5 reference: proposed per-card caption cue (s), used to compute the v2 beat */
-  var CAPTION_AT={bonus:1.6,knife:1,hunter:1.3,zombie:1.3,steal:1.7,judge:1.5,reveal:1.5,skipall:1,trick:1.6,stealturn:1.4,curse:1.1,ghost:1.4,alvin:1.3};
+  var CAPTION_AT={bonus:1.6,knife:1,hunter:1.3,zombie:1.3,steal:1.7,judge:1.5,reveal:1.5,skipall:1,trick:1.6,stealturn:1.4,curse:1.1,ghost:1.4,alvin:1.3,dice:1.2,rps:1.4,betrayal:1.5,speed:.9,wheel:1.8,linkedfate:1.4,impostor:1.9,swapper:1.2};
   function caption(id){
     if(id==='alvin')return 'Private hand inspection · actor must choose one card';
     if(id==='judge')return 'Judge activated · most evil player banished for 3 rounds';
@@ -52,7 +52,8 @@
       flash:mount.querySelector('.cd-flash'),vignette:mount.querySelector('.cd-vignette'),tint:mount.querySelector('.cd-tint')};
     const HAS_EFK = {
   bonus:true, knife:true, hunter:true, zombie:true, steal:true, judge:true, reveal:true,
-  skipall:true, trick:true, stealturn:true, curse:true, ghost:true, alvin:true, phoenix:true
+  skipall:true, trick:true, stealturn:true, curse:true, ghost:true, alvin:true, phoenix:true,
+  dice:true, rps:true, betrayal:true, speed:true, wheel:true, linkedfate:true, impostor:true, swapper:true
 };
 
 api.load = function(id){

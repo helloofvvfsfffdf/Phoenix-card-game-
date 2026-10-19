@@ -56,9 +56,10 @@
    * TYPES - this is how many copies of each the table starts with.
    *
    * Tuned so a five-player, 10-round game deals 25 and then draws about 50
-   * more, so the discard is reshuffled once or twice and everybody gets to see
-   * every card type. Change these numbers to rebalance the game - they are the
-   * only thing that decides how aggressive the table is.
+   * more straight from the stock, and longer games recycle the discard once
+   * or twice, so everybody gets to see every card type. Change these numbers
+   * to rebalance the game - they are the only thing that decides how
+   * aggressive the table is.
    */
   var DECK_COMPOSITION = {
     bonus: 10,      // +10,000 Points - the engine of the game, so the commonest
@@ -687,6 +688,9 @@
     var card = Cards.byId(cardId);
     var actor = state.players[seat];
     if (!card || !actor) return false;
+    if (card.id === 'impostor' && state.players.filter(function (p) {
+      return !isDisabled(p) && !isOut(p, state);
+    }).length < 4) return false;
 
     // Betrayal needs at least two eligible opponents.
     if (card.id === 'betrayal') {
@@ -1378,7 +1382,7 @@
    * Returns { ok, error?, events }. `events` are the log lines the UI prints;
    * they carry text so the log can never drift from the engine.
    */
-  function playCard(state, seat, cardId, targetId) {
+  function playCard(state, seat, cardId, targetId, beforeAdvance) {
     if (state.over) {
       return { ok: false, error: 'The game is already over.', events: [] };
     }
@@ -1492,6 +1496,8 @@
     if (curseLine) {
       events.push({ type: 'curse', cardId: card.id, seat: seat, text: curseLine });
     }
+    // Multiplayer scoring modifiers must settle before standings are frozen.
+    if (beforeAdvance) beforeAdvance();
 
     // Alvin resolves into a choice the player still has to make, so the turn
     // stops here: no advance, and no extra draw either. Advancing now and
@@ -1604,7 +1610,7 @@
    *
    * @returns {{ok: boolean, error?: string, events: Array}}
    */
-  function resolvePendingChoice(state, cardId, targetId) {
+  function resolvePendingChoice(state, cardId, targetId, beforeAdvance) {
     var pending = state.pendingChoice;
     if (!pending) {
       return { ok: false, error: 'There is no choice waiting.', events: [] };
@@ -1646,7 +1652,7 @@
     if (pending.kind === PENDING_CHOICE_KINDS.MOVE) {
       // Consumed before the play, so the play cannot re-enter this branch.
       state.pendingChoice = null;
-      var played = playCard(state, state.turnInRound, cardId, targetId);
+      var played = playCard(state, state.turnInRound, cardId, targetId, beforeAdvance);
       if (!played.ok) {
         // Put it back so the chooser is not left with nothing to do.
         state.pendingChoice = pending;
@@ -1692,11 +1698,19 @@
    * the seat number never simply reaches five.
    */
   function movePastCurrentSeat(state, events) {
+    if (!state.roundVisited) {
+      state.roundVisited = [];
+      for (var i = 0; i < state.seatsPlayed; i++) state.roundVisited.push((state.roundStartSeat + i) % SEAT_COUNT);
+    }
+    state.roundVisited.push(state.turnInRound);
     state.seatsPlayed++;
     state.turnIndex++;
 
     if (state.seatsPlayed < SEAT_COUNT) {
-      state.turnInRound = (state.roundStartSeat + state.seatsPlayed) % SEAT_COUNT;
+      var direction = state.turnDirection || 1;
+      do {
+        state.turnInRound = (state.turnInRound + direction + SEAT_COUNT) % SEAT_COUNT;
+      } while (state.roundVisited.indexOf(state.turnInRound) !== -1);
       return;
     }
 
@@ -1706,6 +1720,7 @@
       return;
     }
     state.seatsPlayed = 0;
+    state.roundVisited = [];
     if (state.rotateStart) {
       state.roundStartSeat = (state.roundStartSeat + 1) % SEAT_COUNT;
     }
@@ -1878,7 +1893,7 @@
     if (state.reshuffles > before) {
       events.push({
         type: 'reshuffle',
-        text: 'The deck ran out - the discard pile is reshuffled into a new deck.'
+        text: 'The drawable deck ran out - the discard pile is reshuffled into the deck.'
       });
     }
   }
@@ -1970,22 +1985,39 @@
   }
 
   /**
-   * Deals the top card of the deck to `player`, reshuffling the discard into a
-   * fresh deck first if the draw pile has run out.
+   * Deals the first card type not already held by `player`. Skipped duplicates
+   * stay in the draw pile, available to other players. If no different type is
+   * left there, recycle the discard only when it can supply a different type.
    *
    * @returns {string|null} the card id dealt, or null if there is nothing to
-   *          give (which can only happen if every card is already in hands).
+   *          give without duplicating a card already in this player's hand.
    */
   function drawCard(state, player) {
-    if (!state.deck.length) {
-      if (!state.discard.length) return null;
-      state.deck = shuffle(state.discard);
+    function available(cardId) { return !holdsCard(state, player.id, cardId); }
+    var index = state.deck.findIndex(available);
+    if (index === -1) {
+      if (!state.discard.some(available)) return null;
+      state.deck = shuffle(state.deck.concat(state.discard));
       state.discard = [];
       state.reshuffles++;
+      index = state.deck.findIndex(available);
     }
-    var cardId = state.deck.shift();
-    state.hands[player.id].push(cardId);
+    var cardId = state.deck.splice(index, 1)[0];
+    handOf(state, player.id).push(cardId);
     return cardId;
+  }
+
+  /** Transfer a physical card only when the recipient does not already own it. */
+  function transferCard(state, fromId, toId, cardId) {
+    if (fromId === toId || cardId === PHOENIX_CARD_ID ||
+        !playerById(state, fromId) || !playerById(state, toId) ||
+        holdsCard(state, toId, cardId)) return false;
+    var source = handOf(state, fromId);
+    var index = source.indexOf(cardId);
+    if (index === -1) return false;
+    source.splice(index, 1);
+    handOf(state, toId).push(cardId);
+    return true;
   }
 
   /** A player's hand as card ids. Never null - an empty array means no cards. */
@@ -2133,7 +2165,7 @@
       if (state.reshuffles > before) {
         events.push({
           type: 'reshuffle',
-          text: 'The deck ran out - the discard pile is reshuffled into a new deck.'
+          text: 'The drawable deck ran out - the discard pile is reshuffled into the deck.'
         });
       }
       if (!drawn) break;
@@ -2235,6 +2267,7 @@
     createGame: createGame,
     deal: deal,
     drawCard: drawCard,
+    transferCard: transferCard,
     handOf: handOf,
     handSize: handSize,
     holdsCard: holdsCard,

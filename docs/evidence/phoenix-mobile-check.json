@@ -1,0 +1,180 @@
+{
+  "mode": "mobile-375x812-touch",
+  "baseUrl": "http://127.0.0.1:4320",
+  "viewport": {
+    "width": 375,
+    "height": 812,
+    "deviceScaleFactor": 3,
+    "mobile": true
+  },
+  "taps": [
+    {
+      "control": "Speed card button (Speed Challenge)",
+      "x": 252,
+      "y": 405,
+      "size": "116×239"
+    },
+    {
+      "control": "target picker confirm button",
+      "x": 220,
+      "y": 405,
+      "size": "54×44"
+    },
+    {
+      "control": "Speed Ready button (player 1)",
+      "x": 186,
+      "y": 492,
+      "size": "92×48"
+    },
+    {
+      "control": "Speed Ready button (player 2)",
+      "x": 186,
+      "y": 544,
+      "size": "92×48"
+    },
+    {
+      "control": "Speed GO button (player 1)",
+      "x": 187,
+      "y": 492,
+      "size": "124×124"
+    },
+    {
+      "control": "Speed GO button (player 2)",
+      "x": 187,
+      "y": 544,
+      "size": "124×124"
+    }
+  ],
+  "screenshots": [
+    "C:\\Users\\Joshua Hopkins\\AppData\\Local\\Temp\\opencode\\phoenix-mobile-harness.png",
+    "C:\\Users\\Joshua Hopkins\\AppData\\Local\\Temp\\opencode\\phoenix-mobile-speed-overlay.png",
+    "C:\\Users\\Joshua Hopkins\\AppData\\Local\\Temp\\opencode\\phoenix-mobile-speed-go.png",
+    "C:\\Users\\Joshua Hopkins\\AppData\\Local\\Temp\\opencode\\phoenix-mobile-menu.png"
+  ],
+  "harnessPage": {
+    "innerWidth": 375,
+    "innerHeight": 812,
+    "scrollWidth": 375,
+    "runWidth": 139,
+    "runHeight": 52,
+    "frameWidth": 319
+  },
+  "cards": {
+    "passed": 470,
+    "failed": 0,
+    "total": 470,
+    "failures": [],
+    "frameWidth": 317
+  },
+  "pageErrorsAfterFlows": [],
+  "speedOverlay": {
+    "innerWidth": 317,
+    "scrollWidth": 317,
+    "controls": [
+      {
+        "id": "speed-ready-btn",
+        "width": 92,
+        "height": 48,
+        "left": 112,
+        "right": 205
+      }
+    ],
+    "shell": {
+      "left": 12,
+      "right": 305,
+      "scrollWidth": 291,
+      "clientWidth": 291
+    }
+  },
+  "speedGo": {
+    "id": "speed-go-btn",
+    "width": 124,
+    "height": 124,
+    "left": 97,
+    "right": 221
+  },
+  "reactionResult": "Speed Challenge - Player: 387ms, Player: 433ms. Player wins 15,000.",
+  "menu": {
+    "innerWidth": 375,
+    "scrollWidth": 375,
+    "buttons": [
+      {
+        "label": "▶ SINGLE PLAYER CREATOR ",
+        "width": 323,
+        "height": 75,
+        "left": 26,
+        "right": 349
+      },
+      {
+        "label": "⚗ MULTIPLAYER TESTING LO",
+        "width": 323,
+        "height": 75,
+        "left": 26,
+        "right": 349
+      },
+      {
+        "label": "♟ MULTIPLAYER PRIVATE RO",
+        "width": 323,
+        "height": 75,
+        "left": 26,
+        "right": 349
+      },
+      {
+        "label": "▦ GALLERY PRIVATE · INVI",
+        "width": 323,
+        "height": 75,
+        "left": 26,
+        "right": 349
+      },
+      {
+        "label": "👑 BADGES COLLECTION · F",
+        "width": 323,
+        "height": 89,
+        "left": 26,
+        "right": 349
+      },
+      {
+        "label": "📣 ANNOUNCEMENTS OFFICIA",
+        "width": 323,
+        "height": 75,
+        "left": 26,
+        "right": 349
+      },
+      {
+        "label": "🏆 LEADERBOARD PLAYERS R",
+        "width": 323,
+        "height": 75,
+        "left": 26,
+        "right": 349
+      },
+      {
+        "label": "▣ CARD COLLECTION COMING",
+        "width": 323,
+        "height": 75,
+        "left": 26,
+        "right": 349
+      },
+      {
+        "label": "✦ CARD CINEMATICS WATCH ",
+        "width": 323,
+        "height": 89,
+        "left": 26,
+        "right": 349
+      },
+      {
+        "label": "⚙ SETTINGS MUSIC, SOUND ",
+        "width": 323,
+        "height": 75,
+        "left": 26,
+        "right": 349
+      },
+      {
+        "label": "🔒 OWNER DASHBOARD SERVE",
+        "width": 323,
+        "height": 75,
+        "left": 26,
+        "right": 349
+      }
+    ]
+  }
+}

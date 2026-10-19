@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PHOENIX — Local Card Playground</title>
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; background:#101625; color:#f5f1e8; font:16px/1.5 system-ui,sans-serif; }
+  header { padding:16px 24px; }
+  h1 { margin:0 0 8px; color:#f1cc83; }
+  p { margin:8px 0; }
+  label, button, select { font:inherit; }
+  button, select { padding:10px 16px; border-radius:8px; border:1px solid #bda370; }
+  button { background:#f1cc83; color:#151b2d; cursor:pointer; font-weight:700; }
+  button:disabled { opacity:.6; cursor:wait; }
+  select { background:#1b263d; color:white; margin:0 10px; }
+  #players { padding:0 24px 24px; }
+  iframe { display:none; width:100%; height:75vh; min-height:600px; border:2px solid #806d49; border-radius:12px; background:#101625; }
+  iframe.selected-player { display:block; }
+  #player-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+  #player-tabs button { background:#1b263d; color:white; }
+  #player-tabs button[aria-selected="true"] { outline:3px solid #f1cc83; }
+  #player-tabs button.needs-input { border-color:#77efa8; color:#aaffc7; }
+  #turn-help { font-weight:700; color:#aaffc7; }
+  #results { white-space:pre-wrap; color:#f1cc83; }
+</style>
+<header>
+  <h1>PHOENIX · Local Card Playground</h1>
+  <p><strong>Local only.</strong> New cards enabled. No production accounts, statistics or leaderboard writes.</p>
+  <p><strong>Click a card in the active player’s screen below.</strong> Then choose an opponent if prompted.
+    Switch player tabs to answer the other player’s choices. You control every player.</p>
+  <details><summary>About this practice game</summary>
+  <p>Every player starts with one of each drawable card so you can test immediately.
+    This is a practice fixture, not a normal shuffled-deck match. Real scoring and card interactions still run on the local server.</p>
+  <p>The launcher handles opening dice and ally drafting. Choose 4–5 players for Impostor.</p></details>
+  <label for="count">Players</label><select id="count"><option>2</option><option>3</option><option>4</option><option selected>5</option></select>
+  <button id="create" type="button">Start test room</button>
+  <button id="stop" type="button">Stop / silence players</button>
+  <nav id="player-tabs" aria-label="Switch player"></nav>
+  <p id="turn-help" role="status"></p>
+  <pre id="results" role="status" aria-live="polite">Ready. Start a test room below.</pre>
+</header>
+<main id="players" aria-label="Player panels"></main>
+<script src="other-cards-browser-check.js"></script>
+<script src="local-play-ui.js"></script>
+</html>

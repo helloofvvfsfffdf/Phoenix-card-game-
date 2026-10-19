@@ -260,3 +260,4 @@ module.exports = function (test, equal, deepEqual, assert) {
   });
 };
 module.exports.browser = browser;
+module.exports.serverFixture = serverFixture;

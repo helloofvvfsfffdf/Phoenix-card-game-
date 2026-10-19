@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PHOENIX — eight-card browser checks</title>
+<style>
+body { background:#101625; color:#eee; font:15px system-ui; padding:20px; }
+button { padding:14px 16px; font:inherit; } pre { white-space:pre-wrap; }
+#players { display:flex; flex-wrap:wrap; gap:8px; }
+/* min(100%, …) keeps the historical 380px desktop frame and lets a phone-sized
+   viewport (mobile-emulated run) shrink each frame to a real phone width. */
+iframe { width:min(100%, 380px); height:650px; border:1px solid #777; }
+</style>
+<h1>Eight-card local browser checks</h1>
+<p>Use only the disposable <code>interactive-local-server.js all</code> fixture.
+Five actual game pages use real WebSockets. Clicks are automated; this is not a manual usability or full-match test.
+Every flow also asserts the frame and each overlay fit the viewport without horizontal overflow,
+keep every control inside the frame, and hold a 44px touch target.</p>
+<button id="run" type="button">Run eight cards</button>
+<pre id="results">Not started.</pre>
+<div id="players"></div>
+<script src="other-cards-browser-check.js"></script>
+</html>
