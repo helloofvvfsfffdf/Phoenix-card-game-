@@ -947,11 +947,27 @@
       const start = el('button', 'online-primary', 'START MATCH');
       start.type = 'button';
       start.onclick = () => {
-        let rounds = Number($('online-rounds').value);
-        if (rounds === 0 || isNaN(rounds)) {
-          const custom = Number($('online-rounds-custom').value);
-          rounds = Math.min(100, Math.max(5, custom || 10));
+        // The round count comes from the SELECT, unless "Custom" is chosen - in
+        // which case it comes from the number box beside it. The two are read
+        // SEPARATELY and never through one another: a select whose value is
+        // the word "custom" is not a number, and treating it as one is how a
+        // custom match silently became a ten-round match.
+        const select = $('online-rounds');
+        const custom = $('online-rounds-custom');
+        let rounds = 10;
+
+        if (select && select.value === 'custom') {
+          const typed = custom ? parseInt(custom.value, 10) : NaN;
+          rounds = isFinite(typed) ? typed : 10;
+        } else if (select) {
+          const chosen = parseInt(select.value, 10);
+          rounds = isFinite(chosen) ? chosen : 10;
         }
+
+        // The same bounds the server enforces, so the number the host sees is
+        // the number they get.
+        rounds = Math.min(100, Math.max(5, rounds));
+
         send({
           type: 'start',
           rounds: rounds
@@ -1172,6 +1188,11 @@ function renderPlaying() {
     if (state.mapleBlocked && state.mapleBlocked.length) {
       renderMapleNotice(actions);
     }
+    if (state.noEvilPermanent) {
+      actions.append(el('p', 'online-restricted',
+        '🖤 The wheel has banned you from Evil cards for the rest of this match.'
+      ));
+    }
 
     if (!state.acting) {
       const chooser=state.pending && state.players.find(p=>p.id===state.pending.chooserId);
@@ -1202,10 +1223,14 @@ function renderPlaying() {
         // Maple took this one off the menu. Drawn greyed and unclickable rather
         // than hidden, so the restriction is visible rather than mysterious - the
         // same treatment a blocked card gets anywhere else.
-        if (state.mapleBlocked && state.mapleBlocked.indexOf(cardId) !== -1) {
+        const bannedByMaple = state.mapleBlocked && state.mapleBlocked.indexOf(cardId) !== -1;
+        const bannedByEvil = !!(state.noEvilPermanent && window.PhoenixCards.isEvil(cardId));
+        if (bannedByMaple || bannedByEvil) {
           const blockedFace = cardFace(card, false);
           blockedFace.classList.add('online-blocked');
-          blockedFace.title = 'Maple will not let you play this - nice cards only.';
+          blockedFace.title = bannedByMaple
+            ? 'Maple will not let you play this - nice cards only.'
+            : 'The wheel has banned you from Evil cards.';
           grid.append(blockedFace);
           return;
         }
@@ -1509,7 +1534,14 @@ const roundsSelect = $('online-rounds');
       roundsSelect.addEventListener('change', () => {
         const customInput = $('online-rounds-custom');
         if (customInput) {
-          customInput.style.display = roundsSelect.value === 'custom' ? 'inline-block' : 'none';
+          // `hidden` rather than a style: the input is a real control, and a
+          // style-based toggle left it focusable and unlabelled in some
+          // browsers.
+          customInput.hidden = roundsSelect.value !== 'custom';
+          if (roundsSelect.value === 'custom' && customInput.focus) {
+            customInput.focus();
+            if (customInput.select) customInput.select();
+          }
         }
       });
     }

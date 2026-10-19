@@ -2065,6 +2065,12 @@
     var me = state.players[seat];
     var moves = [];
     handOf(state, me.id).forEach(function (cardId) {
+      // A player banned from Evil cards cannot play one, and the ban is
+      // enforced HERE - in the single shared definition of "what could be
+      // played" - so the human's picker, the AI prompt, the AI relay and the
+      // server's own move validation all agree. Without this the ban was only
+      // ever reported, never obeyed.
+      if (me.noEvilPermanent && Cards.isEvil(cardId)) return;
       movesForCard(state, seat, cardId, moves);
     });
     // The legendary card is held on the player rather than in the deck, so it is

@@ -38,6 +38,8 @@
   function purge(){for(const [id,effect] of cache){if(cache.size<=2)break;if(id!==current.id){context.releaseEffect(effect);cache.delete(id);}}}
   // Cards that have actual .efk binaries in assets/card-cinematics/
  // All 22 catalog cards now ship compiled originals.
+ // Wheel of Misfortune is listed and previewed, but its binary is not compiled
+ // yet (see manifest.awaitingCompilation), so it shows the emblem treatment.
 const HAS_EFK = {
   bonus:true, knife:true, hunter:true, zombie:true, steal:true, judge:true, reveal:true,
   skipall:true, trick:true, stealturn:true, curse:true, ghost:true, alvin:true, phoenix:true,

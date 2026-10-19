@@ -2343,6 +2343,11 @@ function snapshot(room, member) {
     // instead of a card silently going missing.
     mapleBlocked: Maple.blockedForAction(room,member.seat,acting ? pending : null),
 
+    // Whether THIS player is banned from Evil cards. The ban is enforced by the
+    // engine (Rules.legalMoves refuses an evil card for a banned player), and
+    // this flag is what lets the client grey those cards out and say why.
+    noEvilPermanent: !!(s && s.players[member.seat] && s.players[member.seat].noEvilPermanent),
+
     effects: effectJournal(room),
 
     log: room.log.slice(-35).map(entry => {

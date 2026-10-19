@@ -18,7 +18,7 @@ texture('slash',(x,y)=>Math.exp(-Math.pow(y*27,2))*clamp((1-Math.abs(x))*5));
 texture('feather',(x,y)=>clamp((1-Math.abs(y))*5)*Math.max(Math.exp(-Math.pow((x-.18*Math.sin(y*2))*8,2))*.85,Math.exp(-Math.abs(x)*70))*(.65+.35*Math.cos(y*60+x*30)));
 texture('coin',(x,y)=>{const r=Math.hypot(x,y);return Math.max(Math.exp(-Math.pow((r-.7)*40,2)),Math.exp(-Math.pow((r-.53)*55,2))*.55,Math.abs(x)<.04&&Math.abs(y)<.4?.8:0);});
 texture('rune',(x,y)=>{const r=Math.hypot(x,y),a=Math.atan2(y,x);return Math.max(Math.exp(-Math.pow((r-.7)*55,2)),Math.exp(-Math.pow((r-.48)*65,2))*.6,r>.51&&r<.86?Math.pow(Math.max(0,Math.cos(a*12)),35):0);});
-const palettes={bonus:'#ffd475',knife:'#b9eaff',hunter:'#8be2aa',zombie:'#a1ef63',steal:'#bd9cff',judge:'#ffe6a0',reveal:'#75dcff',skipall:'#ffb579',phoenix:'#ff873d',trick:'#ff9ad9',stealturn:'#7fa8ff',curse:'#c08cff',ghost:'#b1f2f1',alvin:'#ffba7c',dice:'#ffd700',rps:'#ff6b6b',betrayal:'#9b59b6',speed:'#00d4ff',wheel:'#ff9500',linkedfate:'#00ff88',impostor:'#8e44ad',swapper:'#ff4081'};
+const palettes={bonus:'#ffd475',knife:'#b9eaff',hunter:'#8be2aa',zombie:'#a1ef63',steal:'#bd9cff',judge:'#ffe6a0',reveal:'#75dcff',skipall:'#ffb579',phoenix:'#ff873d',trick:'#ff9ad9',stealturn:'#7fa8ff',curse:'#c08cff',ghost:'#b1f2f1',alvin:'#ffba7c',dice:'#ffd700',rps:'#ff6b6b',betrayal:'#9b59b6',speed:'#00d4ff',wheel:'#ff9500',linkedfate:'#00ff88',impostor:'#8e44ad',swapper:'#ff4081',wheelofmisfortune:'#8b0000'};
 const rgb=h=>h.slice(1).match(/../g).map(x=>parseInt(x,16));
 function range(tag,v){return `<${tag}><Center>${v}</Center><Max>${v}</Max><Min>${v}</Min></${tag}>`;}
 function xyz(tag,x=0,y=0,z=0){return `<${tag}>${range('X',x)}${range('Y',y)}${range('Z',z)}</${tag}>`;}
@@ -52,9 +52,9 @@ const builders={
  wheel(c){for(let i=0;i<9;i++){const a0=i*Math.PI*2/9+.06,a1=(i+1)*Math.PI*2/9-.06;arc(c,0,0,6.2,6.2,a0,a1,10,10+i*1.8);const am=(a0+a1)/2;sprite('coin',Math.cos(am)*4.4,Math.sin(am)*4.4,.55,.55,16+i*2.6,85,0,0,0,0,c);}sprite('rune',0,0,3,3,6,130,0,0,0,-.25,c,175);streak(c,Math.cos(-Math.PI/2)*3.1,Math.sin(-Math.PI/2)*3.1,5.6,-90+22,72);ring(c,0,0,7,30);dust(c,60,6,45,.03,'star');},
  linkedfate(c){const ends=[-4.4,4.4];for(const ex of ends){sprite('rune',ex,0,2.6,2.6,8,125,0,0,0,.4,c,170);ring(c,ex,0,2.1,20);}for(let i=0;i<8;i++){const t=i/7,x=ends[0]+(ends[1]-ends[0])*t,y=Math.sin(t*Math.PI)*1.7;sprite('coin',x,y,.6,.6,18+i*3,90,0,.008,0,1,c);if(i<7){const t2=(i+.5)/7,x2=ends[0]+(ends[1]-ends[0])*t2,y2=Math.sin(t2*Math.PI)*1.7;streak(c,x2,y2,1.7,Math.atan2(Math.sin((i+1)/7*Math.PI)*1.7-y,((ends[1]-ends[0])/7))*180/Math.PI,20+i*3);}}trace(c,Array.from({length:30},(_,i)=>{const t=i/29;return [ends[0]+(ends[1]-ends[0])*t,Math.sin(t*Math.PI)*1.7];}),44,'star',.26);dust(c,50,5.5,40,.025,'star');},
  impostor(c){for(let i=0;i<5;i++){const x=-4.6+i*2.3;if(i===2){for(let j=0;j<9;j++)sprite('smoke',x+(random()-.5)*1.4,(random()-.5)*2,1.5,1.9,14+j*2.2,95,0,.02,random()*180,.2,c,60);sprite('rune',x,0,1.7,2,26,100,0,0,0,-.3,c,90);}else{sprite('star',x,0,.85,.85,10+i*3.4,75,0,0,0,0,c,185);ring(c,x,0,1.4,18+i*2);}}streak('#ffffff',0,0,14,90,78);dust(c,45,5.5,50,.015);dust(c,40,5.5,60,.015,'star');},
- swapper(c){for(const side of [-1,1]){const pts=Array.from({length:30},(_,i)=>{const t=i/29;return [side*(4.6-9.2*t),Math.sin(t*Math.PI)*2.4*(side>0?1:-1)];});trace(c,pts,14,'star',.3);sprite('rune',side*4.6,0,2.5,2.9,8,95,0,0,0,side*.4,c,160);sprite('rune',-side*4.6,0,2.5,2.9,34,90,0,0,0,-side*.4,c,120);}ring(c,0,1.2,3,38);ring(c,0,-1.2,3,44);dust(c,55,5.5,26,.035,'star');}
+ swapper(c){for(const side of [-1,1]){const pts=Array.from({length:30},(_,i)=>{const t=i/29;return [side*(4.6-9.2*t),Math.sin(t*Math.PI)*2.4*(side>0?1:-1)];});trace(c,pts,14,'star',.3);sprite('rune',side*4.6,0,2.5,2.9,8,95,0,0,0,side*.4,c,160);sprite('rune',-side*4.6,0,2.5,2.9,34,90,0,0,0,-side*.4,c,120);}ring(c,0,1.2,3,38);ring(c,0,-1.2,3,44);dust(c,55,5.5,26,.035,'star');}, wheelofmisfortune(c){for(let i=0;i<8;i++){const a0=i*Math.PI*2/8+.07,a1=(i+1)*Math.PI*2/8-.07;arc(c,0,0,6.2,6.2,a0,a1,11,10+i*1.9);const am=(a0+a1)/2;sprite('coin',Math.cos(am)*4.4,Math.sin(am)*4.4,.55,.55,16+i*2.7,85,0,0,0,0,c);}sprite('rune',0,0,3.4,3.4,6,135,0,0,0,-.25,c,185);streak(c,Math.cos(-Math.PI/2)*3.1,Math.sin(-Math.PI/2)*3.1,5.6,-90+22,72);for(let i=0;i<20;i++)sprite('smoke',random()*9-4.5,-2+random()*4,2+random()*2,2.6+random()*2,20+i*2,105,0,.05,random()*180,.22,c,85);ring(c,0,0,7,30);dust(c,58,6,45,.03,'ember');}
 };
-const manifest={runtime:'Effekseer 1.80.7',authoring:'Original PHOENIX procedural sprite compositions; no sample effect binaries',effects:[]};
+const manifest={runtime:'Effekseer 1.80.7',authoring:'Original PHOENIX procedural sprite compositions; no sample effect binaries',effects:[],awaitingCompilation:[]};
 for(const [id,build] of Object.entries(builders)){nodes=[];seed=17+id.length;build(palettes[id]);const source=`<?xml version="1.0" encoding="utf-8"?><EffekseerProject><Root><Name>PHOENIX ${id}</Name><Children>${nodes.join('')}</Children></Root><ToolVersion>1.43</ToolVersion><Version>3</Version><StartFrame>0</StartFrame><EndFrame>300</EndFrame><IsLoop>False</IsLoop></EffekseerProject>`;
  // Resource references are relative to the binary. Author next to textures,
  // export, then retain the editable project under source/ with adjusted paths.
@@ -62,11 +62,19 @@ for(const [id,build] of Object.entries(builders)){nodes=[];seed=17+id.length;bui
  // Proven shipped binaries are never recompiled; only missing ones are built.
  if(fs.existsSync(binary)&&process.env.FORCE_REBUILD!=='1'){console.log(id+': existing binary kept ('+fs.statSync(binary).size+' bytes)');}
  else{fs.writeFileSync(input,source);
- const result=cp.spawnSync(editor,['-cui','-in',input,'-e',binary],{cwd:path.dirname(editor),timeout:30000,encoding:'utf8'});
- if(result.error||result.status!==0||!fs.existsSync(binary))throw Error(id+': '+(result.error||result.stderr||result.stdout));
- fs.unlinkSync(input);}
+ if(!fs.existsSync(editor)){
+  // No Effekseer CLI on this machine. The editable project is still written, so
+  // the work is not lost - but there is no binary, so the card is recorded as
+  // awaiting compilation and the manifest says so rather than pretending.
+  console.log(id+': no Effekseer CLI - editable project written, binary NOT compiled.');
+ }else{
+  const result=cp.spawnSync(editor,['-cui','-in',input,'-e',binary],{cwd:path.dirname(editor),timeout:30000,encoding:'utf8'});
+  if(result.error||result.status!==0||!fs.existsSync(binary))throw Error(id+': '+(result.error||result.stderr||result.stdout));
+  fs.unlinkSync(input);
+ }}
  fs.writeFileSync(path.join(out,'source',id+'.efkproj'),source.replaceAll('textures/','../textures/'));
- const data=fs.readFileSync(binary);manifest.effects.push({id,url:'assets/card-cinematics/'+id+'.efk',nodes:nodes.length,maxParticles:nodes.length,bytes:data.length,sha256:crypto.createHash('sha256').update(data).digest('hex')});console.log(id+': '+nodes.length+' bounded particles, '+data.length+' bytes');
+ if(fs.existsSync(binary)){const data=fs.readFileSync(binary);manifest.effects.push({id,url:'assets/card-cinematics/'+id+'.efk',nodes:nodes.length,maxParticles:nodes.length,bytes:data.length,sha256:crypto.createHash('sha256').update(data).digest('hex')});console.log(id+': '+nodes.length+' bounded particles, '+data.length+' bytes');}
+ else{manifest.awaitingCompilation.push(id);}
 }
 manifest.textures=fs.readdirSync(path.join(out,'textures')).map(name=>{const data=fs.readFileSync(path.join(out,'textures',name));return {url:'assets/card-cinematics/textures/'+name,bytes:data.length,sha256:crypto.createHash('sha256').update(data).digest('hex')};});
 fs.writeFileSync(path.join(out,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');

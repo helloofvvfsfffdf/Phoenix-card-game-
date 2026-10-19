@@ -1683,12 +1683,15 @@ test('the banishment really costs three of their own turns', function () {
       if (!move) break;
       Rules.playCard(g, seat, move.cardId, move.targetId);
     }
-    if (banned.turnsSkipped === 3) fired = { seed: n, game: g, result: res, text: text };
+    if (banned.turnsSkipped === 3) fired = { seed: n, game: g, result: res, text: text, backInRound: backInRound };
   }
   assert(fired, 'Judge fired and banished for 3 turns on at least one of 499 seeds');
   var game = fired.game;
   var banned = byId(game, CLAUDE);
-  var backInRound = Rules.returnRound(banned);
+  // The round they come back in is recorded when the banishment LANDS, not read
+  // back afterwards: by the time the banishment has expired the badge has been
+  // cleared, so reading it then would report "never eliminated" instead.
+  var backInRound = fired.backInRound;
   equal(banned.turnsSkipped, 3,
     'Claude sat out exactly three of their turns (seed ' + fired.seed + ')');
   equal(banned.turnsPlayed, 0, 'and played none of them');

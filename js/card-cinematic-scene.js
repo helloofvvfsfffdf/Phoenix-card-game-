@@ -10,6 +10,9 @@
   // Cards that have actual .efk binaries in assets/card-cinematics/
  // All 22 catalog cards now ship compiled originals built by
  // scripts/build-card-cinematics.js (Effekseer 1.80.7 CLI).
+ // Wheel of Misfortune is in the catalogue with an editable project and a
+ // preview, but its binary is not compiled yet - see manifest.awaitingCompilation.
+ // Until it is, the card uses the emblem treatment instead of particle artwork.
 var HAS_EFK = {
   bonus:true, knife:true, hunter:true, zombie:true, steal:true, judge:true, reveal:true,
   skipall:true, trick:true, stealturn:true, curse:true, ghost:true, alvin:true, phoenix:true,

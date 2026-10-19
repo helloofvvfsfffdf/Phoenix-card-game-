@@ -179,6 +179,9 @@
       "sha256": "1ce0fbd64f34053b5d4bf9d40017ac587ee000359ab7580e5f96996671c22a3e"
     }
   ],
+  "awaitingCompilation": [
+    "wheelofmisfortune"
+  ],
   "textures": [
     {
       "url": "assets/card-cinematics/textures/coin.png",
