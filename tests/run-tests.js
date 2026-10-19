@@ -950,17 +950,17 @@ test('the legendary card is deliberately absent from the composition', function 
 
 suite('Cards');
 
-test('the game uses exactly twenty-two cards', function () {
-  equal(Cards.CARDS.length, 22);
+test('the game uses exactly twenty-three cards', function () {
+  equal(Cards.CARDS.length, 23);
 });
 
-test('the twenty-two cards are exactly the ones specified', function () {
+test('the twenty-three cards are exactly the ones specified', function () {
   var names = Cards.CARDS.map(function (c) { return c.name; });
   equal(names.join(' | '), '+10,000 Points | Knife | Hunter | Zombie | Steal Points' +
     ' | Judge | Reveal Deck | Skip Everyone | Phoenix' +
     ' | Trick | Steal a Turn | Curse | Ghost | Alvin' +
     ' | Dice Challenge | Rock Paper Scissors | Betrayal | Speed Challenge' +
-    ' | Wheel of Fortune | Linked Fate | Impostor | Ally Swapper');
+    ' | Wheel of Fortune | Linked Fate | Impostor | Ally Swapper | Wheel of Misfortune');
 });
 
 test('card ids are all lowercase, so resolve() always finds them', function () {
@@ -994,8 +994,8 @@ test('Alvin brings artwork, and only Alvin', function () {
     'and it is drawn as a ginger cat');
 });
 
-test('Zombie, Knife, Steal Points, Trick, Alvin and Rock Paper Scissors are evil', function () {
-  equal(Cards.EVIL_CARDS.join(','), 'zombie,knife,steal,trick,alvin,rps');
+test('Zombie, Knife, Steal Points, Trick, Alvin, Rock Paper Scissors and Wheel of Misfortune are evil', function () {
+  equal(Cards.EVIL_CARDS.join(','), 'zombie,knife,steal,trick,alvin,rps,wheelofmisfortune');
   Cards.CARDS.forEach(function (c) {
     equal(Cards.isEvil(c.id), Cards.EVIL_CARDS.indexOf(c.id) !== -1,
       c.id + ' evil status is consistent');

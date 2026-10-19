@@ -22,7 +22,8 @@
     wheel:'<circle cx="50" cy="50" r="40"/><path d="M50 10v80M10 50h80M22 22l56 56M22 78l56-56"/><circle cx="50" cy="50" r="8"/>',
     linkedfate:'<path d="M25 30q25 20 0 40M75 30q-25 20 0 40"/><path d="M40 50h20"/><circle cx="30" cy="50" r="12"/><circle cx="70" cy="50" r="12"/>',
     impostor:'<path d="M30 20q20 30 0 60M70 20q-20 30 0 60"/><circle cx="50" cy="50" r="15"/><path d="M40 45h20M45 55h10"/>',
-    swapper:'<path d="M25 40q25-20 50 0M25 60q25 20 50 0"/><path d="M40 30l-15 10 15 10M60 70l15-10-15-10"/>'
+    swapper:'<path d="M25 40q25-20 50 0M25 60q25 20 50 0"/><path d="M40 30l-15 10 15 10M60 70l15-10-15-10"/>',
+    wheelofmisfortune:'<circle cx="50" cy="50" r="40"/><path d="M50 10v80M10 50h80"/><path d="M50 50L50 10A40 40 0 0 1 90 50Z" fill="currentColor" opacity="0.3"/><text x="50" y="55" text-anchor="middle" font-size="20">?</text>'
   };
   root.PhoenixCardCinematicArt={icon:function(id){return '<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+(shapes[id]||'')+'</svg>';}};
 }(typeof globalThis!=='undefined'?globalThis:this));

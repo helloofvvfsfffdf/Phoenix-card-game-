@@ -1070,10 +1070,158 @@ function resolveImpostorInteraction(room, pi) {
   return { events, advanceTurn: true };
 }
 
+function resolveWheelOfMisfortuneInteraction(room, pi) {
+  const s = room.state;
+  const actor = s.players.find(p => p.id === pi.actorId);
+
+  // Weighted outcome selection
+  const outcomes = [
+    { key: 'loan', weight: 20 },
+    { key: 'puppets', weight: 15 },
+    { key: 'invisible', weight: 15 },
+    { key: 'restart', weight: 10 },
+    { key: 'apocalypse', weight: 12 },
+    { key: 'nothing', weight: 25 },
+    { key: 'hell', weight: 2 },
+    { key: 'victory', weight: 1 }
+  ];
+
+  // Secure weighted random selection
+  const totalWeight = outcomes.reduce((sum, o) => sum + o.weight, 0);
+  let roll = Math.random() * totalWeight;
+  let outcome = outcomes[0].key;
+  for (const o of outcomes) {
+    roll -= o.weight;
+    if (roll <= 0) { outcome = o.key; break; }
+  }
+
+  let text;
+  const events = [];
+
+  switch (outcome) {
+    case 'loan': {
+      const opponents = s.players.filter(p => p.id !== actor.id && p.enabled && !Rules.isOut(p, s));
+      if (opponents.length > 0) {
+        const target = opponents[Math.floor(Math.random() * opponents.length)];
+        target.points -= 40000;
+        text = 'Wheel of Misfortune - ' + actor.name + ' spins... ' + target.name +
+          ' has been charged 40,000 points for a loan they never requested! LOAN APPROVED!';
+      } else {
+        text = 'Wheel of Misfortune - ' + actor.name + ' spins... No opponents to charge!';
+      }
+      break;
+    }
+    case 'puppets': {
+      const opponents = s.players.filter(p => p.id !== actor.id && p.enabled && !Rules.isOut(p, s));
+      if (opponents.length > 0) {
+        const target = opponents[Math.floor(Math.random() * opponents.length)];
+        if (!s.imprisoned) s.imprisoned = {};
+        s.imprisoned[target.id] = { imprisoner: actor.id, imprisonerSeat: actor.seat };
+        text = 'Wheel of Misfortune - ' + actor.name + ' spins... ' + target.name +
+          ' is now imprisoned! They cannot play or take turns until ' + actor.name + "'s score reaches 0 or below.";
+      } else {
+        text = 'Wheel of Misfortune - ' + actor.name + ' spins... No one to imprison!';
+      }
+      break;
+    }
+    case 'invisible': {
+      if (!s.protected) s.protected = {};
+      s.protected[actor.id] = { roundsLeft: 5 };
+      text = 'Wheel of Misfortune - ' + actor.name + ' spins... They become untargetable for 5 rounds! Now you see me, now you don\'t!';
+      break;
+    }
+    case 'restart': {
+      // Reset match state
+      s.players.forEach(p => { p.points = 0; p.turnsPlayed = 0; p.cardsPlayed = []; p.eliminated = false; p.turnsSkipped = 0; });
+      s.round = 1;
+      s.turnInRound = 0;
+      s.turnDirection = 1;
+      s.over = false;
+      s.tied = false;
+      s.winnerSeat = -1;
+      s.pendingChoice = null;
+      s.pendingInteraction = null;
+      s.linkedFate = [];
+      s.imprisoned = {};
+      s.protected = {};
+      // Redistribute hands
+      const deckSize = Rules.deckSize ? Rules.deckSize() : 0;
+      // Re-deal: clear hands and reshuffle
+      s.hands = {};
+      s.deck = [];
+      s.discard = [];
+      s.destroyed = [];
+      // Rebuild deck from composition
+      if (typeof Rules.createGame === 'function') {
+        const newGame = Rules.createGame({ rounds: s.rounds, seed: crypto.randomBytes(4).readUInt32BE(0) });
+        s.deck = newGame.deck;
+        s.hands = newGame.hands;
+        s.rounds = newGame.rounds;
+      }
+      text = 'Wheel of Misfortune - ' + actor.name + ' spins... The match restarts! Everyone gets a fresh start!';
+      break;
+    }
+    case 'apocalypse': {
+      s.players.forEach(p => {
+        if (!s.hands[p.id]) s.hands[p.id] = [];
+        s.hands[p.id].push('phoenix');
+      });
+      text = 'Wheel of Misfortune - ' + actor.name + ' spins... PHOENIX APOCALYPSE! Everyone receives a Phoenix card!';
+      break;
+    }
+    case 'nothing': {
+      text = 'Wheel of Misfortune - ' + actor.name + ' spins... Congratulations! You have successfully wasted everyone\'s time.';
+      break;
+    }
+    case 'hell': {
+      actor.points = -100000;
+      text = 'Wheel of Misfortune - ' + actor.name + ' spins... Welcome to Hell! Score set to -100,000!';
+      break;
+    }
+    case 'victory': {
+      s.over = true;
+      s.winnerSeat = s.players.indexOf(actor);
+      s.winner = actor.id;
+      text = 'Wheel of Misfortune - ' + actor.name + ' spins... INSTANT VICTORY! ' + actor.name + ' wins the match!';
+      break;
+    }
+  }
+
+  pi.roundData.outcome = outcome;
+  pi.roundData.wheelType = 'misfortune';
+
+  const resultEvents = [{ type: 'result', cardId: 'wheelofmisfortune', outcome, text }];
+  return { events: resultEvents, advanceTurn: outcome !== 'victory' };
+}
+
 function resolveSwapperInteraction(room, pi) {
   const s = room.state;
   const [p1Id, p2Id] = pi.participants;
   const p1 = s.players.find(p => p.id === p1Id);
+  const p2 = s.players.find(p => p.id === p2Id);
+
+  const m1 = room.members.find(m => m.seat === p1.seat);
+  const m2 = room.members.find(m => m.seat === p2.seat);
+  const ally1 = m1.ally;
+  const ally2 = m2.ally;
+  m1.ally = ally2;
+  m2.ally = ally1;
+  p1.ally = ally2;
+  p2.ally = ally1;
+
+  pi.roundData.swapped = { [p1Id]: ally2, [p2Id]: ally1 };
+
+  const events = [{
+    type: 'result', cardId: 'swapper',
+    text: 'Ally Swapper - ' + p1.name + ' and ' + p2.name +
+      ' swapped allies. ' + p1.name + ' now has ' + (ally2 || 'none') +
+      ', ' + p2.name + ' now has ' + (ally1 || 'none') + '.'
+  }];
+  return { events, advanceTurn: true };
+}
+
+/**
+ * Resolves the room's pending interaction and moves the game on
   const p2 = s.players.find(p => p.id === p2Id);
 
   const m1 = room.members.find(m => m.seat === p1.seat);
@@ -1118,6 +1266,7 @@ function finishInteraction(room) {
     else if (pi.type === 'linkedfate') result = resolveLinkedFateInteraction(room, pi);
     else if (pi.type === 'impostor') result = resolveImpostorInteraction(room, pi);
     else if (pi.type === 'swapper') result = resolveSwapperInteraction(room, pi);
+    else if (pi.type === 'wheelofmisfortune') result = resolveWheelOfMisfortuneInteraction(room, pi);
   } catch (e) {
     console.error('[PHOENIX ws] interaction resolution failed -> ' + Auth.describeError(e));
     result = {
@@ -1218,6 +1367,25 @@ function applyLinkedFate(room) {
     link.roundsLeft--;
     return link.roundsLeft > 0;
   });
+  // Expire protection after 5 rounds
+  if (s.protected) {
+    for (const playerId of Object.keys(s.protected)) {
+      s.protected[playerId].roundsLeft--;
+      if (s.protected[playerId].roundsLeft <= 0) {
+        delete s.protected[playerId];
+      }
+    }
+  }
+  // Release imprisonment if spinner's score <= 0
+  if (s.imprisoned) {
+    for (const imprisonedId of Object.keys(s.imprisoned)) {
+      const imp = s.imprisoned[imprisonedId];
+      const spinner = s.players.find(p => p.id === imp.imprisoner);
+      if (!spinner || spinner.points <= 0) {
+        delete s.imprisoned[imprisonedId];
+      }
+    }
+  }
 }
 
 function shareLinkedGains(s, beforePoints) {
@@ -2203,6 +2371,21 @@ function skipUnplayableTurns(room) {
     }
 
     const current = s.players[s.turnInRound];
+
+    // Imprisoned players skip their turn
+    if (s.imprisoned && s.imprisoned[current.id]) {
+      current.turnsSkipped++;
+      const events = Rules.advanceTurn(s);
+      recordEvents(room, events);
+      if (s.round !== room.lastPhoenixRound && !s.over) {
+        room.lastPhoenixRound = s.round;
+        applyPhoenix(room);
+        applyTed(room);
+        applyMaple(room);
+        applyLinkedFate(room);
+      }
+      continue;
+    }
 
     // Maple's Sweet Tooth counts here. The engine's legalMoves knows nothing about
   // it, so without this a restricted player holding only aggressive cards looks
@@ -3332,7 +3515,7 @@ async function handle(ws, data) {
     }
 
     // Interactive cards: create a pending interaction instead of resolving immediately.
-    const interactiveCards = ['rps', 'betrayal', 'speed', 'dice', 'wheel', 'linkedfate', 'impostor', 'swapper'];
+    const interactiveCards = ['rps', 'betrayal', 'speed', 'dice', 'wheel', 'linkedfate', 'impostor', 'swapper', 'wheelofmisfortune'];
     if (interactiveCards.includes(cardId) && (!pending || pending.kind === Rules.PENDING_CHOICE_KINDS.MOVE)) {
       // A stolen turn changes who chooses the card, not who owns/plays it.
       const actor = s.players[s.turnInRound];

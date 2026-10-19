@@ -32,6 +32,7 @@
     linkedfate: ['Linked Fate', '\u{1F517}', '#00ff88', 'transfer', 'sine', [392, 523, 659], 0.5],
     impostor: ['Impostor', '\u{1F575}', '#8e44ad', 'mist', 'sine', [196, 247, 330], 0.7],
     swapper: ['Ally Swapper', '\u{1F504}', '#ff4081', 'orbit', 'triangle', [440, 587, 784], 0.5],
+    'wheelofmisfortune': ['Wheel of Misfortune', '\u{1F3AD}', '#8b0000', 'orbit', 'sawtooth', [110, 220, 165], 0.8],
     'curse-trigger': ['Curse triggered', '⛧', '#b682ef', 'impact', 'triangle', [220, 110], 0.5],
     'hunter-block': ['Hunter reflection', '⌖', '#c6ffab', 'shield', 'triangle', [660, 880, 330], 0.45],
     'ally-phoenix': ['Phoenix · Sneaky Snatcher', '▱', '#ffd05e', 'transfer', 'triangle', [392, 587, 784], 0.45],

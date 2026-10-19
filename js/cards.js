@@ -35,7 +35,7 @@
    * dismantling the table rather than moving points, which is the same kind of
    * move as Knife and Zombie rather than a scoring swing.
    */
-  var EVIL_CARDS = ['zombie', 'knife', 'steal', 'trick', 'alvin', 'rps'];
+  var EVIL_CARDS = ['zombie', 'knife', 'steal', 'trick', 'alvin', 'rps', 'wheelofmisfortune'];
 
   var CARDS = [
     {
@@ -349,6 +349,19 @@
       blurb: 'Swap allies with an opponent.',
       rule: 'Choose an opponent. Your ally and theirs swap places immediately. Points are unchanged.',
       targetNote: 'Pick one opponent. Your allies swap.'
+    },
+    {
+      id: 'wheelofmisfortune',
+      name: 'Wheel of Misfortune',
+      short: 'Misfortune',
+      glyph: '\u{1F3AD}',
+      tone: 'misfortune',
+      needsTarget: false,
+      inLiveGame: true,
+      evil: true,
+      blurb: 'Spin for one of eight terrible outcomes.',
+      rule: 'Spin a wheel for one of eight random outcomes: take out a loan (lose 40,000), become a puppet master, go invisible, restart the match, everyone gets Phoenix, nothing happens, go to -100,000, or instant victory.',
+      targetNote: 'No target: the wheel decides your fate.'
     }
   ];
 

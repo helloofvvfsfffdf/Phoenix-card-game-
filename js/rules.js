@@ -83,7 +83,8 @@
     wheel: 3,       // high impact, low count
     linkedfate: 4,  // link for shared gains
     impostor: 3,    // min 4 players, high impact
-    swapper: 4      // ally swap
+    swapper: 4,      // ally swap
+    wheelofmisfortune: 3  // evil wheel, low count
     // Phoenix is NOT here. It can never be dealt, drawn or reshuffled - see
     // Cards.deckCards() and the phoenixAwarded flag below.
   };
@@ -1169,6 +1170,10 @@
     return 'Wheel of Fortune - ' + actor.name + ' spins...';
   }
 
+  function resolveWheelOfMisfortune(state, actor) {
+    return 'Wheel of Misfortune - ' + actor.name + ' spins...';
+  }
+
   function resolveLinkedFate(state, actor, target) {
     if (!target) return actor.name + ' played Linked Fate but had no opponent.';
     if (!state.linkedFate) state.linkedFate = [];
@@ -1368,6 +1373,7 @@
     betrayal: resolveBetrayal,
     speed: resolveSpeed,
     wheel: resolveWheel,
+    wheelofmisfortune: resolveWheelOfMisfortune,
     linkedfate: resolveLinkedFate,
     impostor: resolveImpostor,
     swapper: resolveSwapper
