@@ -191,7 +191,7 @@ test('swapper', 'the actual drafted ally identities swap in every player snapsho
 test('impostor', 'private words, clues, secret votes and caught-impostor 10,000-point scoring', m => impostorVotes(m, true));
 test('impostor', 'an escaping impostor gains exactly 30,000, nobody else scores', m => impostorVotes(m, false));
 test('impostor', 'three real players cannot start a four-player-minimum card', async m => {
-  const actor = m.clients.find(c => c.state.acting);
+  const actor = require('./helpers/acting-client')(m.clients);
   if (!actor.state.moves.some(move => move.cardId === 'impostor')) return;
   await m.rejected(actor, { type: 'move', cardId: 'impostor', targetId: null });
   assert.strictEqual(m.state().pendingInteraction, null);

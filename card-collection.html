@@ -37,12 +37,14 @@
 </head>
 <body>
 <h1>PHOENIX — Card Collection</h1>
-<p class="subtitle">All 23 cards in the game. Read the rules, understand the effects.</p>
+<p class="subtitle">All 35 cards in the game. Read the rules, understand the effects.</p>
 <button class="back-btn" onclick="window.location.href='index.html'">← Back to Menu</button>
 <div class="card-grid" id="card-grid"></div>
 <script src="js/cards.js"></script>
 <script>
-  const cards = window.PhoenixCards.CARDS;
+  // The OWNER-ONLY cards are deliberately NOT here. They belong to the owner
+  // server alone, and the collection is a public screen.
+  const cards = window.PhoenixCards.CARDS.filter(function (c) { return !c.ownerOnly; });
   const grid = document.getElementById('card-grid');
   cards.forEach(card => {
     const tile = document.createElement('div');

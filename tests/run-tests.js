@@ -657,7 +657,7 @@ test('every player is dealt a hand', function () {
   var openingSeat = s.turnInRound;
   s.players.forEach(function (p) {
     // The player who opens the game is already mid-turn, so they drew one.
-    var expected = Rules.HAND_SIZE + (p.seat === openingSeat ? 1 : 0);
+    var expected = Rules.HAND_SIZE;
     equal(Rules.handSize(s, p.id), expected,
       p.name + ' is holding ' + expected + ' cards');
   });
@@ -711,13 +711,13 @@ test('a turn begins by drawing a card', function () {
   var s = newGame({ seed: 3, rounds: 3 });
   var seat = s.turnInRound;
   var before = Rules.handSize(s, s.players[seat].id);
-  equal(before, Rules.HAND_SIZE + 1, 'the opening player has already drawn once');
+  equal(before, Rules.HAND_SIZE, 'the opening player starts with a full hand, so they do not draw');
 
   var move = Rules.legalMoves(s, seat)[0];
   Rules.playCard(s, seat, move.cardId, move.targetId);
   var next = s.players[s.turnInRound];
-  equal(Rules.handSize(s, next.id), Rules.HAND_SIZE + 1,
-    next.name + ' drew at the start of their turn');
+  equal(Rules.handSize(s, next.id), Rules.HAND_SIZE,
+    next.name + "'s hand is full, so they do not draw either");
 });
 
 test('a card leaves the hand and lands on the discard', function () {
@@ -820,6 +820,15 @@ test('a reshuffle is announced in the log', function () {
     if (!m) break;
     Rules.playCard(s, mover, m.cardId, m.targetId);
   }
+  // A hand is never over the limit, so make room before the deck is
+  // emptied: the next turn has to draw for the reshuffle to happen.
+  var moverSeat = s.turnInRound;
+  s.hands[s.players[moverSeat].id] = s.hands[s.players[moverSeat].id].slice(0, 2);
+  // A hand is never over the limit, so make room before the deck is
+  // emptied: the next turn has to draw for the reshuffle to happen.
+  s.players.forEach(function (p) {
+    s.hands[p.id] = s.hands[p.id].slice(0, 2);
+  });
   s.deck.length = 0;                       // the next draw must recycle the discard
   var before = s.reshuffles;
 
@@ -907,7 +916,7 @@ test('a switched-off player is dealt no cards', function () {
     equal(Rules.handSize(s, GPT), Rules.HAND_SIZE, 'ChatGPT was dealt normally');
     s.players.forEach(function (p) {
       if (p.id === COPILOT) return;
-      var expected = Rules.HAND_SIZE + (p.seat === s.turnInRound ? 1 : 0);
+      var expected = Rules.HAND_SIZE;
       equal(Rules.handSize(s, p.id), expected, p.name + ' has a normal hand');
     });
     equal(allCards(s).length, Rules.deckSize(),
@@ -917,6 +926,11 @@ test('a switched-off player is dealt no cards', function () {
 
 test('draws are announced in the log', function () {
   var s = newGame({ seed: 43, rounds: 4 });
+  // A hand is never over the limit, so make room in the NEXT player's
+  // hand: the draw happens at the START of their turn.
+  s.players.forEach(function (p) {
+    s.hands[p.id] = s.hands[p.id].slice(0, 2);
+  });
   var seat = s.turnInRound;
   var move = Rules.legalMoves(s, seat)[0];
   var result = Rules.playCard(s, seat, move.cardId, move.targetId);
@@ -935,13 +949,19 @@ test('deck composition is exported and complete', function () {
   greater(Rules.HAND_SIZE, 0, 'a hand size is set');
 });
 
-test('the legendary card is deliberately absent from the composition', function () {
+test('the legendary cards are deliberately absent from the composition', function () {
   // Every other card has a deck count; this one must not, or it could be dealt.
   equal(typeof Rules.DECK_COMPOSITION[Rules.PHOENIX_CARD_ID], 'undefined',
     'Phoenix has no deck count');
   var legendary = Cards.CARDS.filter(function (c) { return c.legendary; });
   equal(legendary.length, 1, 'there is exactly one legendary card');
   equal(legendary[0].inDeck, false, 'and it is marked as not in the deck');
+  // The Uno Reverse of Doom is a legendary KIND, and it is dealt -
+  // otherwise it could never be earned.
+  var doom = Cards.byId('reverseofdoom');
+  equal(doom.kind, 'legendary', 'the Reverse of Doom is legendary');
+  greater(Rules.DECK_COMPOSITION.reverseofdoom, 0,
+    'and it is in the deck, so it can be obtained');
 });
 
 /* ===================================================================== */
@@ -950,17 +970,21 @@ test('the legendary card is deliberately absent from the composition', function 
 
 suite('Cards');
 
-test('the game uses exactly twenty-three cards', function () {
-  equal(Cards.CARDS.length, 23);
+test('the game uses exactly thirty-seven cards', function () {
+  equal(Cards.CARDS.length, 37);
 });
 
-test('the twenty-three cards are exactly the ones specified', function () {
+test('the thirty-seven cards are exactly the ones specified', function () {
   var names = Cards.CARDS.map(function (c) { return c.name; });
   equal(names.join(' | '), '+10,000 Points | Knife | Hunter | Zombie | Steal Points' +
     ' | Judge | Reveal Deck | Skip Everyone | Phoenix' +
     ' | Trick | Steal a Turn | Curse | Ghost | Alvin' +
     ' | Dice Challenge | Rock Paper Scissors | Betrayal | Speed Challenge' +
-    ' | Wheel of Fortune | Linked Fate | Impostor | Ally Swapper | Wheel of Misfortune');
+    ' | Wheel of Fortune | Linked Fate | Impostor | Ally Swapper | Wheel of Misfortune' +
+    ' | Musical Chairs | Russian Roulette | Memory Mayhem | Bank Robbery' +
+    ' | Point Swap | Hostage Situation | President | Joshua Survey' +
+    ' | Did You Like the Trailer? | The Mimic | Dehydrated? Maybe Drink Some Water' +
+    ' | Nothing | The Uno Reverse of Doom | PHOENIX Entertainment Customer Support');
 });
 
 test('card ids are all lowercase, so resolve() always finds them', function () {
@@ -974,9 +998,9 @@ test('card ids are all lowercase, so resolve() always finds them', function () {
   });
 });
 
-test('the aimed cards are the fourteen that ask for a player', function () {
+test('the aimed cards are the twenty-one that ask for a player', function () {
   var needs = Cards.CARDS.filter(function (c) { return c.needsTarget; }).map(function (c) { return c.id; });
-  equal(needs.join(','), 'knife,zombie,steal,reveal,trick,stealturn,curse,alvin,dice,rps,betrayal,speed,linkedfate,swapper');
+  equal(needs.join(','), 'knife,zombie,steal,reveal,trick,stealturn,curse,alvin,dice,rps,betrayal,speed,linkedfate,swapper,russianroulette,pointswap,hostage,trailer,mimic,dehydrated,support');
 });
 
 test('the two cards that hand back a choice say so', function () {

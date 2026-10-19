@@ -75,7 +75,7 @@ async function main() {
     while (host.state.phase === 'draft') {
       await action(clients[host.state.draftTurn], { type: 'chooseAlly', ally: host.state.availableAllies[0] });
     }
-    const actor = clients.find(c => c.state.acting);
+    const actor = require('./helpers/acting-client')(clients);
     const move = actor.state.moves.find(m => m.cardId === 'speed');
     assert(move, 'fixture must offer Speed');
     await action(actor, { type: 'move', ...move });
@@ -105,7 +105,7 @@ async function main() {
     assert.strictEqual(host.state.players.reduce((sum, p) => sum + p.points, 0), 15000);
     console.log('PASS: server GO, two real presses, one 15,000-point award and turn advancement.');
 
-    const nextActor = clients.find(c => c.state.acting);
+    const nextActor = require('./helpers/acting-client')(clients);
     const nextMove = nextActor.state.moves.find(m => m.cardId === 'speed');
     await action(nextActor, { type: 'move', ...nextMove });
     const nextPi = host.state.pendingInteraction;

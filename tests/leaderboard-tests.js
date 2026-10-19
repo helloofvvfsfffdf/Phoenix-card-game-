@@ -475,7 +475,7 @@ async function playMatch(port, seats, rounds) {
 
   let moves = 0;
   while (!host.state.over && moves++ < 400) {
-    const actor = members.find(c => c.state && c.state.acting);
+    const actor = require('./helpers/acting-client')(members);
     assert(actor && actor.state.moves.length, 'a legal move is available');
     const option = actor.state.moves
       .find(m => !(actor.state.mapleBlocked || []).includes(m.cardId));

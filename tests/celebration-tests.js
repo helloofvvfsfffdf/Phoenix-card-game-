@@ -17,11 +17,11 @@ function runtime(reduced) {
 }
 function overlay(b) { return b.document.body.children.find(function (n) { return !n.removed && (n.className || '').indexOf('match-celebration')===0; }); }
 module.exports = function(test,equal,deepEqual,assert) {
-  test('preview selector contains every implemented card/ally and fanfare, but no dormant abilities',function(){
+  test('preview selector contains every implemented card and fanfare, but no ally abilities',function(){
     var options=E.previews(), b=effectsBrowser();
     equal(b.nodes['settings-effects-choice'].children.length,options.length);
-    ['victory','defeat','draw','bonus','alvin-burn','block-ted','ally-maple'].forEach(function(k){assert(options.some(function(p){return p.key===k;}));});
-    ['ally-tilly','ally-louie','ally-simba','ally-elsie'].forEach(function(k){assert(!options.some(function(p){return p.key===k;}));});
+    ['victory','defeat','draw','bonus','alvin-burn','curse-trigger','hunter-block'].forEach(function(k){assert(options.some(function(p){return p.key===k;}));});
+    ['ally-tilly','ally-louie','ally-simba','ally-elsie','ally-phoenix','ally-ted','ally-maple','block-ted','block-tilly','maple-restriction'].forEach(function(k){assert(!options.some(function(p){return p.key===k;}),k+' is not in the preview list');});
     equal(E.publicEvent('victory',0),null,'no synthetic victory enters the server effect channel');
     equal(b.api.diagnostics().audio,'uninitialised');
   });

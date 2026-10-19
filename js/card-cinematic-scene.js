@@ -5,18 +5,26 @@
   var renderer=null,preparation=null,active=null,epoch=0,followups=[];
   var stats={plays:0,frames:0,history:[],error:null,launches:0};
   /* dramatic v2: per-card caption cue (item 5 baseline) - phoenix never uses this */
-  var CAPTION_AT={bonus:1.6,knife:1,hunter:1.3,zombie:1.3,steal:1.7,judge:1.5,reveal:1.5,skipall:1,trick:1.6,stealturn:1.4,curse:1.1,ghost:1.4,alvin:1.3,dice:1.2,rps:1.4,betrayal:1.5,speed:.9,wheel:1.8,linkedfate:1.4,impostor:1.9,swapper:1.2};
+  var CAPTION_AT={bonus:1.6,knife:1,hunter:1.3,zombie:1.3,steal:1.7,judge:1.5,reveal:1.5,skipall:1,trick:1.6,stealturn:1.4,curse:1.1,ghost:1.4,alvin:1.3,dice:1.2,rps:1.4,betrayal:1.5,speed:.9,wheel:1.8,linkedfate:1.4,impostor:1.9,swapper:1.2,
+  // The expansion's own cue times.
+  musicalchairs:1.5,russianroulette:1.9,memorymayhem:1.6,bankrobbery:1.7,pointswap:1.2,
+  hostage:2.1,president:1.7,mimic:1.6,dehydrated:1.4,nothing:1.1,reverseofdoom:1.9,
+  support:1.6,wheelofmisfortune:2};
   function cardId(key){return key==='alvin-burn'?'alvin':key==='curse-trigger'?'curse':key==='hunter-block'?'hunter':key;}
   // Cards that have actual .efk binaries in assets/card-cinematics/
- // All 22 catalog cards now ship compiled originals built by
- // scripts/build-card-cinematics.js (Effekseer 1.80.7 CLI).
- // Wheel of Misfortune is in the catalogue with an editable project and a
- // preview, but its binary is not compiled yet - see manifest.awaitingCompilation.
- // Until it is, the card uses the emblem treatment instead of particle artwork.
+ // All 35 catalogue cards ship compiled originals built by
+ // scripts/build-card-cinematics.js (Effekseer 1.80.7 CLI). The manifest
+ // records the byte size and the hash of every one of them.
 var HAS_EFK = {
   bonus:true, knife:true, hunter:true, zombie:true, steal:true, judge:true, reveal:true,
   skipall:true, trick:true, stealturn:true, curse:true, ghost:true, alvin:true, phoenix:true,
-  dice:true, rps:true, betrayal:true, speed:true, wheel:true, linkedfate:true, impostor:true, swapper:true
+  dice:true, rps:true, betrayal:true, speed:true, wheel:true, linkedfate:true, impostor:true, swapper:true,
+  // The expansion. Every one of these has a compiled binary of its own, built
+  // from an original PHOENIX particle composition by
+  // scripts/build-card-cinematics.js (Effekseer 1.80.7 CLI).
+  musicalchairs:true, russianroulette:true, memorymayhem:true, bankrobbery:true,
+  pointswap:true, hostage:true, president:true, mimic:true, dehydrated:true,
+  nothing:true, reverseofdoom:true, support:true, wheelofmisfortune:true
 };
 
 function supports(key){

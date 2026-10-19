@@ -14,6 +14,7 @@ const Gallery = require('./js/gallery.js');
 const Auth = require('./js/auth.js');
 const Badges = require('./js/badges.js');
 const Achievements = require('./js/achievements.js');
+const Expansion = require('./js/expansion.js');
 const Announcements = require('./js/announcements.js');
 const Wins = require('./js/wins.js');
 const EmailVerification = require('./js/email-verification.js');
@@ -1162,9 +1163,11 @@ function resolveWheelOfMisfortuneInteraction(room, pi) {
       break;
     }
     case 'apocalypse': {
+      // The Phoenix is a legendary card, held outside the hand - so nobody's
+      // hand grows past the limit.
       s.players.forEach(p => {
-        if (!s.hands[p.id]) s.hands[p.id] = [];
-        s.hands[p.id].push('phoenix');
+        p.hasPhoenix = true;
+        p.phoenixUsed = false;
       });
       text = 'Wheel of Misfortune - ' + actor.name + ' spins... PHOENIX APOCALYPSE! Everyone receives a Phoenix card!';
       break;
@@ -1250,23 +1253,63 @@ function resolveSwapperInteraction(room, pi) {
  * Shared by the normal `interact` path and the safety timeout below, so a
  * player who never responds can never leave the match permanently frozen.
  */
-function finishInteraction(room) {
+/**
+ * The player a room member is.
+ *
+ * A member has a SEAT, and the seat decides which player it is. There is no
+ * id on the member itself, so every identity check goes through here.
+ */
+function playerIdOf(member) {
+  if (!member) return null;
+  const seat = Rules.SEATS[member.seat];
+  return seat ? seat.id : null;
+}
+
+/**
+ * The outcome of an interaction that the players did not answer by hand -
+ * the timer ran out, or the card resolves in one go.
+ */
+function resolveInteraction(room, pi) {
+  if (pi.type === 'rps') return resolveRpsInteraction(room, pi);
+  if (pi.type === 'betrayal') return resolveBetrayalInteraction(room, pi);
+  if (pi.type === 'speed') return resolveSpeedInteraction(room, pi);
+  if (pi.type === 'dice') return resolveDiceInteraction(room, pi);
+  if (pi.type === 'wheel') return resolveWheelInteraction(room, pi);
+  if (pi.type === 'linkedfate') return resolveLinkedFateInteraction(room, pi);
+  if (pi.type === 'impostor') return resolveImpostorInteraction(room, pi);
+  if (pi.type === 'swapper') return resolveSwapperInteraction(room, pi);
+  if (pi.type === 'bankrobbery') return Expansion.resolveBankRobbery(room);
+  if (pi.type === 'pointswap') return Expansion.resolvePointSwap(room);
+  if (pi.type === 'dehydrated') return Expansion.resolveDehydrated(room);
+  if (pi.type === 'nothing') return Expansion.resolveNothing(room);
+  if (pi.type === 'reverseofdoom') return Expansion.resolveReverseOfDoom(room);
+  if (pi.type === 'support') return Expansion.resolveSupport(room);
+  if (pi.type === 'hostage') return Expansion.startHostage(room);
+  if (pi.type === 'president') return Expansion.startPresidency(room);
+  if (pi.type === 'trailer') return Expansion.resolveTrailerTimeout(room);
+  if (pi.type === 'musicalchairs') return Expansion.resolveTimeout(room, 'musicalchairs',
+    'Musical Chairs - the music played and nobody pressed. Nobody loses.');
+  if (pi.type === 'russianroulette') return Expansion.resolveTimeout(room, 'russianroulette',
+    'Russian Roulette - the revolver was never aimed.');
+  if (pi.type === 'memorymayhem') return Expansion.resolveTimeout(room, 'memorymayhem',
+    'Memory Mayhem - the sequences were forgotten.');
+  if (pi.type === 'joshuasurvey') return Expansion.resolveTimeout(room, 'joshuasurvey',
+    'Joshua Survey - nobody answered the question.');
+  if (pi.type === 'wheelofmisfortune') return resolveWheelOfMisfortuneInteraction(room, pi);
+  return null;
+}
+
+function finishInteraction(room, provided) {
   const pi = room.pendingInteraction;
   if (!pi) return;
   const s = room.state;
   const beforePoints = s.players.map(p => p.points);
 
-  let result;
+  // A caller that has already worked the outcome out passes it in; the
+  // dispatch below is only for the interactions nobody answered by hand.
+  let result = provided || null;
   try {
-    if (pi.type === 'rps') result = resolveRpsInteraction(room, pi);
-    else if (pi.type === 'betrayal') result = resolveBetrayalInteraction(room, pi);
-    else if (pi.type === 'speed') result = resolveSpeedInteraction(room, pi);
-    else if (pi.type === 'dice') result = resolveDiceInteraction(room, pi);
-    else if (pi.type === 'wheel') result = resolveWheelInteraction(room, pi);
-    else if (pi.type === 'linkedfate') result = resolveLinkedFateInteraction(room, pi);
-    else if (pi.type === 'impostor') result = resolveImpostorInteraction(room, pi);
-    else if (pi.type === 'swapper') result = resolveSwapperInteraction(room, pi);
-    else if (pi.type === 'wheelofmisfortune') result = resolveWheelOfMisfortuneInteraction(room, pi);
+    if (!result) result = resolveInteraction(room, pi);
   } catch (e) {
     console.error('[PHOENIX ws] interaction resolution failed -> ' + Auth.describeError(e));
     result = {
@@ -1359,6 +1402,16 @@ function finishInteraction(room) {
   broadcast(room);
 }
 
+/**
+ * Everything that ends when a round ends.
+ *
+ * A status that lasts "five complete rounds" really lasts five complete
+ * rounds, so it is retired here - at the round boundary - and not on a turn.
+ */
+function applyRoundEndHousekeeping(room) {
+  Expansion.onRoundEnd(room);
+}
+
 function applyLinkedFate(room) {
   const s = room.state;
   if (!s || s.over || !s.linkedFate) return;
@@ -1431,7 +1484,8 @@ function scheduleInteractionTimeout(room, pi, durationMs) {
       pi.decisions[id] = pi.type === 'rps' ? ['rock', 'paper', 'scissors'][Math.floor(Math.random() * 3)]
         : pi.type === 'betrayal' ? (Math.random() < 0.5 ? 'share' : 'steal')
         : pi.type === 'speed' ? 'timeout' : pi.type === 'dice' ? 'roll'
-        : pi.type === 'wheel' ? 'spin' : pi.type === 'impostor' ? 'clue:...' : 'ack';
+        : (pi.type === 'wheel' || pi.type === 'wheelofmisfortune') ? 'spin'
+        : pi.type === 'impostor' ? 'clue:...' : 'ack';
     }
     finishInteraction(room);
   }, durationMs);
@@ -1489,6 +1543,9 @@ function startGame(room) {
 
   const s = Rules.createGame({
     rounds: room.requestedRounds,
+    // The two owner-only cards are dealt ONLY in an owner room. The room's
+    // mode is decided by the server when the owner password is checked, so a
+    // client cannot ask for them.
     fixedOrder: true,
     rotateStart: false,
     roundStartSeat: 0,
@@ -2203,6 +2260,13 @@ function dueChoice(s) {
     return null;
   }
 
+  // A choice with nothing left to choose from cannot be made, so it lapses
+  // instead of stopping the match.
+  if (!pending.options || !pending.options.length) {
+    if (s.pendingChoice) s.pendingChoice = null;
+    return null;
+  }
+
   return pending;
 }
 
@@ -2236,26 +2300,57 @@ function snapshot(room, member) {
   const pendingInteraction = interactionView(room.pendingInteraction, Rules.SEATS[member.seat].id);
   const mine = Rules.SEATS[member.seat].id;
 
+  // A HOSTAGE'S TURN belongs to the hostage, but the CRIMINAL plays it, so
+  // the criminal is the one who is acting and the one who is given the moves.
+  const hostage = s && s.hostage ? s.hostage : null;
+  const hostageTurn = !!(hostage && s.players[s.turnInRound].id === hostage.hostageId);
+  const criminalActs = !!(hostageTurn && mine === hostage.criminalId);
+  // A hostage may be the one who has a forced choice to make. The criminal
+  // answers it, because the criminal is playing their turn.
+  const criminalAnswers = !!(hostage && pending && pending.chooserId === hostage.hostageId &&
+    mine === hostage.criminalId);
+  const hostageSeat = hostageTurn
+    ? s.players.findIndex(p => p.id === hostage.hostageId)
+    : -1;
+
+  // A FORCED CHOICE comes first: the chooser decides which card is played,
+  // even when the player whose card it is happens to be a hostage.
+  const pendingChooses = !!(pending && pending.chooserId);
+  const actsForTheHostage = !pendingChooses && criminalActs;
   const acting = !!(
     s &&
     !paused &&
     !s.over &&
     (
-      (pending && pending.chooserId === mine) ||
-      (!pending && current && current.id === mine)
+      actsForTheHostage ||
+      criminalAnswers ||
+      (
+        pendingChooses
+          ? pending.chooserId === mine
+          : (current && current.id === mine)
+      )
     )
   );
 
+  // The disguise this viewer is being shown, if any.
+  const viewerMimic = s && s.mimics ? s.mimics[mine] || null : null;
   const moves = acting
     ? (
         pending
-          ? Maple.playableMoves(room,member.seat,pending.options,pending)
+          ? Maple.playableMoves(
+              room,
+              criminalActs ? hostageSeat : member.seat,
+              pending.options,
+              pending
+            )
           : Maple.playableMoves(
             room,
-            member.seat,
-            Rules.legalMoves(s, s.turnInRound)
+            criminalActs ? hostageSeat : member.seat,
+            Rules.legalMoves(s, criminalActs ? hostageSeat : s.turnInRound)
           ).map(m => ({
-            cardId: m.cardId,
+            // A MIMIC is shown as the card it pretends to be, so the moves
+            // offered to its holder are the disguise as well.
+            cardId: viewerMimic && m.cardId === 'mimic' ? viewerMimic : m.cardId,
             targetId: m.targetId
           }))
       )
@@ -2307,7 +2402,26 @@ function snapshot(room, member) {
 
     current: current ? current.id : null,
 
-    hand: s ? (s.hands[mine] || []) : [],
+    // A MIMIC is shown as the card it pretends to be. Only the server knows
+    // which is which, so the target never learns they are holding a Mimic
+    // until they play it.
+    hand: s ? Expansion.handForViewer(s, mine) : [],
+
+    // The expansion's live state, so every client can show the same thing.
+    president: s && s.president ? s.president : null,
+    bannedCards: s && s.bannedCards ? s.bannedCards.slice() : [],
+    dehydrated: s && s.dehydrated ? s.dehydrated[mine] || null : null,
+    hasTrap: !!(s && s.traps && s.traps[mine]),
+    hostage: s && s.hostage ? s.hostage : null,
+    // A HOSTAGE'S HAND belongs to the criminal - that is what "controlling
+    // their choices" means. Nobody else ever sees it.
+    hostageHand: s && s.hostage && s.hostage.criminalId === mine && s.hands[s.hostage.hostageId]
+      ? s.hands[s.hostage.hostageId].slice()
+      : null,
+    trailer: room.trailer || null,
+    // TRUE when THIS player is the one watching the Mimic's video. The
+    // client uses it to lock their own controls.
+    watchingVideo: !!(room.rickroll && room.rickroll.playerId === mine),
 
     deckCount: s ? s.deck.length : 0,
     discardCount: s ? s.discard.length : 0,
@@ -2388,6 +2502,7 @@ function skipUnplayableTurns(room) {
         applyTed(room);
         applyMaple(room);
         applyLinkedFate(room);
+        applyRoundEndHousekeeping(room);
       }
       continue;
     }
@@ -2769,6 +2884,176 @@ async function gameplayRefusal(ws) {
     return { kind: 'email', message: EmailVerification.REQUIRED_NOTICE };
   }
   return null;
+}
+
+/**
+ * The expansion's interactive cards.
+ *
+ * Each of these is a slightly different conversation between the client and
+ * the server, so they are handled here rather than in the generic `interact`
+ * branch. The server decides everything: the timings, the targets, the score
+ * changes and who is allowed to speak.
+ *
+ * @returns {boolean} true when this message was handled here.
+ */
+function handleExpansionInteraction(room, ws, data, m, pi) {
+  const s = room.state;
+  const playerId = Rules.SEATS[m.seat].id;
+  const decision = String(data.decision || '');
+
+  /**
+   * Record an answer, so the table can see who has already played.
+   *
+   * The generic handler does this for the older cards; the expansion's own
+   * conversations never reach it, so they do it here.
+   */
+  function recordDecision() {
+    const phase = pi.phase || 'main';
+    pi.decisions[phase] = pi.decisions[phase] || {};
+    pi.decisions[phase][playerId] = decision;
+    pi.decisions.main = pi.decisions.main || {};
+    pi.decisions.main[playerId] = decision;
+    pi.submittedAt[playerId] = Date.now();
+  }
+
+  // --- MUSICAL CHAIRS: press the button, and the server says whether it
+  //     counted, was too early, or came too late.
+  if (pi.type === 'musicalchairs') {
+    if (!pi.participants.includes(playerId)) {
+      return error(ws, 'You are not taking part in this round.');
+    }
+    const outcome = Expansion.musicalChairsPress(room, playerId);
+    if (outcome.error) return error(ws, outcome.error);
+    if (outcome.early) {
+      send(ws, { type: 'interact-ack', interaction: 'musicalchairs', early: true, message: outcome.error });
+      return true;
+    }
+    recordDecision();
+    send(ws, { type: 'interact-ack', interaction: 'musicalchairs' });
+    broadcast(room);
+    if (outcome.done) {
+      recordEvents(room, outcome.events);
+      finishInteraction(room, { events: outcome.events, advanceTurn: true });
+    }
+    return true;
+  }
+
+  // --- RUSSIAN ROULETTE: the holder aims, and the server pulls the trigger.
+  if (pi.type === 'russianroulette') {
+    if (!pi.participants.includes(playerId)) {
+      return error(ws, 'You are not taking part in this round.');
+    }
+    if (!decision.startsWith('aim:')) {
+      return error(ws, 'Choose somebody to hold the revolver.');
+    }
+    const aimed = decision.slice(4);
+    const outcome = Expansion.russianRouletteAim(room, playerId, aimed);
+    if (outcome.error) return error(ws, outcome.error);
+    recordDecision();
+    recordEvents(room, outcome.events);
+    if (outcome.done) {
+      finishInteraction(room, { events: outcome.events, advanceTurn: true });
+    } else {
+      broadcast(room);
+    }
+    return true;
+  }
+
+  // --- MEMORY MAYHEM: write the sequence back.
+  if (pi.type === 'memorymayhem') {
+    if (!pi.participants.includes(playerId)) {
+      return error(ws, 'You are not taking part in this round.');
+    }
+    if (!decision.startsWith('mem:')) {
+      return error(ws, 'Write the sequence back.');
+    }
+    const parts = decision.split(':');
+    const sequenceIndex = Number(parts[1]);
+    const answer = parts.slice(2).join(':');
+    const data = pi.roundData;
+    data.allAnswers = data.allAnswers || {};
+    data.allTimes = data.allTimes || {};
+    const previous = data.allAnswers[playerId] || [];
+    previous[sequenceIndex] = answer;
+    data.allAnswers[playerId] = previous;
+    data.allTimes[playerId] = data.allTimes[playerId] || [];
+    data.allTimes[playerId][sequenceIndex] = Date.now();
+    const outcome = Expansion.memoryAnswer(room, playerId, sequenceIndex, answer);
+    if (outcome.error) return error(ws, outcome.error);
+    recordDecision();
+    send(ws, { type: 'interact-ack', interaction: 'memorymayhem' });
+    broadcast(room);
+    if (outcome.done) {
+      recordEvents(room, outcome.events);
+      finishInteraction(room, { events: outcome.events, advanceTurn: true });
+    } else if (outcome.nextSequence) {
+      recordEvents(room, outcome.events);
+      broadcast(room);
+    }
+    return true;
+  }
+
+  // --- THE MIMIC: the holder of the card chooses what it pretends to be.
+  if (pi.type === 'mimic') {
+    if (pi.actorId !== playerId) {
+      return error(ws, 'You are not holding the Mimic.');
+    }
+    if (!decision.startsWith('disguise:')) {
+      return error(ws, 'Choose the card the Mimic will pretend to be.');
+    }
+    const outcome = Expansion.mimicDisguise(room, playerId, decision.slice(9));
+    if (outcome.error) return error(ws, outcome.error);
+    recordDecision();
+    recordEvents(room, outcome.events);
+    finishInteraction(room, { events: outcome.events, advanceTurn: true });
+    return true;
+  }
+
+  // --- CUSTOMER SUPPORT: the target files a complaint.
+  if (pi.type === 'support') {
+    if (pi.targetId !== playerId) {
+      return error(ws, 'The complaint form is for somebody else.');
+    }
+    if (!decision.startsWith('complaint:')) {
+      return error(ws, 'Choose one of the three complaints.');
+    }
+    const outcome = Expansion.supportComplaint(room, playerId, decision.slice(10));
+    if (outcome.error) return error(ws, outcome.error);
+    recordDecision();
+    recordEvents(room, outcome.events);
+    finishInteraction(room, { events: outcome.events, advanceTurn: true });
+    return true;
+  }
+
+  // --- JOSHUA SURVEY: players answer, the owner judges.
+  if (pi.type === 'joshuasurvey') {
+    if (decision.startsWith('judge:')) {
+      const parts = decision.split(':');
+      const subject = parts[1];
+      const accept = parts[2] === 'accept';
+      const outcome = Expansion.surveyJudge(room, playerId, subject, accept);
+      if (outcome.error) return error(ws, outcome.error);
+      recordDecision();
+      recordEvents(room, outcome.events);
+      if (outcome.done) {
+        finishInteraction(room, { events: outcome.events, advanceTurn: true });
+      } else {
+        broadcast(room);
+      }
+      return true;
+    }
+    if (!decision.startsWith('answer:')) {
+      return error(ws, 'Type your answer.');
+    }
+    const outcome = Expansion.surveyAnswer(room, playerId, decision.slice(7));
+    if (outcome.error) return error(ws, outcome.error);
+    recordDecision();
+    send(ws, { type: 'interact-ack', interaction: 'joshuasurvey' });
+    broadcast(room);
+    return true;
+  }
+
+  return false;
 }
 
 async function handle(ws, data) {
@@ -3160,6 +3445,46 @@ async function handle(ws, data) {
     return;
   }
 
+  // A PRESIDENTIAL BAN. The president may add one during their own turn, and
+  // may only take one away outside it. The server checks both.
+  if (data.type === 'president_ban') {
+    if (!s.president || s.president.id !== playerIdOf(m)) {
+      return error(ws, 'Only the President can pass policy.');
+    }
+    const banId = String(data.cardId || '').slice(0, 40);
+    if (!s.bannedCards) s.bannedCards = [];
+    const removing = data.remove === true;
+    if (removing) {
+      if (s.turnInRound === m.seat) {
+        return error(ws, 'You may only lift a ban on somebody else\'s turn.');
+      }
+      const at = s.bannedCards.indexOf(banId);
+      if (at !== -1) s.bannedCards.splice(at, 1);
+    } else {
+      if (s.turnInRound !== m.seat) {
+        return error(ws, 'You may only pass a ban on your own turn.');
+      }
+      if (!Cards.byId(banId)) return error(ws, 'That is not a card.');
+      if (Rules.isOwnerOnlyCard(banId)) {
+        return error(ws, 'That card cannot be banned.');
+      }
+      if (s.bannedCards.indexOf(banId) === -1) s.bannedCards.push(banId);
+    }
+    broadcast(room);
+    return;
+  }
+
+  // THE MIMIC'S PRANK IS OVER. The client says the video finished; the
+  // server checks that this really is the player who was watching.
+  if (data.type === 'rickroll_done') {
+    if (room.rickroll && room.rickroll.playerId === playerIdOf(m)) {
+      room.rickroll = null;
+      room.log.push(m.name + ' has watched the video.');
+    }
+    broadcast(room);
+    return;
+  }
+
   if (data.type === 'kick') {
     if (room.phase !== 'lobby') {
       return error(ws, 'Kicking is only available in the lobby.');
@@ -3293,12 +3618,24 @@ async function handle(ws, data) {
       return error(ws, 'No interaction pending.');
     }
 
+    // The expansion's own conversations are handled first, because they have
+
     const seat = m.seat;
     const playerId = Rules.SEATS[seat].id;
 
     // Only participants may submit.
     if (!pi.participants.includes(playerId)) {
       return error(ws, 'You are not part of this interaction.');
+    }
+
+    // The expansion's own conversations are handled first, because they have
+    // their own decision formats: a press, an aim, an answer, a disguise, a
+    // complaint, a survey reply. The generic handler below waits for EVERY
+    // participant, which is not how these cards work.
+    if (['musicalchairs', 'russianroulette', 'memorymayhem', 'mimic', 'support',
+      'joshuasurvey'].includes(pi.type)) {
+      const handled = handleExpansionInteraction(room, ws, data, m, pi);
+      if (handled) return;
     }
 
     if (pi.type === 'speed') {
@@ -3357,7 +3694,9 @@ async function handle(ws, data) {
       }
     }
 
-    if (pi.type === 'wheel' && playerId !== pi.actorId) return error(ws, 'Only the caster can spin.');
+    if ((pi.type === 'wheel' || pi.type === 'wheelofmisfortune') && playerId !== pi.actorId) {
+      return error(ws, 'Only the caster can spin.');
+    }
 
     // Store in phase-based structure
     pi.decisions[phaseKey][playerId] = decision;
@@ -3381,7 +3720,7 @@ async function handle(ws, data) {
       return;
     }
 
-    if (pi.type === 'wheel') {
+    if (pi.type === 'wheel' || pi.type === 'wheelofmisfortune') {
       finishInteraction(room);
       return;
     }
@@ -3466,29 +3805,90 @@ async function handle(ws, data) {
 
     const id = Rules.SEATS[m.seat].id;
     const pending = dueChoice(s);
-    const actor = s.players.find(p => p.id === id);
+
+    // A HOSTAGE'S TURN belongs to the hostage, but the CRIMINAL plays it. The
+    // hostage's own socket is refused, and the criminal's socket plays the
+    // hostage's cards while it is really the hostage's turn. Without this the
+    // match would stop dead the moment the card was played.
+    const turnSeat = s.turnInRound;
+    const turnPlayer = s.players[turnSeat];
+    let onBehalf = false;
+    if (s.hostage && turnPlayer.id === s.hostage.hostageId) {
+      // A forced choice may have left the card to somebody else entirely -
+      // the chooser of a Steal a Turn, say. They are allowed to pick it.
+      const chooserId = pending ? pending.chooserId : null;
+      if (id === s.hostage.hostageId) {
+        return error(ws, 'You are being held hostage. Your captor plays this turn.');
+      }
+      if (id !== s.hostage.criminalId && id !== chooserId) {
+        return error(ws, 'It is not your turn.');
+      }
+      // Either way, the card comes from the hostage's hand.
+      onBehalf = true;
+    }
+
+    // The player whose card is being played: the requester, or the hostage.
+    const actor = onBehalf ? turnPlayer : s.players.find(p => p.id === id);
+    const actorId = onBehalf ? turnPlayer.id : id;
 
     if (room.pendingInteraction) {
       return error(ws, 'An interaction is in progress. Submit your decision first.');
     }
 
-    if (
-      pending
-        ? pending.chooserId !== id
-        : s.players[s.turnInRound].id !== id
-    ) {
+    if (pending) {
+      // A forced choice is answered by the player who sends it. When a
+      // criminal is playing a hostage's turn, that is the criminal - even if
+      // the choice belongs to the hostage.
+      const chooserIsRequester = pending.chooserId === id;
+      // A hostage may be the chooser, and then their criminal answers it.
+      const chooserIsTheHostage = !!(s.hostage && pending.chooserId === s.hostage.hostageId &&
+        id === s.hostage.criminalId);
+      if (!chooserIsRequester && !chooserIsTheHostage) {
+        return error(ws, 'It is not your turn.');
+      }
+    } else if (turnPlayer.id !== actorId) {
       return error(ws, 'It is not your turn.');
     }
 
     const cardId = String(data.cardId || '').slice(0, 40);
 
+    // THE OWNER-ONLY CARDS. They belong to the owner server and nowhere else,
+    // and the check is on the room's mode - which the server decided when the
+    // owner password was verified - not on anything the client sent.
+    if (Rules.isOwnerOnlyCard(cardId) && room.mode !== 'owner') {
+      return error(ws, 'That card does not exist in this room.');
+    }
+
+    // THE MIMIC'S PRANK. While the video is playing, the player who played
+    // the disguised card cannot act - the server holds the turn, not the
+    // browser. The client reports that the video finished, and the server
+    // also lets go on its own after a while, so a stuck client can never
+    // freeze the match.
+    if (room.rickroll && room.rickroll.playerId === id) {
+      return error(ws, 'You are watching the video. It ends when it ends.');
+    }
+
+    // A PRESIDENTIAL BAN applies to everybody, the president included.
+    if (s.bannedCards && s.bannedCards.indexOf(cardId) !== -1) {
+      return error(ws, 'That card type has been banned by the President.');
+    }
+
     const targetId = data.targetId === null
       ? null
       : String(data.targetId || '').slice(0, 40);
 
+    // A player holding a MIMIC is shown the card it pretends to be, so the
+    // move they send is the disguise's id. The server maps it back to the
+    // Mimic, which is what actually happens.
+    const mimicDisguise = s.mimics && s.mimics[actorId] ? s.mimics[actorId] : null;
+
     const options = pending
       ? pending.options
-      : Rules.legalMoves(s, s.turnInRound);
+      : Rules.legalMoves(s, s.turnInRound).map(function (move) {
+        return (mimicDisguise && move.cardId === 'mimic')
+          ? { cardId: mimicDisguise, targetId: move.targetId }
+          : move;
+      });
 
     if (
       !options.some(o =>
@@ -3517,7 +3917,9 @@ async function handle(ws, data) {
     }
 
     // Interactive cards: create a pending interaction instead of resolving immediately.
-    const interactiveCards = ['rps', 'betrayal', 'speed', 'dice', 'wheel', 'linkedfate', 'impostor', 'swapper', 'wheelofmisfortune'];
+    const interactiveCards = ['rps', 'betrayal', 'speed', 'dice', 'wheel', 'linkedfate', 'impostor', 'swapper', 'wheelofmisfortune',
+      'musicalchairs', 'russianroulette', 'memorymayhem', 'mimic', 'support',
+      'joshuasurvey', 'trailer'];
     if (interactiveCards.includes(cardId) && (!pending || pending.kind === Rules.PENDING_CHOICE_KINDS.MOVE)) {
       // A stolen turn changes who chooses the card, not who owns/plays it.
       const actor = s.players[s.turnInRound];
@@ -3575,10 +3977,23 @@ async function handle(ws, data) {
       };
 
       // Set up participants based on card type.
-      if (cardId === 'rps' || cardId === 'speed' || cardId === 'dice' || cardId === 'linkedfate' || cardId === 'swapper') {
+      if (cardId === 'rps' || cardId === 'speed' || cardId === 'dice' || cardId === 'linkedfate' || cardId === 'swapper' ||
+          cardId === 'mimic' || cardId === 'support' || cardId === 'russianroulette' ||
+          cardId === 'trailer') {
+        // The caster and the target. The Mimic, the complaint form, the
+        // revolver and the trailer are all between two people.
         room.pendingInteraction.participants = [id, targetId];
       } else if (cardId === 'wheel' || cardId === 'wheelofmisfortune') {
         // Wheel affects all players, no target needed
+        const eligible = s.players.filter(p => p.enabled && !Rules.isOut(p, s));
+        room.pendingInteraction.participants = eligible.map(p => p.id);
+      } else if (cardId === 'musicalchairs' || cardId === 'memorymayhem' ||
+                 cardId === 'bankrobbery' || cardId === 'president' ||
+                 cardId === 'reverseofdoom' || cardId === 'nothing' ||
+                 cardId === 'joshuasurvey') {
+        // These need no target, and the whole table takes part in them - or
+        // watches them happen. The participants list is what the snapshot
+        // describes, so it must never be empty.
         const eligible = s.players.filter(p => p.enabled && !Rules.isOut(p, s));
         room.pendingInteraction.participants = eligible.map(p => p.id);
       } else if (cardId === 'betrayal') {
@@ -3618,6 +4033,21 @@ async function handle(ws, data) {
         room.pendingInteraction.roundData.votes = {};
       }
 
+      // The expansion's minigames start HERE, when the card is played. The
+      // music has to be playing before the first press, the revolver has to be
+      // loaded before it is aimed, and the sequences have to exist before
+      // anybody writes them down.
+      if (cardId === 'musicalchairs' || cardId === 'russianroulette' ||
+          cardId === 'memorymayhem' || cardId === 'joshuasurvey' ||
+          cardId === 'trailer') {
+        const started = cardId === 'musicalchairs' ? Expansion.startMusicalChairs(room)
+          : cardId === 'russianroulette' ? Expansion.startRussianRoulette(room)
+          : cardId === 'memorymayhem' ? Expansion.startMemoryMayhem(room)
+          : cardId === 'joshuasurvey' ? Expansion.startSurvey(room)
+          : Expansion.startTrailer(room);
+        if (started && started.events) recordEvents(room, started.events);
+      }
+
       // Safety net: if a participant never responds, auto-resolve after timeout.
       scheduleInteractionTimeout(room, room.pendingInteraction, room.pendingInteraction.timeoutMs);
 
@@ -3636,6 +4066,9 @@ async function handle(ws, data) {
 
     const beforePoints = s.players.map(p => p.points);
 
+    // A MIMIC is played through the engine's own path, because the effect
+    // the card pretends to have must NEVER happen.
+    const playingMimic = !!(mimicDisguise && cardId === mimicDisguise);
     const result = pending
       ? Rules.resolvePendingChoice(
           s,
@@ -3643,13 +4076,15 @@ async function handle(ws, data) {
           targetId,
           () => shareLinkedGains(s, beforePoints)
         )
-      : Rules.playCard(
-          s,
-          s.turnInRound,
-          cardId,
-          targetId,
-          () => shareLinkedGains(s, beforePoints)
-        );
+      : playingMimic
+        ? Rules.playMimic(s, s.turnInRound)
+        : Rules.playCard(
+            s,
+            s.turnInRound,
+            cardId,
+            targetId,
+            () => shareLinkedGains(s, beforePoints)
+          );
 
     if (!result.ok) {
       return error(
@@ -3658,7 +4093,49 @@ async function handle(ws, data) {
       );
     }
 
+    // THE UNO REVERSE OF DOOM. If the target has a trap waiting and the
+    // card is a harmful one, the effect never lands: it is cancelled and
+    // reflected back at twice its strength. The trap is consumed when it
+    // fires, and the reflection is applied directly, so it can never reflect
+    // itself.
+    const aimedAt = targetId ? s.players.find(function (p) { return p.id === targetId; }) : null;
+    if (aimedAt && actorId !== aimedAt.id) {
+      const reflected = Expansion.checkTrap(room, actor, aimedAt, cardId);
+      if (reflected) {
+        recordEvents(room, [reflected]);
+        broadcast(room);
+        return;
+      }
+    }
+
+    // THE MIMIC. The card was a disguise, so the effect that card would have
+    // had never happens. The Mimic is used up and the target gets Rickrolled.
+    if (mimicDisguise && cardId === mimicDisguise) {
+      recordEvents(room, [{
+        type: 'result', cardId: 'mimic',
+        text: 'The Mimic - ' + m.name + ' played the ' + mimicDisguise +
+          ' and nothing happened. Never does.'
+      }]);
+      delete s.mimics[actorId];
+      // The prank starts, and the server holds this player in it.
+      room.rickroll = {
+        playerId: actorId,
+        startedAt: Date.now(),
+        // A backstop: the video is a few minutes long, and after this the
+        // server lets the player go whatever the client says.
+        until: Date.now() + 8 * 60 * 1000
+      };
+      send(m.ws, { type: 'rickroll' });
+      broadcast(room);
+      return;
+    }
+
     recordEvents(room, result.events);
+
+    // THE POLICE OFFICER. If the hostage has been freed by now, the criminal
+    // pays for it immediately.
+    const freed = Expansion.checkHostage(room);
+    if (freed) recordEvents(room, [freed]);
 
     if (
       s.round !== room.lastPhoenixRound &&

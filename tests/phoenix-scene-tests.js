@@ -16,7 +16,11 @@ function runtime(reduced, existing) {
 function stage(b){return b.document.body.children.find(function(n){return !n.removed&&(n.className||'').indexOf('phoenix-takeover')===0;});}
 module.exports=function(test,equal,deepEqual,assert){
   test('all non-Phoenix sounds, ally recipes and victory/defeat remain byte-for-byte unchanged',function(){
-    var h=crypto.createHash('sha256');Object.keys(E.DEFINITIONS).filter(function(k){return k!=='phoenix';}).concat(['victory','defeat','draw']).forEach(function(k){h.update(k);h.update(JSON.stringify(Sound.recipe(k)));h.update(JSON.stringify(Sound.recipe(k,true)));});
+    // Only the recipes that existed BEFORE the expansion are hashed, so this
+    // guard still means "nothing that was already there has changed".
+    var expansionOnly=['musicalchairs','russianroulette','memorymayhem','bankrobbery','pointswap','hostage','president','mimic','dehydrated','nothing','reverseofdoom','support','joshuasurvey','trailer'];
+    var preExpansion=Object.keys(E.DEFINITIONS).filter(function(k){return k!=='phoenix'&&expansionOnly.indexOf(k)===-1;});
+    var h=crypto.createHash('sha256');preExpansion.filter(function(k){return k!=='phoenix';}).concat(['victory','defeat','draw']).forEach(function(k){h.update(k);h.update(JSON.stringify(Sound.recipe(k)));h.update(JSON.stringify(Sound.recipe(k,true)));});
     equal(h.digest('hex'),'6d2095d722e3c87cfcbef486f58241661bd3ead6769a8ebf6355fcdd5dca813e','baseline wheelofmisfortune recipes');
   });
   test('Phoenix media sizes/hashes match the documented derivatives and mobile budget',function(){

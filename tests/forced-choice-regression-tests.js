@@ -8,7 +8,7 @@ function setup(card){
   var room={phase:'playing',state:s,code:'TEST',members:s.players.slice(0,3).map(function(p,i){return {seat:i,name:['Alice','Bob','Riley'][i],ally:['phoenix','ted','elsie'][i],ws:{}};}),mapleUntil:{0:99},log:[]};
   var source=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
   var begin=source.indexOf('function dueChoice(s)'),end=source.indexOf('// Skip turns when no legal moves are available.');
-   var context={Rules:Rules,Maple:Maple,interactionView:require('../js/interaction-view'),ALLIES:['phoenix','ted','elsie'],effectJournal:function(){return {stream:'test',sequence:0,events:[]};}};
+   var context={Rules:Rules,Maple:Maple,Expansion:require('../js/expansion.js'),interactionView:require('../js/interaction-view'),ALLIES:['phoenix','ted','elsie'],effectJournal:function(){return {stream:'test',sequence:0,events:[]};}};
    context.crypto=require('crypto');
    vm.runInNewContext(source.slice(begin,end),context);
   return {room:room,snapshot:context.snapshot,pending:context.dueChoice(s)};

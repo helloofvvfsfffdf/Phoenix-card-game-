@@ -146,9 +146,15 @@ module.exports = function (test, equal, deepEqual, assert) {
     var f = serverFixture('tilly', false);
     var actor = f.room.state.players[0], victim = f.room.state.players[1];
     var held = f.room.state.hands[actor.id].length, lost = f.room.state.hands[victim.id].length;
+    var before = f.room.state.hands[victim.id].slice();
     f.api.applyPhoenix(f.room);
-    equal(f.room.state.hands[actor.id].length, held + 1);
+    // A hand is never allowed past the limit, so a full hand gives up its
+    // oldest card to make room for the one it stole.
+    equal(f.room.state.hands[actor.id].length, held);
     equal(f.room.state.hands[victim.id].length, lost - 1);
+    var stolen = before.filter(function (id) { return f.room.state.hands[victim.id].indexOf(id) === -1; });
+    equal(stolen.length, 1, 'the victim lost exactly one card');
+    assert(f.room.state.hands[actor.id].indexOf(stolen[0]) !== -1, 'and the thief holds it');
     equal(f.room.effects.events[0].key, 'ally-phoenix');
     deepEqual(Object.keys(f.room.effects.events[0]).sort(), ['actor', 'id', 'key', 'outcome', 'target']);
   });

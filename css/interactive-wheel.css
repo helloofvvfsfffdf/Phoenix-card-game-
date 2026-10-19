@@ -1,2 +1,26 @@
 .wheel-overlay .wheel-graphic { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; max-width: 220px; margin: 1rem auto; }
 .wheel-overlay .wheel-segment { width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #ffd05e, #ff9500); border: 2px solid #fff; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #fff; font-weight: bold; }
+
+/* --- The Wheel of Misfortune -------------------------------------------
+ * A black and red wheel, with the odds printed on every segment so nobody
+ * is surprised by what comes up. */
+.wheel-overlay-misfortune .interactive-shell { border-color: #8b0000; }
+.wheel-overlay-misfortune h2 { color: #ff8f8f; }
+.wheel-overlay-misfortune .wheel-graphic .wheel-segment {
+  background: linear-gradient(135deg, #4a1010, #8b0000);
+  border-color: #ff6b6b;
+  flex-direction: column;
+  line-height: 1.05;
+  font-size: 0.62rem;
+}
+.wheel-overlay-misfortune .wheel-segment-odds {
+  font-size: 0.55rem;
+  color: #ffd0d0;
+  margin-top: 2px;
+}
+.wheel-overlay-misfortune .wheel-segment-number { color: #ffe3e3; }
+.wheel-overlay-misfortune .wheel-outcomes li { border-color: #6b1d1d; }
+.wheel-overlay-misfortune .wheel-outcome-odds { color: #ff9c9c; }
+.wheel-overlay-misfortune .wheel-segment.wheel-result {
+  box-shadow: 0 0 0 3px #fff, 0 0 18px #ff3b3b;
+}

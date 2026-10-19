@@ -25,7 +25,21 @@
     linkedfate:'<path d="M25 30q25 20 0 40M75 30q-25 20 0 40"/><path d="M40 50h20"/><circle cx="30" cy="50" r="12"/><circle cx="70" cy="50" r="12"/>',
     impostor:'<path d="M30 20q20 30 0 60M70 20q-20 30 0 60"/><circle cx="50" cy="50" r="15"/><path d="M40 45h20M45 55h10"/>',
     swapper:'<path d="M25 40q25-20 50 0M25 60q25 20 50 0"/><path d="M40 30l-15 10 15 10M60 70l15-10-15-10"/>',
-    wheelofmisfortune:'<circle cx="50" cy="50" r="40"/><path d="M50 10v80M10 50h80"/><path d="M50 50L50 10A40 40 0 0 1 90 50Z" fill="currentColor" opacity="0.3"/>'
+    joshuasurvey:'<path d="M26 18h48v64H26Z"/><path d="M34 30h32M34 42h32M34 54h22"/><path d="M60 62l14 14-6 6-14-14Z"/>',
+    trailer:'<rect x="14" y="30" width="72" height="44" rx="6"/><path d="M14 44h72M26 62l10-10 10 8 12-12 8 8"/><circle cx="78" cy="30" r="8"/>',
+    wheelofmisfortune:'<circle cx="50" cy="50" r="40"/><path d="M50 10v80M10 50h80"/><path d="M50 50L50 10A40 40 0 0 1 90 50Z" fill="currentColor" opacity="0.3"/>',
+    musicalchairs:'<path d="M20 70h60M28 70V40h44v30"/><path d="M18 40h48l-8-14H26Z"/><path d="M44 26V14M38 14h12"/>',
+    russianroulette:'<circle cx="50" cy="52" r="26"/><circle cx="50" cy="52" r="8"/><path d="M50 26V16M50 16l-10 6M50 16l10 6M36 34l-8-8M64 34l8-8"/><path d="M64 68l14 14"/>',
+    memorymayhem:'<circle cx="36" cy="42" r="12"/><circle cx="64" cy="42" r="12"/><path d="M48 42h4"/><path d="M30 66q20 18 40 0"/><path d="M40 74h20"/>',
+    bankrobbery:'<rect x="16" y="44" width="68" height="40" rx="5"/><circle cx="50" cy="62" r="12"/><path d="M50 50v24M38 62h24"/><path d="M30 44V32a20 20 0 0 1 40 0v12"/>',
+    pointswap:'<path d="M22 38h40l-12-12"/><path d="M78 62H38l12 12"/><path d="M22 38v10M78 62V52"/>',
+    hostage:'<circle cx="50" cy="34" r="14"/><path d="M36 50h28v34H36Z"/><path d="M28 30h44"/><path d="M44 50v-8M56 50v-8"/>',
+    president:'<path d="M50 18l8 12h-16Z"/><path d="M24 84l8-34 18 14 18-14 8 34Z"/><path d="M36 30l6-10 8 12 8-12 6 10"/>',
+    mimic:'<path d="M20 62c0-20 14-34 30-34s30 14 30 34"/><path d="M34 60h.01M50 60h.01M66 60h.01"/><path d="M38 74q12 10 24 0"/><path d="M64 34l14-12"/>',
+    dehydrated:'<path d="M50 14c-14 20-22 30-22 42a22 22 0 0 0 44 0c0-12-8-22-22-42Z"/><path d="M40 58a10 10 0 0 0 10 10"/>',
+    nothing:'<circle cx="50" cy="50" r="28"/><path d="M40 44h.01M60 44h.01"/><path d="M40 62q10-6 20 0"/>',
+    reverseofdoom:'<circle cx="50" cy="50" r="26"/><path d="M50 24v26l16 10"/><path d="M50 14l8 8M50 14l-8 8M50 86l8-8M50 86l-8-8"/>',
+    support:'<path d="M30 24h40a6 6 0 0 1 6 6v26a6 6 0 0 1-6 6H42l-14 12V36a6 6 0 0 1 2-12Z"/><path d="M40 42h20M40 52h14"/>'
   };
   function icon(id){return '<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+shapes[id]+'</svg>';}
   let current=cards[0],timeline=null,context=null,gl=null,manifest=null,serial=0,ready=false,paused=false,touring=false,tourTimer=null,lastTime=0,frames=0,frameMs=0,ticking=false,released=false,handles=[],cache=new Map(),loads=new Map();
@@ -40,10 +54,32 @@
  // All 22 catalog cards now ship compiled originals.
  // Wheel of Misfortune is listed and previewed, but its binary is not compiled
  // yet (see manifest.awaitingCompilation), so it shows the emblem treatment.
+ // The OWNER-ONLY cards appear in the GALLERY and nowhere else. They have
+ // their own metadata here rather than in the cinematic catalogue, because
+ // the cinematics are the public showcase and these two must never be in it.
+ const OWNER_CARDS = {
+  joshuasurvey: { color: '#ffd16b', title: 'Ten questions, the owner decides',
+    motif: 'A sheet of questions, a pencil, and a very large stamp.',
+    duration: 4.6, variants: ['A question is drawn', 'Everybody answers', 'The owner judges'],
+    caption: 'AN ACCEPTED ANSWER EARNS 50,000 POINTS · THE OWNER DECIDES' },
+  trailer: { color: '#ff4081', title: 'Did you like the trailer?',
+    motif: 'A projector whirs up in the dark and a big score lands.',
+    duration: 4.8, variants: ['Choose an opponent', 'The trailer plays'],
+    caption: 'NO SKIP · NO FAST FORWARD · THE TRAILER PLAYS OVER THEIR GAME' }
+ };
+
+ // The gallery's own metadata, with the owner-only cards folded in.
+ function meta(id) {
+  return catalog[id] || OWNER_CARDS[id] || { color: '#888', title: id, motif: '', duration: 3, variants: [], caption: '' };
+ }
 const HAS_EFK = {
   bonus:true, knife:true, hunter:true, zombie:true, steal:true, judge:true, reveal:true,
   skipall:true, trick:true, stealturn:true, curse:true, ghost:true, alvin:true, phoenix:true,
-  dice:true, rps:true, betrayal:true, speed:true, wheel:true, linkedfate:true, impostor:true, swapper:true
+  dice:true, rps:true, betrayal:true, speed:true, wheel:true, linkedfate:true, impostor:true, swapper:true,
+  // The expansion. Every one of these has a compiled binary of its own.
+  musicalchairs:true, russianroulette:true, memorymayhem:true, bankrobbery:true,
+  pointswap:true, hostage:true, president:true, mimic:true, dehydrated:true,
+  nothing:true, reverseofdoom:true, support:true, wheelofmisfortune:true
 };
 
 function load(id){
@@ -117,12 +153,13 @@ function load(id){
     if(!low&&ready){gsap.ticker.add(render);ticking=true;}text('renderer-status',low?'Reduced motion · no particles':ready?'Playing · capped 30 fps · no sound':'Playing static fallback · no sound');timeline.play(0);if(document.hidden){timeline.pause();paused=true;$('pause').textContent='Resume';}
   }
   async function play(){const ticket=++serial;halt();clearCanvas();$('replay').disabled=true;text('renderer-status','Loading this card’s particles…');try{const effect=ready&&!reduced()?await load(current.id):null;if(ticket!==serial||released)return;build(effect);}catch(error){if(ticket===serial){report(error);build(null);}}finally{if(ticket===serial)$('replay').disabled=false;}}
-  function select(id,fromTour){if(!fromTour){touring=false;$('tour').setAttribute('aria-pressed','false');$('tour').textContent='Play all 14';}current=PhoenixCards.byId(id);const def=catalog[id];document.documentElement.style.setProperty('--accent',def.color);text('study-number','STUDY '+String(cards.indexOf(current)+1).padStart(2,'0')+' / 14');text('study-title',def.title);text('stage-card-name',current.name.toUpperCase());text('card-name',current.name);text('card-rule',current.rule);text('motif',def.motif);$('hero').innerHTML=$('card-emblem').innerHTML=icon(id);$('variant').replaceChildren();def.variants.forEach(name=>{const o=document.createElement('option');o.textContent=name;$('variant').appendChild(o);});const budget=manifest&&manifest.effects.find(e=>e.id===id);text('budget',def.duration+'s composition · '+(budget?budget.maxParticles+' particles maximum · ':'')+'one active effect · bounded resolution');document.querySelectorAll('#card-list button').forEach(b=>{b.classList.toggle('active',b.dataset.card===id);b.setAttribute('aria-pressed',String(b.dataset.card===id));});history.replaceState(null,'','#'+id);return play();}
+  function select(id,fromTour){if(!fromTour){touring=false;$('tour').setAttribute('aria-pressed','false');$('tour').textContent='Play all '+cards.length;}current=PhoenixCards.byId(id);const def=meta(id);document.documentElement.style.setProperty('--accent',def.color);text('study-number','STUDY '+String(cards.indexOf(current)+1).padStart(2,'0')+' / '+cards.length);text('study-title',def.title);text('stage-card-name',current.name.toUpperCase());text('card-name',current.name);text('card-rule',current.rule);text('motif',def.motif);$('hero').innerHTML=$('card-emblem').innerHTML=icon(id);$('variant').replaceChildren();def.variants.forEach(name=>{const o=document.createElement('option');o.textContent=name;$('variant').appendChild(o);});const budget=manifest&&manifest.effects.find(e=>e.id===id);text('budget',def.duration+'s composition · '+(budget?budget.maxParticles+' particles maximum · ':'')+'one active effect · bounded resolution');document.querySelectorAll('#card-list button').forEach(b=>{b.classList.toggle('active',b.dataset.card===id);b.setAttribute('aria-pressed',String(b.dataset.card===id));});history.replaceState(null,'','#'+id);return play();}
   function pause(){if(!timeline)return;paused=!paused;paused?timeline.pause():timeline.resume();if(!paused)lastTime=timeline.time();$('pause').textContent=paused?'Resume':'Pause';}
-  cards.forEach((card,i)=>{const b=document.createElement('button');b.type='button';b.dataset.card=card.id;b.style.setProperty('--card-color',catalog[card.id].color);b.innerHTML='<span class="catalog-index">'+String(i+1).padStart(2,'0')+'</span><span class="catalog-icon" aria-hidden="true">'+icon(card.id)+'</span><span class="catalog-name"></span>';b.lastChild.textContent=card.name;b.addEventListener('click',()=>select(card.id,false));$('card-list').appendChild(b);});
-  $('replay').onclick=play;$('pause').onclick=pause;$('variant').onchange=play;$('reduced').onchange=play;$('quality').onchange=play;$('tour').onclick=()=>{touring=!touring;$('tour').setAttribute('aria-pressed',String(touring));$('tour').textContent=touring?'Stop tour':'Play all 14';play();};
+  cards.forEach((card,i)=>{const b=document.createElement('button');b.type='button';b.dataset.card=card.id;b.style.setProperty('--card-color',meta(card.id).color);b.innerHTML='<span class="catalog-index">'+String(i+1).padStart(2,'0')+'</span><span class="catalog-icon" aria-hidden="true">'+icon(card.id)+'</span><span class="catalog-name"></span>';b.lastChild.textContent=card.name;
+if(card.ownerOnly){const tag=document.createElement('span');tag.className='catalog-owner';tag.textContent='OWNER EXCLUSIVE';b.appendChild(tag);}b.addEventListener('click',()=>select(card.id,false));$('card-list').appendChild(b);});
+  $('replay').onclick=play;$('pause').onclick=pause;$('variant').onchange=play;$('reduced').onchange=play;$('quality').onchange=play;$('tour').onclick=()=>{touring=!touring;$('tour').setAttribute('aria-pressed',String(touring));$('tour').textContent=touring?'Stop tour':'Play all '+cards.length;play();};
   let autoPaused=false;document.addEventListener('visibilitychange',()=>{if(document.hidden){clearTimeout(tourTimer);if(timeline&&!paused&&timeline.progress()<1){pause();autoPaused=true;}}else if(autoPaused){autoPaused=false;if(paused)pause();}else if(touring&&timeline&&timeline.progress()===1)tourTimer=setTimeout(()=>select(cards[(cards.indexOf(current)+1)%cards.length].id,true),900);});
-  media.addEventListener('change',()=>{$('reduced').checked=media.matches;play();});document.addEventListener('keydown',e=>{if(e.key==='Escape'){touring=false;halt();clearCanvas();text('renderer-status','Stopped · renderer idle');$('tour').textContent='Play all 14';$('tour').setAttribute('aria-pressed','false');}});
+  media.addEventListener('change',()=>{$('reduced').checked=media.matches;play();});document.addEventListener('keydown',e=>{if(e.key==='Escape'){touring=false;halt();clearCanvas();text('renderer-status','Stopped · renderer idle');$('tour').textContent='Play all '+cards.length;$('tour').setAttribute('aria-pressed','false');}});
   async function release(){released=true;serial++;halt();await Promise.allSettled(Array.from(loads.values()));if(context){for(const effect of cache.values())context.releaseEffect(effect);cache.clear();effekseer.releaseContext(context);context=null;}canvas.width=canvas.height=1;}
   addEventListener('pagehide',release);
   window.PhoenixCardGallery={select:id=>select(id,false),replay:play,pause,release,inspect:()=>{let bright=0,hash=0;if(gl&&!gl.isContextLost()){const b=new Uint8Array(canvas.width*canvas.height*4);gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,b);for(let i=0;i<b.length;i+=4){if(b[i]+b[i+1]+b[i+2]>50&&b[i+3]>10)bright++;hash=(Math.imul(hash,31)+b[i]+3*b[i+1]+7*b[i+2])>>>0;}}return {card:current.id,variant:$('variant').selectedIndex,ready,paused,time:timeline?timeline.time():0,frames,bright,hash,width:canvas.width,height:canvas.height,cache:cache.size,loading:loads.size,ticking,touring,reduced:reduced(),...diagnostics};}};

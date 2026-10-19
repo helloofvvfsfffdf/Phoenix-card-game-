@@ -362,6 +362,213 @@
       blurb: 'Spin for one of eight terrible outcomes.',
       rule: 'Spin a wheel for one of eight random outcomes: take out a loan (lose 40,000), become a puppet master, go invisible, restart the match, everyone gets Phoenix, nothing happens, go to -100,000, or instant victory.',
       targetNote: 'No target: the wheel decides your fate.'
+    },
+    /* ---------------------------------------------------------------------
+     * The PHOENIX expansion.
+     *
+     * `kind` is the card's TYPE - neutral, evil, chaos, special or
+     * legendary - and it is what Judge, the collection screen and the
+     * galleries read. The EVIL_CARDS list above is what the RULES read, so
+     * both have to agree; isEvil() checks the list, and the test suite
+     * checks the two against each other.
+     *
+     * `ownerOnly` cards are the two the owner alone may play, in the owner
+     * server only. They are never dealt into an ordinary lobby - the DECK
+     * COMPOSITION in js/rules.js leaves them out and the server refuses to
+     * add them anywhere else - and they are hidden from the collection and
+     * from the cinematics.
+     * ------------------------------------------------------------------- */
+    {
+      id: 'musicalchairs',
+      name: 'Musical Chairs',
+      short: 'Chairs',
+      glyph: '\u{1F3B5}',
+      tone: 'musical',
+      kind: 'neutral',
+      needsTarget: false,
+      inLiveGame: true,
+      blurb: 'Music stops. Last to press loses 10,000.',
+      rule: 'Music plays for an unpredictable time, then stops. Press your button AFTER the music stops. The last eligible player to press loses 10,000 points. Pressing too early disables your button for 10 seconds.',
+      targetNote: 'No target: everybody at the table plays.'
+    },
+    {
+      id: 'russianroulette',
+      name: 'Russian Roulette',
+      short: 'Roulette',
+      glyph: '\u{1F3AF}',
+      tone: 'roulette',
+      kind: 'evil',
+      needsTarget: true,
+      inLiveGame: true,
+      blurb: 'A revolver, six chambers and a friend.',
+      rule: 'Choose an opponent to hold the revolver. Each resolution the odds of the losing outcome rise, from one in six to a certainty on the sixth. On a safe result the targeted player takes the revolver and picks the next target. The first losing result ends it, and the targeted player is eliminated for 3 rounds.',
+      targetNote: 'Pick one opponent to hold the revolver.'
+    },
+    {
+      id: 'memorymayhem',
+      name: 'Memory Mayhem',
+      short: 'Memory',
+      glyph: '\u{1F9E0}',
+      tone: 'memory',
+      kind: 'neutral',
+      needsTarget: false,
+      inLiveGame: true,
+      blurb: 'Three sequences. The weakest memory pays.',
+      rule: 'Three symbol sequences of increasing difficulty are shown. Every player tries to reproduce them. The player with the lowest accuracy across all three loses 8,000 points, with response time as the tiebreaker.',
+      targetNote: 'No target: everybody at the table plays.'
+    },
+    {
+      id: 'bankrobbery',
+      name: 'Bank Robbery',
+      short: 'Robbery',
+      glyph: '\u{1F3E6}',
+      tone: 'bank',
+      kind: 'evil',
+      needsTarget: false,
+      inLiveGame: true,
+      blurb: 'Rob the richest player at the table.',
+      rule: 'The opponent with the highest positive score is robbed. You take 25% of their positive points, up to 25,000 points, and it is added to your score.',
+      targetNote: 'No target: the richest opponent is robbed.'
+    },
+    {
+      id: 'pointswap',
+      name: 'Point Swap',
+      short: 'Swap',
+      glyph: '\u{1F501}',
+      tone: 'pointswap',
+      kind: 'chaos',
+      needsTarget: true,
+      inLiveGame: true,
+      blurb: 'Trade scores with a random opponent.',
+      rule: 'Choose an opponent. You and they exchange your ENTIRE scores. Negative scores are perfectly valid, and nobody is clamped to zero.',
+      targetNote: 'Pick one opponent to trade scores with.'
+    },
+    {
+      id: 'hostage',
+      name: 'Hostage Situation',
+      short: 'Hostage',
+      glyph: '\u{1F52B}',
+      tone: 'hostage',
+      kind: 'evil',
+      needsTarget: true,
+      inLiveGame: true,
+      blurb: 'Take a hostage. Call the police.',
+      rule: 'You become the criminal and take an opponent hostage, controlling their choices on their turns. A third player is randomly made the police officer and must gain 40,000 points net before the hostage is released. When the hostage is released you are eliminated for 5 rounds and lose half your score.',
+      targetNote: 'Pick one opponent to hold hostage.'
+    },
+    {
+      id: 'president',
+      name: 'President',
+      short: 'President',
+      glyph: '\u{1F396}',
+      tone: 'president',
+      kind: 'special',
+      needsTarget: false,
+      inLiveGame: true,
+      blurb: 'Rule the table for five rounds.',
+      rule: 'You are president for 5 rounds and earn 5,000 points for every round you complete. As president you may ban card types for everyone - including yourself. Banned cards stay in hands but cannot be played, and a player with no legal card simply skips their turn.',
+      targetNote: 'No target: the whole table is affected.'
+    },
+    {
+      id: 'joshuasurvey',
+      name: 'Joshua Survey',
+      short: 'Survey',
+      glyph: '\u{1F4CB}',
+      tone: 'survey',
+      kind: 'owner',
+      ownerOnly: true,
+      inDeck: false,
+      // NOT in the ordinary live game: an owner room deals these two by name,
+      // and nowhere else does. This keeps them out of the public deck, out
+      // of the AI relay's card list and out of the cinematics.
+      inLiveGame: false,
+      needsTarget: false,
+      blurb: 'Ten questions. The owner decides who is right.',
+      rule: 'One question is drawn at random and every player answers in their own words. The owner reads the answers and accepts or declines each one. An accepted answer earns 50,000 points; a declined one earns nothing.',
+      targetNote: 'No target: every player at the table answers.'
+    },
+    {
+      id: 'trailer',
+      name: 'Did You Like the Trailer?',
+      short: 'Trailer',
+      glyph: '\u{1F3AC}',
+      tone: 'trailer',
+      kind: 'owner',
+      ownerOnly: true,
+      inDeck: false,
+      // NOT in the ordinary live game: an owner room deals these two by name,
+      // and nowhere else does. This keeps them out of the public deck, out
+      // of the AI relay's card list and out of the cinematics.
+      inLiveGame: false,
+      needsTarget: true,
+      blurb: 'The trailer plays. There is no skip.',
+      rule: 'Choose an opponent and the official PHOENIX trailer plays over their game. It cannot be skipped or fast-forwarded, and their game resumes when it ends.',
+      targetNote: 'Pick one opponent to watch the trailer.'
+    },
+    {
+      id: 'mimic',
+      name: 'The Mimic',
+      short: 'Mimic',
+      glyph: '\u{1F3AD}',
+      tone: 'mimic',
+      kind: 'evil',
+      needsTarget: true,
+      inLiveGame: true,
+      blurb: 'Hand over a card that is not what it looks like.',
+      rule: 'Choose an opponent, then choose an ordinary card to disguise. The target receives a card that looks exactly like it - same name, artwork and rules - but when they play it the real effect never happens. Instead, they are Rickrolled. The Mimic is used up afterwards.',
+      targetNote: 'Pick one opponent, then the card to disguise.'
+    },
+    {
+      id: 'dehydrated',
+      name: 'Dehydrated? Maybe Drink Some Water',
+      short: 'Water',
+      glyph: '\u{1F4A7}',
+      tone: 'dehydrated',
+      kind: 'evil',
+      needsTarget: true,
+      inLiveGame: true,
+      blurb: 'Their screen goes round and round.',
+      rule: 'The target is told they seem dehydrated. Their whole game interface rotates for 5 complete rounds. Everything stays reachable - the cards still play - it is just extremely annoying.',
+      targetNote: 'Pick one opponent.'
+    },
+    {
+      id: 'nothing',
+      name: 'Nothing',
+      short: 'Nothing',
+      glyph: '\u{1F610}',
+      tone: 'nothing',
+      kind: 'neutral',
+      needsTarget: false,
+      inLiveGame: true,
+      blurb: 'This card does nothing. What did you expect?',
+      rule: 'This card does nothing. What did you expect?',
+      targetNote: 'No target: nothing happens to anybody.'
+    },
+    {
+      id: 'reverseofdoom',
+      name: 'The Uno Reverse of Doom',
+      short: 'Doom',
+      glyph: '\u{1F500}',
+      tone: 'doom',
+      kind: 'legendary',
+      needsTarget: false,
+      inLiveGame: true,
+      blurb: 'A secret trap that turns harm around.',
+      rule: 'For 3 complete rounds a secret trap waits on you. The next opponent who aims a harmful card at you sets it off: the effect is cancelled and reflected back at twice its strength. Nobody is told the trap is there. It is used up when it fires, or it expires after 3 rounds.',
+      targetNote: 'No target: the trap is set on you.'
+    },
+    {
+      id: 'support',
+      name: 'PHOENIX Entertainment Customer Support',
+      short: 'Support',
+      glyph: '\u{1F3DE}',
+      tone: 'support',
+      kind: 'chaos',
+      needsTarget: true,
+      inLiveGame: true,
+      blurb: 'A complaint form, and a very small apology.',
+      rule: 'The target is handed a customer support complaint form. Whatever they pick, the reply is the same: your complaint has been rejected. Then they get one of three outcomes - lose 5,000 points, skip their next turn, or receive 1 point in compensation. You keep 10,000 points as an administration fee.',
+      targetNote: 'Pick one opponent to complain to.'
     }
   ];
 

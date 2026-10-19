@@ -67,7 +67,14 @@
     rps: 'PhoenixRpsInteractive', betrayal: 'PhoenixBetrayalInteractive',
     speed: 'PhoenixSpeedInteractive', wheel: 'PhoenixWheelInteractive', wheelofmisfortune: 'PhoenixWheelInteractive',
     dice: 'PhoenixDiceInteractive', linkedfate: 'PhoenixLinkedFateInteractive',
-    impostor: 'PhoenixImpostorInteractive', swapper: 'PhoenixSwapperInteractive'
+    impostor: 'PhoenixImpostorInteractive', swapper: 'PhoenixSwapperInteractive',
+    musicalchairs: 'PhoenixMusicalChairsInteractive',
+    russianroulette: 'PhoenixRussianRouletteInteractive',
+    memorymayhem: 'PhoenixMemoryMayhemInteractive',
+    mimic: 'PhoenixMimicInteractive',
+    support: 'PhoenixSupportInteractive',
+    joshuasurvey: 'PhoenixJoshuaSurveyInteractive',
+    trailer: 'PhoenixTrailerInteractive'
   };
   let activeInteractionModule = null;
   let interactionKey = null;
@@ -129,11 +136,14 @@
     if (mod && typeof mod.build === 'function') {
       activeInteractionModule = name;
       interactionKey = pi.createdAt;
-      mod.build();
+      mod.build(pi.type);
       if (typeof mod.onState === 'function') mod.onState(message);
       if (pi.type === 'speed') return; // Speed owns its ready/countdown/reaction controls.
       const myId = message.players[message.seat] && message.players[message.seat].id;
-      const eligible = (pi.participants || []).includes(myId) && (pi.type !== 'wheel' || pi.actorId === myId);
+      // Only the caster spins a wheel: the Wheel of Fortune and the Wheel of
+      // Misfortune both belong to the player who played the card.
+      const casterOnly = pi.type === 'wheel' || pi.type === 'wheelofmisfortune';
+      const eligible = (pi.participants || []).includes(myId) && (!casterOnly || pi.actorId === myId);
       const locked = (pi.submitted || []).includes(myId);
       document.querySelectorAll('.interactive-overlay button, .interactive-overlay input').forEach(el => {
         el.disabled = !eligible || locked;
@@ -550,6 +560,17 @@
           $('menu-feedback').textContent = message.message;
         }
       } else if (message.type === 'effect') {
+      } else if (message.type === 'rickroll') {
+        // The Mimic's prank. The SERVER is holding this player's turn;
+        // the video is simply what they see while it does.
+        showMimicRickroll();
+        return;
+      } else if (message.type === 'mimicRickroll') {
+        // THE MIMIC. The card was a disguise, so its real effect never
+        // happened - and the player is Rickrolled instead.
+        showMimicRickroll();
+        return;
+      } else if (message.type === 'effect') {
         if (window.PhoenixCinematics) window.PhoenixCinematics.show(message.effect, 'online-screen');
       } else if (message.type === 'state') {
         const previous = state;
@@ -561,6 +582,7 @@
         render();
         updateInteraction(message);
         if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.observe(previous, message);
+        maybeFakeShutdown(message.effects);
         if (window.PhoenixCinematics) window.PhoenixCinematics.consume(message.effects);
         if (window.PhoenixCinematics) window.PhoenixCinematics.match(message);
       }
@@ -1196,15 +1218,80 @@ function renderPlaying() {
 
     if (!state.acting) {
       const chooser=state.pending && state.players.find(p=>p.id===state.pending.chooserId);
+      // A HOSTAGE is told that their captor is playing their turn, so the
+      // silence is explained rather than mysterious.
+      const held = state.hostage && state.players.find(p=>p.id===state.hostage.hostageId);
+      if (held && held.id === (state.players[state.seat] || {}).id) {
+        const criminal = state.players.find(p=>p.id===state.hostage.criminalId);
+        actions.append(el('p', 'online-hostage-note',
+          '🔒 You are being held hostage. ' + (criminal ? criminal.name : 'Your captor') + ' is playing your turn.'));
+        return;
+      }
       actions.append(el('p', '', chooser ? 'Waiting for '+chooser.name+' to make the required choice.' : 'Waiting for your turn.'));
       return;
+    }
+
+    // A HOSTAGE'S TURN: the criminal plays it, from the hostage's hand.
+    const hostageHand = state.hostageHand || null;
+    if (hostageHand) {
+      const hostage = state.hostage && state.players.find(function (p) { return p.id === state.hostage.hostageId; });
+      actions.append(el('p', 'online-hostage-note',
+        '🔒 You are the criminal. You are playing ' + (hostage ? hostage.name : 'the hostage') +
+        "'s turn, and these are their cards."));
     }
 
     actions.append(el(
       'h3',
       '',
-      state.pending && state.pending.kind==='burn' ? 'Choose a card to destroy — Alvin' : state.pending ? 'Choose the card for this stolen turn' : 'Your turn — choose a card'
+      hostageHand ? 'Choose a card for the hostage'
+        : state.pending && state.pending.kind==='burn' ? 'Choose a card to destroy — Alvin'
+        : state.pending ? 'Choose the card for this stolen turn'
+        : 'Your turn — choose a card'
     ));
+
+    // THE PRESIDENT'S POLICY MENU. Bans bind everybody, the President
+    // included, and the President may only pass one on their own turn.
+    if (state.president) {
+      const president = state.president;
+      const isPresident = president.id === (state.players[state.seat] || {}).id;
+      const myTurn = state.acting;
+      const policy = el('div', 'online-policy');
+      policy.appendChild(el('h3', '', 'PRESIDENTIAL POLICY'));
+      policy.appendChild(el(
+        'p',
+        'online-policy-note',
+        isPresident
+          ? 'You are President. Pass a ban on your own turn, and lift one on anybody else\'s turn.'
+          : playerName(president.id) + ' is President. ' + (state.bannedCards || []).length + ' card type(s) banned.'
+      ));
+      const cards = window.PhoenixCards;
+      if (cards) {
+        const banned = state.bannedCards || [];
+        cards.CARDS.filter(function (c) {
+          return !c.ownerOnly && c.inDeck !== false && c.inLiveGame !== false;
+        }).forEach(function (card) {
+          const row = el('div', 'online-policy-row');
+          row.appendChild(el('span', '', card.name));
+          const isBanned = banned.indexOf(card.id) !== -1;
+          if (isBanned) {
+            row.appendChild(el('span', 'online-policy-banned', 'BANNED'));
+            if (isPresident && !myTurn) {
+              const lift = el('button', 'online-secondary', 'LIFT');
+              lift.type = 'button';
+              lift.onclick = function () { send({ type: 'president_ban', cardId: card.id, remove: true }); };
+              row.appendChild(lift);
+            }
+          } else if (isPresident && myTurn) {
+            const ban = el('button', 'online-secondary', 'BAN');
+            ban.type = 'button';
+            ban.onclick = function () { send({ type: 'president_ban', cardId: card.id }); };
+            row.appendChild(ban);
+          }
+          actions.appendChild(row);
+        });
+      }
+      actions.appendChild(policy);
+    }
 
     if (!state.moves.length) {
       actions.append(el('p', '', 'No legal moves available.'));
@@ -1346,6 +1433,13 @@ function renderPlaying() {
     // renderPiles() no-ops until the match has actually started.
     renderPiles();
 
+    // THE MIMIC'S PRANK. The server is holding this player's turn, so their
+    // controls are locked until the video is over.
+    document.body.classList.toggle('phoenix-rickroll-locked', !!s.watchingVideo);
+
+    // THE DEHYDRATED EFFECT. The target's whole screen turns for five rounds.
+    if (window.PhoenixDehydrated) window.PhoenixDehydrated.apply(!!s.dehydrated);
+
     renderHand();
     renderLog();
     if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.decorate('online-screen');
@@ -1360,6 +1454,36 @@ function renderPlaying() {
    * name by typing it. If the badge module is not on this page, this is a
    * no-op - matches must never depend on it.
    */
+  /** A player's display name, by their id. */
+  function playerName(id) {
+    if (!id || !state || !state.players) return '';
+    const found = state.players.filter(function (p) { return p.id === id; })[0];
+    return found ? found.name : id;
+  }
+
+  /** The Mimic's prank. */
+  function showMimicRickroll() {
+    if (window.PhoenixMimicRickroll) window.PhoenixMimicRickroll.show();
+  }
+
+  /**
+   * The secret Fake System Shutdown.
+   *
+   * Every successful card play has an independent five percent chance of
+   * triggering it for the player who played the card. It is the browser's
+   * own event, entirely inside this page: nothing here asks the operating
+   * system for anything, and the browser's own controls are never touched.
+   */
+  let lastEffectSequence = -1;
+  function maybeFakeShutdown(effects) {
+    if (!effects || !Array.isArray(effects.events)) return;
+    if (effects.sequence === lastEffectSequence) return;
+    lastEffectSequence = effects.sequence;
+    const played = effects.events.some(function (e) { return e.key && e.type === 'card'; });
+    if (!played) return;
+    if (window.PhoenixFakeShutdown) window.PhoenixFakeShutdown.maybeTrigger();
+  }
+
   function badgesFor(player) {
     const badges = window.PhoenixBadges;
     if (!badges || typeof badges.chips !== 'function') return null;
@@ -1418,14 +1542,18 @@ function renderPlaying() {
 
     if (!state.started) return;
 
-    hand.append(el('h3', '', 'Your private hand'));
+    // A HOSTAGE'S HAND. The criminal is the one who chooses from it, so it
+    // is shown to them while they hold the hostage.
+    const hostageHand = state.hostageHand || null;
+    const shownHand = hostageHand || state.hand;
+    hand.append(el('h3', '', hostageHand ? 'The hostage\'s hand — you choose for them' : 'Your private hand'));
 
     // A grid of real card faces, not a list of words. Ted's fog wins over
     // everything: if the server says this hand is concealed, no card in it is
     // drawn, whatever it actually is.
     const grid = el('div', 'online-card-grid online-private-cards');
 
-    state.hand.forEach((id, index) => {
+    shownHand.forEach((id, index) => {
       const card = window.PhoenixCards.byId(id);
 
       if (!card) {

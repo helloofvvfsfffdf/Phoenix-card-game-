@@ -39,7 +39,7 @@ async function run(players, allyOffset) {
           await m.decide(id, decision);
         }
       } else {
-        const actor = m.clients.find(c => c.state.acting);
+        const actor = require('./helpers/acting-client')(m.clients);
         assert(actor && actor.state.moves.length, 'server offers an actionable move');
         const moves = actor.state.moves;
         const move = moves.find(move => !cards.has(move.cardId)) || moves[actions % moves.length];

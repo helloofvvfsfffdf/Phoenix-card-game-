@@ -23,7 +23,21 @@
     linkedfate:'<path d="M25 30q25 20 0 40M75 30q-25 20 0 40"/><path d="M40 50h20"/><circle cx="30" cy="50" r="12"/><circle cx="70" cy="50" r="12"/>',
     impostor:'<path d="M30 20q20 30 0 60M70 20q-20 30 0 60"/><circle cx="50" cy="50" r="15"/><path d="M40 45h20M45 55h10"/>',
     swapper:'<path d="M25 40q25-20 50 0M25 60q25 20 50 0"/><path d="M40 30l-15 10 15 10M60 70l15-10-15-10"/>',
-    wheelofmisfortune:'<circle cx="50" cy="50" r="40"/><path d="M50 10v80M10 50h80"/><path d="M50 50L50 10A40 40 0 0 1 90 50Z" fill="currentColor" opacity="0.3"/><text x="50" y="55" text-anchor="middle" font-size="20">?</text>'
+    joshuasurvey:'<path d="M26 18h48v64H26Z"/><path d="M34 30h32M34 42h32M34 54h22"/><path d="M60 62l14 14-6 6-14-14Z"/>',
+    trailer:'<rect x="14" y="30" width="72" height="44" rx="6"/><path d="M14 44h72M26 62l10-10 10 8 12-12 8 8"/><circle cx="78" cy="30" r="8"/>',
+    wheelofmisfortune:'<circle cx="50" cy="50" r="40"/><path d="M50 10v80M10 50h80"/><path d="M50 50L50 10A40 40 0 0 1 90 50Z" fill="currentColor" opacity="0.3"/><text x="50" y="55" text-anchor="middle" font-size="20">?</text>',
+    musicalchairs:'<path d="M20 70h60M28 70V40h44v30"/><path d="M18 40h48l-8-14H26Z"/><path d="M44 26V14M38 14h12"/>',
+    russianroulette:'<circle cx="50" cy="52" r="26"/><circle cx="50" cy="52" r="8"/><path d="M50 26V16M50 16l-10 6M50 16l10 6M36 34l-8-8M64 34l8-8"/><path d="M64 68l14 14"/>',
+    memorymayhem:'<circle cx="36" cy="42" r="12"/><circle cx="64" cy="42" r="12"/><path d="M48 42h4"/><path d="M30 66q20 18 40 0"/><path d="M40 74h20"/>',
+    bankrobbery:'<rect x="16" y="44" width="68" height="40" rx="5"/><circle cx="50" cy="62" r="12"/><path d="M50 50v24M38 62h24"/><path d="M30 44V32a20 20 0 0 1 40 0v12"/>',
+    pointswap:'<path d="M22 38h40l-12-12"/><path d="M78 62H38l12 12"/><path d="M22 38v10M78 62V52"/>',
+    hostage:'<circle cx="50" cy="34" r="14"/><path d="M36 50h28v34H36Z"/><path d="M28 30h44"/><path d="M44 50v-8M56 50v-8"/>',
+    president:'<path d="M50 18l8 12h-16Z"/><path d="M24 84l8-34 18 14 18-14 8 34Z"/><path d="M36 30l6-10 8 12 8-12 6 10"/>',
+    mimic:'<path d="M20 62c0-20 14-34 30-34s30 14 30 34"/><path d="M34 60h.01M50 60h.01M66 60h.01"/><path d="M38 74q12 10 24 0"/><path d="M64 34l14-12"/>',
+    dehydrated:'<path d="M50 14c-14 20-22 30-22 42a22 22 0 0 0 44 0c0-12-8-22-22-42Z"/><path d="M40 58a10 10 0 0 0 10 10"/>',
+    nothing:'<circle cx="50" cy="50" r="28"/><path d="M40 44h.01M60 44h.01"/><path d="M40 62q10-6 20 0"/><text x="50" y="57" text-anchor="middle" font-size="22">?</text>',
+    reverseofdoom:'<circle cx="50" cy="50" r="26"/><path d="M50 24v26l16 10"/><path d="M50 14l8 8M50 14l-8 8M50 86l8-8M50 86l-8-8"/>',
+    support:'<path d="M30 24h40a6 6 0 0 1 6 6v26a6 6 0 0 1-6 6H42l-14 12V36a6 6 0 0 1 2-12Z"/><path d="M40 42h20M40 52h14"/>'
   };
   root.PhoenixCardCinematicArt={icon:function(id){return '<svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+(shapes[id]||'')+'</svg>';}};
 }(typeof globalThis!=='undefined'?globalThis:this));

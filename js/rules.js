@@ -84,16 +84,56 @@
     linkedfate: 4,  // link for shared gains
     impostor: 3,    // min 4 players, high impact
     swapper: 4,      // ally swap
-    wheelofmisfortune: 8  // evil wheel, more common
+    wheelofmisfortune: 8,  // evil wheel, more common
+    // --- the expansion ---
+    musicalchairs: 3,   // a table-wide minigame, so middling
+    russianroulette: 3,// evil, and it takes a target
+    memorymayhem: 3,   // a table-wide minigame
+    bankrobbery: 4,    // evil, and it picks its own victim
+    pointswap: 3,      // chaos
+    hostage: 3,        // evil and long-running
+    president: 2,      // special, and it shapes the whole match
+    mimic: 2,          // evil, rare, and it needs a disguise
+    dehydrated: 4,     // evil, and it is temporary
+    nothing: 3,        // neutral, and it does nothing at all
+    reverseofdoom: 2,  // legendary, and it is a trap
+    support: 3,        // chaos
     // Phoenix is NOT here. It can never be dealt, drawn or reshuffled - see
     // Cards.deckCards() and the phoenixAwarded flag below.
+    //
+    // Joshua Survey and Did You Like the Trailer? are NOT here either.
+    // They belong to the owner alone, in the owner server only, so they are
+    // added at deal time and never anywhere else.
   };
+
+  /**
+   * The owner-only cards, kept apart from the ordinary deck on purpose.
+   *
+   * They are only ever dealt into an OWNER room - a room created with the
+   * owner password - and never into a public or ordinary private lobby.
+   */
+  var OWNER_CARD_IDS = ['joshuasurvey', 'trailer'];
+
+  /** Whether a card may only ever be played by the owner, in an owner room. */
+  function isOwnerOnlyCard(cardId) {
+    return OWNER_CARD_IDS.indexOf(cardId) !== -1;
+  }
 
   /** The legendary card. Never in the deck; earned by winning a whole game. */
   var PHOENIX_CARD_ID = Cards.legendaryId();
 
   /** Cards dealt to every player before the first turn. */
-  var HAND_SIZE = 5;
+  /**
+   * Cards dealt to every player at the start of a match.
+   *
+   * Seven, and seven is also the ceiling: a hand is never allowed to hold
+   * more than HAND_LIMIT cards, so a player at the limit simply does not
+   * draw on their turn until they have played something away.
+   */
+  var HAND_SIZE = 7;
+
+  /** The most cards a player may hold at any one time. */
+  var HAND_LIMIT = 7;
 
   function deckSize() {
     return Cards.deckIds().reduce(function (n, id) {
@@ -481,7 +521,27 @@
       destroyed: [],
 
       // True once the legendary card has been played this game.
-      phoenixFired: false
+      phoenixFired: false,
+
+      // Whether the owner-only cards are in this game at all. True ONLY for
+      // an owner room; the server decides, never the client.
+      includeOwnerCards: options.includeOwnerCards === true,
+
+      // Card types the president has banned. A banned card stays in hands
+      // but cannot be played by anybody, the president included.
+      bannedCards: [],
+
+      // --- the expansion's own state ---
+      // A trap waiting on a player (The Uno Reverse of Doom).
+      traps: {},
+      // The rotation effect (Dehydrated), by player id.
+      dehydrated: {},
+      // The Mimic: which card each player is pretending to hold.
+      mimics: {},
+      // The presidency: who, until when, and what they have banned.
+      president: null,
+      // The hostage situation.
+      hostage: null
     };
 
     players.forEach(function (player) {
@@ -1353,6 +1413,136 @@
     return 'Phoenix is spent. It cannot be used again.';
   }
 
+  /* --- the expansion ------------------------------------------------- */
+
+  /**
+   * Bank Robbery: the richest opponent with a positive score is robbed of
+   * a quarter of their points, up to 25,000, and it goes to the thief.
+   */
+  function resolveBankRobbery(state, actor) {
+    var victims = opponents(state, actor.seat)
+      .filter(function (p) { return p.enabled && p.points > 0; })
+      .sort(function (a, b) { return (b.points - a.points) || (a.seat - b.seat); });
+    if (!victims.length) {
+      return 'Bank Robbery - there is nothing worth stealing at this table.';
+    }
+    var victim = victims[0];
+    var amount = Math.min(25000, Math.floor(victim.points * 0.25));
+    victim.points -= amount;
+    actor.points += amount;
+    return 'Bank Robbery - ' + actor.name + ' robs ' + victim.name + ' of ' +
+      formatPoints(amount) + ' points.';
+  }
+
+  /** Point Swap: the two players trade their entire scores. */
+  function resolvePointSwap(state, actor, target) {
+    if (!target) return 'Point Swap - there is nobody to trade with.';
+    var mine = actor.points;
+    var theirs = target.points;
+    actor.points = theirs;
+    target.points = mine;
+    return 'Point Swap - ' + actor.name + ' and ' + target.name + ' trade scores.';
+  }
+
+  /** Dehydrated: the target's interface turns for five rounds. */
+  function resolveDehydrated(state, actor, target) {
+    if (!target) return 'Dehydrated - nobody to hydrate.';
+    state.dehydrated[target.id] = { untilRound: state.round + 5 };
+    return 'Dehydrated - ' + target.name + ' is told they seem dehydrated.';
+  }
+
+  /** Nothing: nothing at all happens. */
+  function resolveNothing(state, actor) {
+    return 'Nothing - ' + actor.name + ' played Nothing. Nothing happened.';
+  }
+
+  /** The Uno Reverse of Doom: a secret trap for three rounds. */
+  function resolveReverseOfDoom(state, actor) {
+    state.traps[actor.id] = { untilRound: state.round + 3 };
+    return 'The Uno Reverse of Doom - a secret trap waits on ' + actor.name + '.';
+  }
+
+  /** The Mimic: the target is handed a card that is not what it looks like. */
+  function resolveMimic(state, actor, target, disguise) {
+    if (!target) return 'The Mimic - there is nobody to hand it to.';
+    var face = disguise && Cards.byId(disguise) ? disguise : 'bonus';
+    state.mimics[target.id] = face;
+    var hand = handOf(state, target.id);
+    var at = hand.indexOf(face);
+    if (at !== -1) {
+      // They already hold that card, so the Mimic takes its place: a hand may
+      // only hold one of each type, and this keeps it that way.
+      hand[at] = 'mimic';
+    } else {
+      hand.push('mimic');
+      while (hand.length > HAND_LIMIT) {
+        state.discard.push(hand.shift());
+      }
+    }
+    return 'The Mimic - ' + target.name + ' is handed a ' + formatCard(face) + '.';
+  }
+
+  /** Customer Support: the target complains, and is rejected. */
+  function resolveSupport(state, actor, target) {
+    if (!target) return 'Customer Support - there is nobody to complain to.';
+    actor.points += 10000;
+    return 'Customer Support - ' + target.name + ' files a complaint. It is rejected.';
+  }
+
+  /** The President: five rounds, and 5,000 for every round completed. */
+  function resolvePresident(state, actor) {
+    state.president = { id: actor.id, untilRound: state.round + 5 };
+    actor.points += 5000;
+    return 'President - ' + actor.name + ' is President for 5 rounds.';
+  }
+
+  /** Hostage Situation: the criminal takes the hostage. */
+  function resolveHostage(state, actor, target) {
+    if (!target) return 'Hostage Situation - there is no hostage to take.';
+    var others = state.players.filter(function (p) {
+      return p.enabled && p.id !== actor.id && p.id !== target.id && !isOut(p, state);
+    });
+    if (!others.length) return 'Hostage Situation - there is nobody to call the police.';
+    var officer = others[Math.floor(random() * others.length)];
+    state.hostage = {
+      criminalId: actor.id, hostageId: target.id, officerId: officer.id,
+      officerStartPoints: officer.points, target: 40000
+    };
+    return 'Hostage Situation - ' + actor.name + ' holds ' + target.name +
+      ' hostage. ' + officer.name + ' is the police officer.';
+  }
+
+  /**
+   * Musical Chairs, in the engine: the server runs the real one, so this is the
+   * single-player shape of it - nobody wins, nobody loses, and the turn is
+   * simply spent.
+   */
+  function resolveMusicalChairs(state, actor) {
+    return 'Musical Chairs - the music plays, and then it stops.';
+  }
+
+  /** Russian Roulette, in the engine: the server runs the real one. */
+  function resolveRussianRoulette(state, actor, target) {
+    if (!target) return 'Russian Roulette - there is nobody to hold the revolver.';
+    return 'Russian Roulette - ' + target.name + ' holds the revolver.';
+  }
+
+  /** Memory Mayhem, in the engine: the server runs the real one. */
+  function resolveMemoryMayhem(state, actor) {
+    return 'Memory Mayhem - three sequences, each one longer than the last.';
+  }
+
+  /** Joshua Survey, in the engine: the server runs the real one. */
+  function resolveJoshuaSurvey(state, actor) {
+    return 'Joshua Survey - one question, and every player answers.';
+  }
+
+  /** Did You Like the Trailer?, in the engine: the server runs the real one. */
+  function resolveTrailer(state, actor, target) {
+    if (!target) return 'Did You Like the Trailer? - there is nobody to show it to.';
+    return 'Did You Like the Trailer? - ' + target.name + ' is watching the trailer.';
+  }
+
   var RESOLVERS = {
     bonus: resolveBonus,
     knife: resolveKnife,
@@ -1374,6 +1564,20 @@
     speed: resolveSpeed,
     wheel: resolveWheel,
     wheelofmisfortune: resolveWheelOfMisfortune,
+    musicalchairs: resolveMusicalChairs,
+    russianroulette: resolveRussianRoulette,
+    memorymayhem: resolveMemoryMayhem,
+    bankrobbery: resolveBankRobbery,
+    pointswap: resolvePointSwap,
+    hostage: resolveHostage,
+    president: resolvePresident,
+    joshuasurvey: resolveJoshuaSurvey,
+    trailer: resolveTrailer,
+    mimic: resolveMimic,
+    dehydrated: resolveDehydrated,
+    nothing: resolveNothing,
+    reverseofdoom: resolveReverseOfDoom,
+    support: resolveSupport,
     linkedfate: resolveLinkedFate,
     impostor: resolveImpostor,
     swapper: resolveSwapper
@@ -1545,6 +1749,40 @@
       events.push({ type: 'over', text: winnerLine(state) });
     }
 
+    return { ok: true, events: events, nextSeat: state.over ? -1 : state.turnInRound };
+  }
+
+  /**
+   * The Mimic is played by the person holding it.
+   *
+   * The effect the card pretends to have never happens - that is the whole
+   * point of the card. The Mimic is spent, the turn moves on, and the table
+   * sees nothing but a card that did nothing at all.
+   *
+   * @returns {{ok: boolean, error?: string, events: Array}}
+   */
+  function playMimic(state, seat) {
+    var actor = state.players[seat];
+    if (!actor) return { ok: false, error: 'Unknown player.', events: [] };
+    if (!holdsCard(state, actor.id, 'mimic')) {
+      return { ok: false, error: actor.name + ' does not hold a Mimic.', events: [] };
+    }
+    var events = [];
+    moveCardToDiscard(state, actor, 'mimic');
+    events.push({
+      type: 'card',
+      cardId: 'mimic',
+      seat: seat,
+      targetSeat: -1,
+      text: actor.name + ' plays the Mimic. Nothing happens.'
+    });
+    actor.turnsPlayed++;
+    actor.cardsPlayed.push('mimic');
+    var advanced = advanceTurn(state);
+    for (var i = 0; i < advanced.length; i++) events.push(advanced[i]);
+    if (state.over) {
+      events.push({ type: 'over', text: winnerLine(state) });
+    }
     return { ok: true, events: events, nextSeat: state.over ? -1 : state.turnInRound };
   }
 
@@ -1843,8 +2081,23 @@
       // holding. The turn stops until that choice is made - it is still their
       // turn, and it will be played for them once the chooser decides.
       if (isStealTurnDue(state, next)) {
-        events.push(forcedChoiceEvent(state));
-        break;
+        // A choice with nothing left to choose from lapses, rather than
+        // wedging the match with a question nobody can answer.
+        var choice = pendingChoiceOptions(state);
+        if (choice && choice.options.length) {
+          events.push(forcedChoiceEvent(state));
+          break;
+        }
+        state.pendingChoice = null;
+        events.push({
+          type: 'choice',
+          seat: next.seat,
+          text: 'Steal a Turn lapses - its target has no card they could play.'
+        });
+        next.turnsSkipped++;
+        movePastCurrentSeat(state, events);
+        if (state.over) break;
+        continue;
       }
       break;
     }
@@ -1885,6 +2138,10 @@
    * gets one: a turn is always "draw, then play", whoever opens the round.
    */
   function drawForTurn(state, player, events) {
+    // A hand is never allowed past the limit, so a player holding the full
+    // hand does not draw: they play a card away first and pick it up next
+    // turn. Nothing is lost - the deck is not reshuffled by the refusal.
+    if (handSize(state, player.id) >= HAND_LIMIT) return;
     var before = state.reshuffles;
     var drawn = drawCard(state, player);
     if (!drawn) return;
@@ -1969,12 +2226,21 @@
    */
   function deal(state) {
     var deck = [];
+    //
+    // The owner-only cards join the deck ONLY in an owner room, and only
+    // because the room asked for them. An ordinary lobby never deals them,
+    // never sees them and never lists them.
     // deckCards() excludes the legendary card, so Phoenix can never be dealt
     // however the counts are edited above.
     Cards.deckCards().forEach(function (card) {
       var count = DECK_COMPOSITION[card.id] || 0;
       for (var i = 0; i < count; i++) deck.push(card.id);
     });
+    // The two owner-only cards, added ONLY in an owner room. One copy each.
+    if (state.includeOwnerCards) {
+      OWNER_CARD_IDS.forEach(function (id) { deck.push(id); });
+    }
+
     shuffle(deck);
 
     state.deck = deck;
@@ -2022,7 +2288,13 @@
     var index = source.indexOf(cardId);
     if (index === -1) return false;
     source.splice(index, 1);
-    handOf(state, toId).push(cardId);
+    var hand = handOf(state, toId);
+    // A hand is never allowed past the limit, so a full hand gives up its
+    // oldest card to make room for the one it has just stolen.
+    if (hand.length >= HAND_LIMIT) {
+      state.discard.push(hand.shift());
+    }
+    hand.push(cardId);
     return true;
   }
 
@@ -2071,6 +2343,8 @@
       // server's own move validation all agree. Without this the ban was only
       // ever reported, never obeyed.
       if (me.noEvilPermanent && Cards.isEvil(cardId)) return;
+      // A presidential ban applies to EVERYONE, the president included.
+      if (state.bannedCards && state.bannedCards.indexOf(cardId) !== -1) return;
       movesForCard(state, seat, cardId, moves);
     });
     // The legendary card is held on the player rather than in the deck, so it is
@@ -2275,6 +2549,9 @@
     BONUS_POINTS: BONUS_POINTS,
     DECK_COMPOSITION: DECK_COMPOSITION,
     HAND_SIZE: HAND_SIZE,
+    HAND_LIMIT: HAND_LIMIT,
+    OWNER_CARD_IDS: OWNER_CARD_IDS,
+    isOwnerOnlyCard: isOwnerOnlyCard,
 
     createGame: createGame,
     deal: deal,
@@ -2337,6 +2614,7 @@
     legalTargets: legalTargets,
     targetWarning: targetWarning,
     playCard: playCard,
+    playMimic: playMimic,
     advanceTurn: advanceTurn,
     finish: finish,
     standings: standings,

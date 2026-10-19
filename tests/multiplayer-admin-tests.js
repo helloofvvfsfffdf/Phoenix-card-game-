@@ -417,7 +417,7 @@ async function main() {
         continue;
       }
 
-      const actor = five.find(c => c.state.acting);
+      const actor = require('./helpers/acting-client')(five);
       assert(actor && actor.state.moves.length, 'a legal move is available');
       const option = actor.state.moves.find(m =>
         !(actor.state.mapleBlocked || []).includes(m.cardId)

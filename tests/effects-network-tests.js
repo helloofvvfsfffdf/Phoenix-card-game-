@@ -93,20 +93,26 @@ async function main() {
     }
     check('dice and draft complete without altered gameplay', () => assert.strictEqual(host.state.phase, 'playing'));
     const before = host.state.effects.sequence;
-    const acting = clients.find(c => c.state.acting);
+    const acting = require('./helpers/acting-client')(clients);
     const rejection = next(acting, 'error');
     acting.ws.send(JSON.stringify({ type: 'move', cardId: 'not-a-card', targetId: null }));
     await rejection;
     check('illegal moves emit no public cinematic', () => assert.strictEqual(host.state.effects.sequence, before));
     let moves = 0;
     while (!host.state.over && moves++ < 150) {
-      const actor = clients.find(c => c.state.acting);
+      const actor = require('./helpers/acting-client')(clients);
       assert(actor && actor.state.moves.length, 'an authoritative legal move is available');
       // The server now filters a pending action against the correct player:
       // burn choices are exempt; stolen moves use the target's restriction.
       const move = actor.state.moves.find(option => !(actor.state.mapleBlocked || []).includes(option.cardId));
       assert(move, 'a Maple-permitted authoritative option is available');
+      const beforeCurrent = host.state.current;
       await action(actor, { type: 'move', cardId: move.cardId, targetId: move.targetId });
+      // Wait for the turn to move on, so the next move is made against a
+      // settled table rather than a half-updated one.
+      for (let settle = 0; settle < 60 && host.state.current === beforeCurrent; settle++) {
+        await new Promise(r => setTimeout(r, 25));
+      }
       for (const c of clients) {
         assert.deepStrictEqual(c.state.effects, host.state.effects, 'all players receive the same public journal');
         for (const event of c.state.effects.events) {

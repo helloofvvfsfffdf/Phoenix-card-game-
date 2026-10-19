@@ -177,11 +177,113 @@
       "maxParticles": 121,
       "bytes": 119772,
       "sha256": "1ce0fbd64f34053b5d4bf9d40017ac587ee000359ab7580e5f96996671c22a3e"
+    },
+    {
+      "id": "musicalchairs",
+      "url": "assets/card-cinematics/musicalchairs.efk",
+      "nodes": 119,
+      "maxParticles": 119,
+      "bytes": 117838,
+      "sha256": "9bea4b46eb66a695e192424d0efbb8cacdf65246708ae1256264f376f8669957"
+    },
+    {
+      "id": "russianroulette",
+      "url": "assets/card-cinematics/russianroulette.efk",
+      "nodes": 56,
+      "maxParticles": 56,
+      "bytes": 55554,
+      "sha256": "153df4ea813fff9ed3bda657aa7a9d32969fc9a7305810cbc004c2c63b53ca5a"
+    },
+    {
+      "id": "memorymayhem",
+      "url": "assets/card-cinematics/memorymayhem.efk",
+      "nodes": 11,
+      "maxParticles": 11,
+      "bytes": 11052,
+      "sha256": "b76754828718af60363b325e364fda6625dc52655e1cc2f19aca9c202322c266"
+    },
+    {
+      "id": "bankrobbery",
+      "url": "assets/card-cinematics/bankrobbery.efk",
+      "nodes": 23,
+      "maxParticles": 23,
+      "bytes": 22948,
+      "sha256": "4e6276866f6557aec0dfbde30e82e5f12e83fc07c0b4aaf09be93c1a634e853b"
+    },
+    {
+      "id": "pointswap",
+      "url": "assets/card-cinematics/pointswap.efk",
+      "nodes": 29,
+      "maxParticles": 29,
+      "bytes": 28836,
+      "sha256": "cc1c01388f9feac29a212891598155a1165c3bb98ae80c343a443f68b820d53c"
+    },
+    {
+      "id": "hostage",
+      "url": "assets/card-cinematics/hostage.efk",
+      "nodes": 96,
+      "maxParticles": 96,
+      "bytes": 95034,
+      "sha256": "4a2e576bc5a2900495d12fd861d1ddac721f8280d0d493efaab04e2111138aa2"
+    },
+    {
+      "id": "president",
+      "url": "assets/card-cinematics/president.efk",
+      "nodes": 12,
+      "maxParticles": 12,
+      "bytes": 12080,
+      "sha256": "ffe5987080731ec865da663fe84d0145d60dc0512a87484b3b919a89bf3ec678"
+    },
+    {
+      "id": "mimic",
+      "url": "assets/card-cinematics/mimic.efk",
+      "nodes": 26,
+      "maxParticles": 26,
+      "bytes": 25954,
+      "sha256": "1ff3a0b32598bf6b3363dcfda4e494c67cff74541e43d58e6be1078ea6408621"
+    },
+    {
+      "id": "dehydrated",
+      "url": "assets/card-cinematics/dehydrated.efk",
+      "nodes": 23,
+      "maxParticles": 23,
+      "bytes": 22950,
+      "sha256": "51b640b0fcf7b3d2bd76bff49f2abb3d97b7f917d33ae64117cac774d99a5501"
+    },
+    {
+      "id": "nothing",
+      "url": "assets/card-cinematics/nothing.efk",
+      "nodes": 9,
+      "maxParticles": 9,
+      "bytes": 9078,
+      "sha256": "46c4df4d388f43668ff45b0b7c13bc5a13b940160e87a0e99c61ade1d7f65d67"
+    },
+    {
+      "id": "support",
+      "url": "assets/card-cinematics/support.efk",
+      "nodes": 100,
+      "maxParticles": 100,
+      "bytes": 99068,
+      "sha256": "3f7be3208c1265604df502042206f04d3c65d3f9eec9fea40a825d7f9828b821"
+    },
+    {
+      "id": "reverseofdoom",
+      "url": "assets/card-cinematics/reverseofdoom.efk",
+      "nodes": 138,
+      "maxParticles": 138,
+      "bytes": 136572,
+      "sha256": "dd1c378137c86acdaa77555845e6bbfc47c70f5b9ddae25e5635c9ceeba57cc3"
+    },
+    {
+      "id": "wheelofmisfortune",
+      "url": "assets/card-cinematics/wheelofmisfortune.efk",
+      "nodes": 177,
+      "maxParticles": 177,
+      "bytes": 175226,
+      "sha256": "59c18979855b6b1d4d9dfc01d9d789ba6f1b0d7ed0eed2f8ceeab84a482257ea"
     }
   ],
-  "awaitingCompilation": [
-    "wheelofmisfortune"
-  ],
+  "awaitingCompilation": [],
   "textures": [
     {
       "url": "assets/card-cinematics/textures/coin.png",

@@ -88,9 +88,9 @@ async function main() {
       PhoenixCinematics.update({volume:.35});PhoenixCinematics.stopPreview();PhoenixMusicSettings.leave();
       return {results,muted,zero,errors:smokeErrors};
     })()`);
-    assert(previews.muted && previews.zero); assert.strictEqual(previews.results.length,29);
+    assert(previews.muted && previews.zero); assert.strictEqual(previews.results.length,require('../js/effects').previews().length);
     previews.results.forEach(r => { assert.strictEqual(r.sources,1); assert(r.peak > 0 && r.peak <= .781); });
-    console.log('PASS: 29 native Web Audio previews, controls, mute/zero volume and bounded PCM');
+    console.log('PASS: '+previews.results.length+' native Web Audio previews, controls, mute/zero volume and bounded PCM');
     if (process.env.PHOENIX_BROWSER_OWNER_PASSWORD) {
       const multiplayer = await evaluate(`(async()=>{
         window.smokePeers=[];window.smokeStates=new Map();const Native=WebSocket;
@@ -106,7 +106,7 @@ async function main() {
         while(['turnDice','allyDice'].includes(smokeStates.get(smokeHost).phase)){if(guard++>150)throw new Error('dice');await action(smokePeers[smokeStates.get(smokeHost).dice.next],{type:'roll'});}
         const allies=['ted','phoenix','elsie'];while(smokeStates.get(smokeHost).phase==='draft')await action(smokePeers[smokeStates.get(smokeHost).draftTurn],{type:'chooseAlly',ally:allies.shift()});
         await new Promise(r=>setTimeout(r,500));const matchPaused=a.paused;let moves=0;
-        while(!smokeStates.get(smokeHost).over&&moves++<150){const ws=smokePeers.find(w=>smokeStates.get(w).acting),s=smokeStates.get(ws),m=s.moves.find(m=>m.cardId!=='phoenix'&&!(s.mapleBlocked||[]).includes(m.cardId))||s.moves.find(m=>!(s.mapleBlocked||[]).includes(m.cardId));await action(ws,{type:'move',cardId:m.cardId,targetId:m.targetId});}
+        while(!smokeStates.get(smokeHost).over&&moves++<150){const ws=require('./helpers/acting-client')(smokePeers,w=>smokeStates.get(w)),s=smokeStates.get(ws),m=s.moves.find(m=>m.cardId!=='phoenix'&&!(s.mapleBlocked||[]).includes(m.cardId))||s.moves.find(m=>!(s.mapleBlocked||[]).includes(m.cardId));await action(ws,{type:'move',cardId:m.cardId,targetId:m.targetId});}
         const final=smokeStates.get(smokeHost),result=PhoenixEffects.matchResult(final),stage=PhoenixCinematics.diagnostics().celebration;window.smokeWinner=final.winner;
         await new Promise(r=>setTimeout(r,result==='victory'?11000:5500));const cleaned=PhoenixCinematics.diagnostics();
         // Repeated authoritative state uses the actual message handler again.
@@ -145,7 +145,7 @@ async function main() {
           await smokeAction(smokeHost,{type:'start',rounds:10});let guard=0;while(['turnDice','allyDice'].includes(smokeStates.get(smokeHost).phase)){if(guard++>150)throw Error('dice');await smokeAction(smokePeers[smokeStates.get(smokeHost).dice.next],{type:'roll'});}
           const allies=['ted','phoenix','elsie'];while(smokeStates.get(smokeHost).phase==='draft')await smokeAction(smokePeers[smokeStates.get(smokeHost).draftTurn],{type:'chooseAlly',ally:allies.shift()});
           const initial=smokePeers.map(ws=>({seat:smokeStates.get(ws).seat,moves:smokeStates.get(ws).moves}));let fired=false,actorIsBrowser=false,totalBefore=0,totalAfter=0;guard=0;
-          while(!smokeStates.get(smokeHost).over&&guard++<200){const ws=smokePeers.find(w=>smokeStates.get(w).acting),s=smokeStates.get(ws);const allowed=s.moves.filter(m=>!(s.mapleBlocked||[]).includes(m.cardId));
+          while(!smokeStates.get(smokeHost).over&&guard++<200){const ws=require('./helpers/acting-client')(smokePeers,w=>smokeStates.get(w)),s=smokeStates.get(ws);const allowed=s.moves.filter(m=>!(s.mapleBlocked||[]).includes(m.cardId));
             const m=allowed.find(m=>m.cardId==='phoenix')||allowed.find(m=>['bonus','hunter','ghost','reveal','trick'].includes(m.cardId))||allowed[0];if(!m)throw Error('no legal move');
             if(m.cardId==='phoenix'){totalBefore=s.players.reduce((a,p)=>a+p.points,0);actorIsBrowser=ws===smokeHost;await smokeAction(ws,{type:'move',cardId:m.cardId,targetId:m.targetId});fired=true;totalAfter=smokeStates.get(ws).players[smokeStates.get(ws).seat].points;break;}
             await smokeAction(ws,{type:'move',cardId:m.cardId,targetId:m.targetId});}

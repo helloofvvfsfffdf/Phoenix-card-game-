@@ -1,0 +1,85 @@
+/* PHOENIX — the Rickroll overlay, and the lock on the controls while it plays.
+ *
+ * Appended to css/expansion.css. The video is the official YouTube embed, so
+ * the frame is 16:9 and scales with the screen - including on a phone, where
+ * the overlay takes the whole viewport and the video sits in the middle of it.
+ */
+
+/* The overlay. */
+.phoenix-rickroll {
+  position: fixed;
+  inset: 0;
+  z-index: 96;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(4, 5, 10, 0.97);
+}
+.phoenix-rickroll-panel {
+  width: min(1100px, 100%);
+  text-align: center;
+}
+.phoenix-rickroll-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.8);
+}
+.phoenix-rickroll-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.phoenix-rickroll-note {
+  margin: 16px 0 0;
+  font-size: 14px;
+  letter-spacing: 1px;
+  color: #c8b89b;
+}
+.phoenix-rickroll-continue {
+  margin-top: 14px;
+  min-height: 44px;
+  padding: 12px 26px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #f7e5c0;
+  background: #1c1d27;
+  border: 1px solid #75572e;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.phoenix-rickroll-continue:hover { border-color: #ffc93c; color: #ffc93c; }
+
+/* The lock. While the video is playing the player's own controls are out of
+ * reach - the server is holding their turn anyway - but the SCREEN still shows
+ * the table underneath, so they are not looking at a blank page. */
+.phoenix-rickroll-locked #online-actions,
+.phoenix-rickroll-locked #online-hand,
+.phoenix-rickroll-locked #online-seats,
+.phoenix-rickroll-locked #online-log {
+  pointer-events: none;
+  opacity: 0.35;
+  filter: blur(1px);
+}
+.phoenix-rickroll-locked #online-actions button,
+.phoenix-rickroll-locked #online-hand button,
+.phoenix-rickroll-locked #online-seats button {
+  pointer-events: none;
+}
+
+/* On a phone the overlay takes the whole screen, and the note and the button
+ * are big enough for a thumb. */
+@media (max-width: 720px) {
+  .phoenix-rickroll { padding: 0; }
+  .phoenix-rickroll-panel { width: 100%; }
+  .phoenix-rickroll-frame { border-radius: 0; aspect-ratio: 16 / 9; }
+  .phoenix-rickroll-note { font-size: 12px; padding: 0 12px; }
+  .phoenix-rickroll-continue { width: calc(100% - 24px); margin: 12px; }
+}

@@ -1,10 +1,17 @@
-/* PHOENIX — Wheel of Fortune interactive minigame */
+/* PHOENIX - Wheel of Fortune and Wheel of Misfortune interactive minigames.
+ *
+ * Two wheels, one overlay. The Wheel of Fortune has nine outcomes; the Wheel
+ * of Misfortune has eight, and every one of them is terrible in a different
+ * way. The server decides which one comes up - the client only shows it.
+ */
 (function () {
   'use strict';
   var overlay = null;
   var myId = null;
   var spinResult = null;
-  var outcomes = [
+
+  /* The Wheel of Fortune: nine outcomes, all of them survivable. */
+  var FORTUNE = [
     ['reshuffle', 'Shuffle<br>cards', 'Reshuffle all cards'],
     ['reset_self', 'Reset<br>you', 'Reset your points to 0'],
     ['reset_others', 'Reset<br>others', 'Reset everyone else’s points to 0'],
@@ -16,41 +23,72 @@
     ['no_evil_permanent', 'No evil<br>cards', 'No evil cards for the rest of the game']
   ];
 
-  function wheelMarkup() {
+  /* The Wheel of Misfortune: eight outcomes, and the odds are printed on the
+   * wheel so nobody is surprised. The weights are the server's weights. */
+  var MISFORTUNE = [
+    ['loan', 'Take out<br>a loan', 'An opponent is charged 40,000 points for a loan they never asked for', 20],
+    ['puppets', 'Master of<br>Puppets', 'An opponent is imprisoned until your score reaches zero', 15],
+    ['invisible', 'Now you<br>see me', 'You become untargetable for 5 rounds', 15],
+    ['apocalypse', 'Phoenix<br>apocalypse', 'Everybody is handed a Phoenix card', 12],
+    ['restart', 'Play<br>again', 'The match restarts - everybody gets a fresh hand', 10],
+    ['nothing', 'Nothing', 'You have successfully wasted everyone’s time', 25],
+    ['hell', 'Welcome to<br>hell', 'Your score is set to -100,000', 2],
+    ['victory', 'Instant<br>victory', 'You win the match on the spot', 1]
+  ];
+
+  /** The wheel that belongs to this interaction. */
+  function wheelFor(type) {
+    return type === 'wheelofmisfortune' ? MISFORTUNE : FORTUNE;
+  }
+
+  function isMisfortune(type) {
+    return type === 'wheelofmisfortune';
+  }
+
+  function wheelMarkup(list, misfortune) {
     return '<div class="wheel-stage"><div class="wheel-pointer" aria-hidden="true">▼</div>' +
-      '<div class="wheel-graphic" id="wheel-graphic" role="img" aria-label="Wheel with nine numbered outcomes, listed below">' +
-      outcomes.map(function (outcome, index) {
+      '<div class="wheel-graphic' + (misfortune ? ' wheel-graphic-misfortune' : '') + '" id="wheel-graphic" role="img" aria-label="Wheel with ' +
+      list.length + ' numbered outcomes, listed below">' +
+      list.map(function (outcome, index) {
         return '<div class="wheel-segment s' + (index + 1) + '" data-outcome="' + outcome[0] + '" aria-hidden="true">' +
-          '<span class="wheel-segment-number">' + (index + 1) + '</span><span>' + outcome[1] + '</span></div>';
+          '<span class="wheel-segment-number">' + (index + 1) + '</span><span>' + outcome[1] + '</span>' +
+          (misfortune ? '<span class="wheel-segment-odds">' + outcome[3] + '%</span>' : '') + '</div>';
       }).join('') + '</div></div>';
   }
 
-  function outcomeListMarkup() {
-    return '<p class="wheel-caption">Match the wheel number to its outcome below.</p>' +
-      '<ol class="wheel-outcomes" id="wheel-outcomes" aria-label="Possible wheel outcomes">' +
-      outcomes.map(function (outcome, index) {
+  function outcomeListMarkup(list, misfortune) {
+    return '<p class="wheel-caption">' + (misfortune
+      ? 'The wheel decides your fate. The odds are on the wheel.'
+      : 'Match the wheel number to its outcome below.') + '</p>' +
+      '<ol class="wheel-outcomes' + (misfortune ? ' wheel-outcomes-misfortune' : '') + '" id="wheel-outcomes" aria-label="Possible wheel outcomes">' +
+      list.map(function (outcome, index) {
         return '<li data-outcome="' + outcome[0] + '"><span class="wheel-outcome-number" aria-hidden="true">' +
-          (index + 1) + '</span><span>' + outcome[2] + '</span></li>';
+          (index + 1) + '</span><span>' + outcome[2] +
+          (misfortune ? ' <b class="wheel-outcome-odds">' + outcome[3] + '%</b>' : '') + '</span></li>';
       }).join('') + '</ol>';
   }
 
-  function build() {
+  function build(type) {
+    var misfortune = isMisfortune(type);
+    var list = wheelFor(type);
     if (overlay && document.body.contains(overlay)) {
-      overlay.hidden = false;
-      return;
+      // The wheel may have changed under us: rebuild it for the new type.
+      if (overlay.getAttribute('data-wheel') === type) {
+        overlay.hidden = false;
+        return;
+      }
+      close();
     }
-    const isMisfortune = (window.PhoenixOnline && window.PhoenixOnline.getState) && 
-      window.PhoenixOnline.getState() && window.PhoenixOnline.getState().pendingInteraction &&
-      window.PhoenixOnline.getState().pendingInteraction.type === 'wheelofmisfortune';
     overlay = document.createElement('div');
-    overlay.className = 'interactive-overlay wheel-overlay';
+    overlay.className = 'interactive-overlay wheel-overlay' + (misfortune ? ' wheel-overlay-misfortune' : '');
     overlay.id = 'wheel-overlay';
+    overlay.setAttribute('data-wheel', type);
     overlay.innerHTML =
-      '<div class="interactive-shell" role="dialog" aria-modal="true" aria-label="' + (isMisfortune ? 'Wheel of Misfortune' : 'Wheel of Fortune') + '">' +
-      '  <h2>' + (isMisfortune ? 'Wheel of Misfortune' : 'Wheel of Fortune') + '</h2>' +
-      wheelMarkup() +
-      '  <button type="button" id="wheel-spin" class="primary">Spin the Wheel</button>' +
-      outcomeListMarkup() +
+      '<div class="interactive-shell" role="dialog" aria-modal="true" aria-label="' + (misfortune ? 'Wheel of Misfortune' : 'Wheel of Fortune') + '">' +
+      '  <h2>' + (misfortune ? 'Wheel of Misfortune' : 'Wheel of Fortune') + '</h2>' +
+      wheelMarkup(list, misfortune) +
+      '  <button type="button" id="wheel-spin" class="primary">' + (misfortune ? 'Spin the Wheel of Misfortune' : 'Spin the Wheel') + '</button>' +
+      outcomeListMarkup(list, misfortune) +
       '  <p id="wheel-feedback" aria-live="polite"></p>' +
       '</div>';
     document.body.appendChild(overlay);
@@ -73,7 +111,6 @@
     spinBtn.textContent = 'Spinning…';
     document.getElementById('wheel-feedback').textContent = 'The wheel is turning…';
 
-
     window.ws.send(JSON.stringify({ type: 'interact', decision: 'spin' }));
   }
 
@@ -81,6 +118,8 @@
     if (!msg.pendingInteraction || (msg.pendingInteraction.type !== 'wheel' && msg.pendingInteraction.type !== 'wheelofmisfortune')) return;
 
     var pi = msg.pendingInteraction;
+    var misfortune = isMisfortune(pi.type);
+    var list = wheelFor(pi.type);
     var spinBtn = document.getElementById('wheel-spin');
     var feedback = document.getElementById('wheel-feedback');
     var graphic = document.getElementById('wheel-graphic');
@@ -94,22 +133,28 @@
 
         // Highlight the winning segment
         if (resultEvent.outcome && graphic) {
-          var index = outcomes.findIndex(function (o) { return o[0] === resultEvent.outcome; });
-          var rotation = 1080 + 360 - (index * 40 + 20);
-          if (window.gsap) window.gsap.to(graphic, {rotation: rotation, duration: 1.4, ease: 'power3.out'});
-          else graphic.style.transform = 'rotate(' + rotation + 'deg)';
-          var segments = graphic.querySelectorAll('.wheel-segment');
-          segments.forEach(function(seg) {
-            seg.classList.remove('wheel-result');
-            if (seg.dataset.outcome === resultEvent.outcome) {
-              seg.classList.add('wheel-result');
-            }
-          });
+          var index = list.findIndex(function (o) { return o[0] === resultEvent.outcome; });
+          if (index >= 0) {
+            // A full turn and a bit, so the wheel always lands on a segment.
+            var step = 360 / list.length;
+            var rotation = 1080 + 360 - (index * step + step / 2);
+            if (window.gsap) window.gsap.to(graphic, {rotation: rotation, duration: misfortune ? 2.6 : 1.4, ease: 'power3.out'});
+            else graphic.style.transform = 'rotate(' + rotation + 'deg)';
+            var segments = graphic.querySelectorAll('.wheel-segment');
+            segments.forEach(function (seg) {
+              seg.classList.remove('wheel-result');
+              if (seg.dataset.outcome === resultEvent.outcome) {
+                seg.classList.add('wheel-result');
+              }
+            });
+          }
         }
 
-        spinBtn.hidden = true;
-        if (window.gsap) {
-          window.gsap.to(feedback, {color: '#ffd700', duration: 0.5, yoyo: true, repeat: 1});
+        if (spinBtn) {
+          spinBtn.hidden = true;
+          if (window.gsap) {
+            window.gsap.to(feedback, {color: misfortune ? '#ff6b6b' : '#ffd700', duration: 0.5, yoyo: true, repeat: 1});
+          }
         }
       }
       return;

@@ -1,0 +1,103 @@
+/* PHOENIX — the expansion's mobile layout.
+ *
+ * Every new card has to be playable on a phone: the overlays have to fit a
+ * narrow screen, the buttons have to be big enough for a thumb, and nothing
+ * may overflow sideways. This is appended to css/expansion.css.
+ */
+
+/* --- The overlays themselves: full-width on a phone, scrollable if tall --- */
+@media (max-width: 720px) {
+  .interactive-overlay {
+    padding: 10px;
+    align-items: flex-start;
+  }
+  .interactive-overlay .interactive-shell {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px 12px;
+  }
+  .interactive-overlay h2 { font-size: 19px; letter-spacing: 1px; }
+
+  /* Buttons: at least 44px tall, and the full width where they are the
+     only way to act, so a thumb never has to hit something small. */
+  .interactive-overlay button {
+    min-height: 44px;
+    padding: 11px 14px;
+    font-size: 14px;
+  }
+  .mc-stage { gap: 8px; margin: 12px 0; }
+  .mc-stage button { min-width: 0; flex: 1 1 44%; }
+  .support-overlay .mc-stage { flex-direction: column; }
+  .support-overlay .mc-stage button { width: 100%; text-align: left; }
+
+  /* The symbols stay big enough to read at a glance. */
+  .mc-symbol, .mm-symbol { width: 44px; height: 44px; font-size: 24px; margin: 4px; }
+  .mm-sequence { min-height: 56px; }
+  .mm-answer { flex-direction: column; align-items: stretch; }
+  .mm-answer input, .mm-answer button { width: 100%; }
+
+  /* The revolver. */
+  .rr-revolver { width: 104px; height: 104px; font-size: 18px; margin: 12px auto; }
+
+  /* The survey: the answer box stacks, and the buttons stay big. */
+  .survey-answer { flex-direction: column; align-items: stretch; gap: 6px; }
+  .survey-answer button { width: 100%; }
+  .survey-question { font-size: 16px; }
+
+  /* The presidential policy list: one card type per row, with a full-width
+     button, because that is a long list of small targets. */
+  .online-policy-row { flex-wrap: nowrap; align-items: center; gap: 8px; }
+  .online-policy-row span:first-child {
+    flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-size: 12px;
+  }
+  .online-policy-row button { min-width: 64px; min-height: 40px; padding: 8px 10px; }
+
+  /* The Mimic's prank and the secret shutdown fill the screen, and the text
+     never runs off the side. */
+  .phoenix-mimic-rickroll-panel { padding: 16px; }
+  .phoenix-mimic-rickroll-title { font-size: 26px; letter-spacing: 2px; }
+  .phoenix-mimic-rickroll-sub { font-size: 13px; letter-spacing: 1px; }
+  .phoenix-fake-shutdown-panel { width: 88vw; }
+  .phoenix-fake-shutdown-line { font-size: 16px; }
+
+  /* The trailer placeholder. */
+  .trailer-placeholder { padding: 26px 12px; letter-spacing: 3px; font-size: 13px; }
+}
+
+/* --- The Dehydrated effect on a phone -----------------------------------
+ * A full-screen rotation is unusable on a small screen, so on a phone the
+ * effect rotates the TABLE only, and the controls stay put and reachable. */
+@media (max-width: 720px) {
+  .is-dehydrated #online-actions,
+  .is-dehydrated #online-hand,
+  .is-dehydrated #online-seats,
+  .is-dehydrated #online-room,
+  .is-dehydrated #online-log {
+    animation: phoenix-dehydrate 9s linear infinite;
+  }
+  .is-dehydrated #online-actions { animation-duration: 12s; }
+  .is-dehydrated-still #online-actions,
+  .is-dehydrated-still #online-hand,
+  .is-dehydrated-still #online-seats,
+  .is-dehydrated-still #online-room,
+  .is-dehydrated-still #normal-log { animation: none; }
+}
+
+/* --- The gallery: the owner-only tag must not break the list ---------- */
+.catalog-owner {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 6px;
+  border: 1px solid #ffc93c;
+  border-radius: 4px;
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: #ffd16b;
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .catalog-owner { font-size: 7px; letter-spacing: 1px; padding: 1px 4px; }
+}

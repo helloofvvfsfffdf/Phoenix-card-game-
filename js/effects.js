@@ -33,6 +33,20 @@
     impostor: ['Impostor', '\u{1F575}', '#8e44ad', 'mist', 'sine', [196, 247, 330], 0.7],
     swapper: ['Ally Swapper', '\u{1F504}', '#ff4081', 'orbit', 'triangle', [440, 587, 784], 0.5],
     'wheelofmisfortune': ['Wheel of Misfortune', '\u{1F3AD}', '#8b0000', 'orbit', 'sawtooth', [110, 220, 165], 0.8],
+    musicalchairs: ['Musical Chairs', '\u{1F3B5}', '#7ec8e3', 'orbit', 'sine', [523, 659, 784, 523], 0.9],
+    russianroulette: ['Russian Roulette', '\u{1F3AF}', '#c0392b', 'impact', 'sawtooth', [220, 165, 110], 0.8],
+    memorymayhem: ['Memory Mayhem', '\u{1F9E0}', '#b39ddb', 'illusion', 'sine', [440, 587, 698], 0.7],
+    bankrobbery: ['Bank Robbery', '\u{1F3E6}', '#ffd700', 'transfer', 'triangle', [196, 392, 587], 0.8],
+    pointswap: ['Point Swap', '\u{1F501}', '#66d9e8', 'transfer', 'sine', [330, 660, 330], 0.6],
+    hostage: ['Hostage Situation', '\u{1F52B}', '#e74c3c', 'impact', 'sawtooth', [110, 110, 82], 0.9],
+    president: ['President', '\u{1F396}\uFE0F}', '#ffd16b', 'shield', 'triangle', [523, 659, 784], 0.8],
+    mimic: ['The Mimic', '\u{1F3AD}', '#9b59b6', 'illusion', 'triangle', [440, 392, 330], 0.7],
+    dehydrated: ['Dehydrated', '\u{1F4A7}', '#5dade2', 'orbit', 'sine', [587, 523, 440], 0.8],
+    nothing: ['Nothing', '\u{1F610}', '#95a5a6', 'mist', 'sine', [220, 196], 0.5],
+    reverseofdoom: ['The Uno Reverse of Doom', '\u{1F500}', '#8e44ad', 'impact', 'sawtooth', [330, 262, 196], 1.0],
+    support: ['Customer Support', '\u{1F3DE}', '#f5b041', 'reveal', 'triangle', [349, 392, 440], 0.7],
+    'joshuasurvey': ['Joshua Survey', '\u{1F4CB}', '#ffd16b', 'reveal', 'sine', [440, 554, 659], 0.8],
+    'trailer': ['Did You Like the Trailer?', '\u{1F3AC}', '#ff4081', 'impact', 'sawtooth', [220, 330, 440], 1.0],
     'curse-trigger': ['Curse triggered', '⛧', '#b682ef', 'impact', 'triangle', [220, 110], 0.5],
     'hunter-block': ['Hunter reflection', '⌖', '#c6ffab', 'shield', 'triangle', [660, 880, 330], 0.45],
     'ally-phoenix': ['Phoenix · Sneaky Snatcher', '▱', '#ffd05e', 'transfer', 'triangle', [392, 587, 784], 0.45],
@@ -54,9 +68,15 @@
     if (!Object.prototype.hasOwnProperty.call(DEFINITIONS, key)) return null;
     return Sound.recipe(key, inert);
   }
+  // The allies are NOT in the preview list. Their effects still happen in a
+  // match - they are simply not something you can audition on their own, and
+  // the list is for the CARDS.
   var DORMANT = ['ally-tilly', 'ally-louie', 'ally-simba', 'ally-elsie'];
+  function isAllyEffect(key) {
+    return key.indexOf('ally-') === 0 || key.indexOf('block-') === 0 || key === 'maple-restriction';
+  }
   function previews() {
-    return Object.keys(DEFINITIONS).filter(function (key) { return DORMANT.indexOf(key) < 0; }).map(function (key) {
+    return Object.keys(DEFINITIONS).filter(function (key) { return DORMANT.indexOf(key) < 0 && !isAllyEffect(key); }).map(function (key) {
       return { key: key, label: DEFINITIONS[key][0] + (key === 'hunter-block' ? ' (reflection support)' : '') };
     }).concat([{ key: 'victory', label: 'Victory fanfare' }, { key: 'defeat', label: 'Defeat coda' }, { key: 'draw', label: 'Draw coda' }]);
   }
