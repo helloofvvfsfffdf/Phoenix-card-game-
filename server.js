@@ -13,6 +13,7 @@ const Effects = require('./js/effects.js');
 const Gallery = require('./js/gallery.js');
 const Auth = require('./js/auth.js');
 const Badges = require('./js/badges.js');
+const Achievements = require('./js/achievements.js');
 const Announcements = require('./js/announcements.js');
 const Wins = require('./js/wins.js');
 const EmailVerification = require('./js/email-verification.js');
@@ -1161,6 +1162,39 @@ function finishInteraction(room) {
 
   if (result && result.events) recordEvents(room, result.events);
 
+  // Achievement tracking: check for badge unlocks based on verified game events.
+  if (pi && result) {
+    const interactionGrants = Achievements.checkInteractionAchievements(room, pi, result);
+    const progressUpdates = Achievements.checkProgressAchievements(room, pi, result);
+
+    // Grant single-match badges immediately
+    for (const grant of interactionGrants) {
+      const member = room.members.find(m => Rules.SEATS[m.seat].id === pi.actorId);
+      if (member && member.account && member.ws) {
+        Achievements.grantBadge(member.account, grant.badgeKey, member.ws).catch(err => {
+          console.error('[PHOENIX achievements] grant failed -> ' + Auth.describeError(err));
+        });
+      }
+    }
+
+    // Update multi-match progress and grant when complete
+    for (const update of progressUpdates) {
+      if (update.account) {
+        Achievements.updateProgress(update.account.id, update.badgeKey, update.increment).then(progress => {
+          if (progress.completed) {
+            const member = room.members.find(m => m.account && m.account.id === update.account.id);
+            const ws = member ? member.ws : null;
+            Achievements.grantBadge(update.account, update.badgeKey, ws).catch(err => {
+              console.error('[PHOENIX achievements] grant failed -> ' + Auth.describeError(err));
+            });
+          }
+        }).catch(err => {
+          console.error('[PHOENIX achievements] progress update failed -> ' + Auth.describeError(err));
+        });
+      }
+    }
+  }
+
   if (result && result.advanceTurn && s && !s.over) {
     recordEvents(room, Rules.advanceTurn(s));
   }
@@ -1192,8 +1226,20 @@ function shareLinkedGains(s, beforePoints) {
     const a = s.players.findIndex(p => p.id === link.a);
     const b = s.players.findIndex(p => p.id === link.b);
     if (a < 0 || b < 0) continue;
-    s.players[b].points += Math.floor(gains[a] / 2);
-    s.players[a].points += Math.floor(gains[b] / 2);
+    const bonusA = Math.floor(gains[b] / 2);
+    const bonusB = Math.floor(gains[a] / 2);
+    s.players[b].points += bonusB;
+    s.players[a].points += bonusA;
+    // Track for Partners in Crime achievement
+    if (bonusB >= 10000) {
+      // Player b received >= 10000 bonus
+      if (s.linkedFateBonus) s.linkedFateBonus[b] = (s.linkedFateBonus[b] || 0) + bonusB;
+      else s.linkedFateBonus = { [b]: bonusB };
+    }
+    if (bonusA >= 10000) {
+      if (s.linkedFateBonus) s.linkedFateBonus[a] = (s.linkedFateBonus[a] || 0) + bonusA;
+      else s.linkedFateBonus = { [a]: bonusA };
+    }
   }
 }
 

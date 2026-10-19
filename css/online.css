@@ -394,3 +394,14 @@
   border-radius: 999px;
   vertical-align: middle;
 }
+
+/* Badge Unlocked notification - small, polished, non-intrusive */
+.badge-unlocked-notification { position: fixed; bottom: 20px; right: 20px; z-index: 9999; background: linear-gradient(135deg, #1a1a2e, #16213e); border: 2px solid #ffd700; border-radius: 12px; padding: 16px 20px; max-width: 320px; box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 20px rgba(255,215,0,0.2); animation: badgeSlideIn 0.4s ease-out; color: #fff; font-family: inherit; }
+.badge-unlocked-notification.badge-unlocked-fade { animation: badgeFadeOut 0.5s ease-in forwards; }
+.badge-unlocked-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #ffd700; margin-bottom: 8px; }
+.badge-unlocked-icon { width: 48px; height: 48px; border-radius: 8px; margin-bottom: 8px; display: block; }
+.badge-unlocked-name { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.badge-unlocked-rarity { font-size: 11px; font-weight: 600; letter-spacing: 1px; color: #aaa; margin-bottom: 6px; }
+.badge-unlocked-desc { font-size: 13px; color: #ccc; line-height: 1.4; }
+@keyframes badgeSlideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes badgeFadeOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(120%); } }

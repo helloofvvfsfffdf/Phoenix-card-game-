@@ -298,6 +298,61 @@
     $('online-feedback').textContent = message;
   }
 
+  function showBadgeUnlockedNotification(badge) {
+    if (!badge) return;
+    // Create a small, polished notification that doesn't interrupt gameplay.
+    const existing = document.getElementById('badge-unlocked-notification');
+    if (existing) existing.remove();
+
+    const notif = document.createElement('div');
+    notif.id = 'badge-unlocked-notification';
+    notif.className = 'badge-unlocked-notification';
+    notif.setAttribute('role', 'status');
+    notif.setAttribute('aria-live', 'polite');
+
+    const title = document.createElement('div');
+    title.className = 'badge-unlocked-title';
+    title.textContent = 'Badge Unlocked!';
+    notif.appendChild(title);
+
+    if (badge.icon) {
+      const img = document.createElement('img');
+      img.className = 'badge-unlocked-icon';
+      img.setAttribute('src', badge.icon);
+      img.setAttribute('alt', '');
+      notif.appendChild(img);
+    }
+
+    const name = document.createElement('div');
+    name.className = 'badge-unlocked-name';
+    name.textContent = badge.name || '';
+    notif.appendChild(name);
+
+    if (badge.rarity) {
+      const rarity = document.createElement('div');
+      rarity.className = 'badge-unlocked-rarity';
+      rarity.textContent = String(badge.rarity).toUpperCase();
+      notif.appendChild(rarity);
+    }
+
+    if (badge.description) {
+      const desc = document.createElement('div');
+      desc.className = 'badge-unlocked-desc';
+      desc.textContent = badge.description;
+      notif.appendChild(desc);
+    }
+
+    document.body.appendChild(notif);
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+      if (notif.parentNode) {
+        notif.classList.add('badge-unlocked-fade');
+        setTimeout(() => { if (notif.parentNode) notif.remove(); }, 500);
+      }
+    }, 5000);
+  }
+
   /* ------------------------------------------------------------------ */
   /* The ban screen                                                      */
   /*                                                                     */
@@ -460,6 +515,11 @@
         // session cookie). An OWNER account opens the dashboard with no
         // separate owner password.
         PhoenixOnline.account = message.account;
+        return;
+      } else if (message.type === 'badgeUnlocked') {
+        // A secret badge was just earned. Show a small, polished notification
+        // that reveals the name and artwork, without interrupting gameplay.
+        showBadgeUnlockedNotification(message.badge);
         return;
       } else if (message.type === 'admin_state') {
         PhoenixOnline.adminState = message;

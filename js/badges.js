@@ -48,7 +48,12 @@ const WIN_BADGE_KEY = 'champion';
  * absent here by construction - so no catalogue row, and no caller passing
  * something it should not, can hand out the owner badge through this route.
  */
-const AUTO_AWARDABLE_KEYS = [WIN_BADGE_KEY];
+const SECRET_BADGE_KEYS = [
+  'lucky-six', 'mind-reader', 'backstabber', 'lightning-reflexes',
+  'jackpot', 'partners-in-crime', 'master-of-disguise', 'identity-crisis'
+];
+
+const AUTO_AWARDABLE_KEYS = [WIN_BADGE_KEY].concat(SECRET_BADGE_KEYS);
 
 function isAutoAwardable(key) {
   return typeof key === 'string' && AUTO_AWARDABLE_KEYS.indexOf(key) !== -1;
@@ -163,18 +168,26 @@ async function ensureOwnerBadge(accountId) {
   return true;
 }
 
-async function listCatalogue() {
+async function listCatalogue(accountId) {
   const { data, error } = await Auth.client()
     .from('badges')
-    .select('key, name, rarity, description, sort_order, icon')
+    .select('key, name, rarity, description, sort_order, icon, secret')
     .order('sort_order', { ascending: true })
     .order('rarity', { ascending: true });
   if (error) throw error;
-  return (data || []).map(b => ({
+  const rows = (data || []).map(b => ({
     key: b.key, name: b.name, rarity: b.rarity,
     description: b.description, icon: safeIcon(b.icon),
-    divine: b.rarity === 'divine'
+    divine: b.rarity === 'divine',
+    secret: Boolean(b.secret)
   }));
+  // Secrecy: secret badges are only visible to accounts that own them.
+  if (accountId) {
+    const owned = await ownedKeys(accountId);
+    const ownedSet = new Set(owned);
+    return rows.filter(b => !b.secret || ownedSet.has(b.key));
+  }
+  return rows.filter(b => !b.secret);
 }
 
 async function ownedKeys(accountId) {
@@ -234,7 +247,7 @@ async function getMine(account) {
 
   let catalogue, owned, featured;
   try {
-    catalogue = await listCatalogue();
+    catalogue = await listCatalogue(account.id);
     owned = await ownedKeys(account.id);
     featured = await featuredRows(account.id);
   } catch (error) {
@@ -338,7 +351,7 @@ async function getProfile(username) {
 
   let catalogue, featured;
   try {
-    catalogue = await listCatalogue();
+    catalogue = await listCatalogue(account.id);
     featured = await featuredRows(account.id);
   } catch (error) {
     if (schemaMissing(error)) return { ok: false, available: false };
@@ -397,7 +410,7 @@ async function awardBadge(account, username, badgeKey) {
 
   let catalogue;
   try {
-    catalogue = await listCatalogue();
+    catalogue = await listCatalogue(account.id);
   } catch (error) {
     if (schemaMissing(error)) return { ok: false, available: false };
     logError('awardBadge catalogue failed', error);
@@ -524,7 +537,7 @@ async function featuredBadges(account) {
   try {
     if (account.role === 'owner') await ensureOwnerBadge(account.id);
 
-    const catalogue = await listCatalogue();
+    const catalogue = await listCatalogue(account.id);
     const featured = await featuredRows(account.id);
 
     const byKey = {};
