@@ -287,7 +287,7 @@
   inset: 0;
   z-index: 76;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 16px;
   background: radial-gradient(circle at top, #263452, #090f1c 75%);
@@ -302,6 +302,8 @@
   width: 100%;
   max-width: 760px;
   padding: 20px;
+  margin-top: 20px;
+  margin-bottom: 20px;
   border: 1px solid #75572e;
   border-radius: 18px;
   background: #151b2d;
@@ -582,8 +584,8 @@
 /* ------------------------------- mobile ------------------------------------ */
 
 @media (max-width: 620px) {
-  .badge-overlay { padding: 10px; }
-  .badge-shell { padding: 16px; }
+  .badge-overlay { padding: 10px; align-items: flex-start; }
+  .badge-shell { padding: 16px; margin-top: 10px; margin-bottom: 10px; }
   .badge-featured { grid-template-columns: 1fr; }
   .badge-slot { min-height: 0; }
   .badge-collection { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
