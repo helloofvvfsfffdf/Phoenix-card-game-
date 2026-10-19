@@ -84,7 +84,7 @@
     linkedfate: 4,  // link for shared gains
     impostor: 3,    // min 4 players, high impact
     swapper: 4,      // ally swap
-    wheelofmisfortune: 3  // evil wheel, low count
+    wheelofmisfortune: 8  // evil wheel, more common
     // Phoenix is NOT here. It can never be dealt, drawn or reshuffled - see
     // Cards.deckCards() and the phoenixAwarded flag below.
   };
