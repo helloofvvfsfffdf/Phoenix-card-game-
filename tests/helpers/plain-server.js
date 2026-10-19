@@ -10,7 +10,7 @@
  * Not a deployment entry point. Never run this as a start command. */
 'use strict';
 const Cards = require('../../js/cards');
-const INTERACTIVE_IDS = ['speed', 'impostor', 'dice', 'rps', 'betrayal', 'wheel', 'linkedfate', 'swapper'];
+const INTERACTIVE_IDS = ['speed', 'impostor', 'dice', 'rps', 'betrayal', 'wheel', 'linkedfate', 'swapper', 'wheelofmisfortune'];
 INTERACTIVE_IDS.forEach(function (id) { if (Cards.byId(id)) { Cards.byId(id).inLiveGame = false; } });
 module.exports = { INTERACTIVE_IDS };
 if (require.main === module) {

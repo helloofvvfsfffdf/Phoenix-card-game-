@@ -3566,7 +3566,7 @@ async function handle(ws, data) {
         decisions: {},
         submittedAt: {},
         createdAt: Date.now(),
-        timeoutMs: (cardId === 'impostor' || cardId === 'wheel') ? 60000 : 30000,
+        timeoutMs: (cardId === 'impostor' || cardId === 'wheel' || cardId === 'wheelofmisfortune') ? 60000 : 30000,
         // Card-specific state
         phase: cardId === 'speed' ? 'ready' : cardId === 'impostor' ? 'clues' : 'waiting',
         roundData: {}     // For storing rolls, spins, etc.
@@ -3575,7 +3575,7 @@ async function handle(ws, data) {
       // Set up participants based on card type.
       if (cardId === 'rps' || cardId === 'speed' || cardId === 'dice' || cardId === 'linkedfate' || cardId === 'swapper') {
         room.pendingInteraction.participants = [id, targetId];
-      } else if (cardId === 'wheel') {
+      } else if (cardId === 'wheel' || cardId === 'wheelofmisfortune') {
         // Wheel affects all players, no target needed
         const eligible = s.players.filter(p => p.enabled && !Rules.isOut(p, s));
         room.pendingInteraction.participants = eligible.map(p => p.id);

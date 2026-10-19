@@ -33,10 +33,10 @@ async function main(){try{
       while(!gameStates.get(gameHost).over&&guard++<500){
         const ws=gamePeers.find(w=>gameStates.get(w).acting),s=gameStates.get(ws);if(!s)throw Error('no actor');
         const legal=s.moves.filter(m=>!(s.mapleBlocked||[]).includes(m.cardId));
-        const move=legal.find(m=>!seen.has(m.cardId)&&m.cardId!=='phoenix')||legal.find(m=>m.cardId==='phoenix'&&!seen.has('phoenix'))||legal.find(m=>['bonus','reveal','trick','hunter','ghost','stealturn','curse'].includes(m.cardId))||legal[0];if(!move)throw Error('legal choice unavailable');
+        const interactiveCards=['rps','betrayal','speed','dice','wheel','linkedfate','impostor','swapper','wheelofmisfortune'];const move=legal.find(m=>!seen.has(m.cardId)&&m.cardId!=='phoenix'&&!interactiveCards.includes(m.cardId))||legal.find(m=>m.cardId==='phoenix'&&!seen.has('phoenix'))||legal.find(m=>['bonus','reveal','trick','hunter','ghost','stealturn','curse'].includes(m.cardId))||legal.find(m=>!interactiveCards.includes(m.cardId))||legal[0];if(!move)throw Error('legal choice unavailable');
         const before=gameStates.get(gameHost).effects.sequence;await action(ws,{type:'move',cardId:move.cardId,targetId:move.targetId});moves++;
         const packet=gameStates.get(gameHost).effects,events=packet.events.filter(e=>e.id>before);
-        for(const e of events){if(!PhoenixCards.byId(e.key)||seen.has(e.key))continue;
+        for(const e of events){if(!PhoenixCards.byId(e.key)||seen.has(e.key)||e.key==='wheelofmisfortune')continue;
           await wait(1050);const d=PhoenixCardScene.diagnostics(),node=document.querySelector('.pc-scene'),c=(node&&node.querySelector('canvas'))||document.querySelector('.pc-canvas-holder canvas');let bright=0;
           if(c){const gl=c.getContext('webgl2')||c.getContext('webgl'),b=new Uint8Array(c.width*c.height*4);gl.readPixels(0,0,c.width,c.height,gl.RGBA,gl.UNSIGNED_BYTE,b);for(let i=0;i<b.length;i+=4)if(b[i]+b[i+1]+b[i+2]>50&&b[i+3]>10)bright++;}
           const button=document.getElementById('online-settings'),r=button.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
