@@ -1,7 +1,7 @@
 /* Transparent, input-pass-through presentation. No match DOM transforms. */
 .pc-scene{position:fixed;inset:0;z-index:54;pointer-events:none!important;overflow:hidden;contain:layout paint;isolation:isolate;color:var(--pc-color)}
 .pc-scene *{pointer-events:none!important}
-.pc-mount{position:absolute;left:50%;top:40%;width:min(760px,100vw);height:min(440px,70vh);transform:translate(-50%,-50%);overflow:hidden}
+.pc-mount{position:absolute;left:0;top:0;width:100vw;height:100vh;transform:none;overflow:hidden}
 .pc-mount canvas{position:absolute;inset:0;width:100%;height:100%}
 .pc-halo{position:absolute;inset:15%;background:radial-gradient(ellipse,color-mix(in srgb,var(--pc-color) 12%,transparent),transparent 68%);opacity:0}
 .pc-hero{position:absolute;left:50%;top:50%;width:115px;height:115px;transform:translate(-50%,-50%);filter:drop-shadow(0 0 15px color-mix(in srgb,var(--pc-color) 35%,transparent))}
