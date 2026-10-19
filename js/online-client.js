@@ -946,10 +946,17 @@
     if (state.host) {
       const start = el('button', 'online-primary', 'START MATCH');
       start.type = 'button';
-      start.onclick = () => send({
-        type: 'start',
-        rounds: Number($('online-rounds').value)
-      });
+      start.onclick = () => {
+        let rounds = Number($('online-rounds').value);
+        if (rounds === 0 || isNaN(rounds)) {
+          const custom = Number($('online-rounds-custom').value);
+          rounds = Math.min(100, Math.max(5, custom || 10));
+        }
+        send({
+          type: 'start',
+          rounds: rounds
+        });
+      };
       actions.append(start);
 
       // Player list with kick buttons (host only)
@@ -1496,6 +1503,16 @@ function renderPlaying() {
     if (adminBtn) adminBtn.onclick = openAdmin;
     const ownerMenuBtn = $('menu-owner');
     if (ownerMenuBtn) ownerMenuBtn.onclick = openAdmin;
+
+const roundsSelect = $('online-rounds');
+    if (roundsSelect) {
+      roundsSelect.addEventListener('change', () => {
+        const customInput = $('online-rounds-custom');
+        if (customInput) {
+          customInput.style.display = roundsSelect.value === 'custom' ? 'inline-block' : 'none';
+        }
+      });
+    }
 
     $('online-copy').onclick = () => {
       if (!state) return;

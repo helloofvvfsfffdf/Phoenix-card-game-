@@ -3143,10 +3143,7 @@ async function handle(ws, data) {
       );
     }
 
-    room.requestedRounds = Math.min(
-      20,
-      Math.max(5, Number(data.rounds) || 10)
-    );
+    room.requestedRounds = Math.min(100, Math.max(5, Number(data.rounds) || 10));
 
     beginRollStage(room, 'turnDice');
     broadcast(room);
