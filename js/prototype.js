@@ -125,7 +125,7 @@
 
     ['menu-cards'].forEach(function (id) {
       $(id).addEventListener('click', function () {
-        window.location.href = 'card-effects.html';
+        window.location.href = 'card-collection.html';
       });
     });
     ['btn-new', 'btn-play-again'].forEach(function (id) {

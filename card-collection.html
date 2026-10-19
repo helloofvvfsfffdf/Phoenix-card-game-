@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PHOENIX — Card Collection</title>
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  body { background: #0a0e1a; color: #e0e0e0; font-family: system-ui, sans-serif; margin: 0; padding: 20px; }
+  h1 { text-align: center; color: #ffd700; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: #888; margin-bottom: 24px; font-size: 14px; }
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; max-width: 1400px; margin: 0 auto; }
+  .card-tile { background: #151b2d; border: 1px solid #2c3550; border-radius: 12px; padding: 16px; }
+  .card-tile h3 { margin: 0 0 4px; color: #ffd700; font-size: 16px; }
+  .card-glyph { font-size: 32px; margin-bottom: 8px; display: block; }
+  .card-short { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .card-blurb { color: #ccc; font-size: 13px; margin-bottom: 8px; font-style: italic; }
+  .card-rule { color: #aaa; font-size: 12px; line-height: 1.5; margin-bottom: 8px; }
+  .card-target { color: #666; font-size: 11px; }
+  .card-tone { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 1px; margin-bottom: 8px; }
+  .tone-gold { background: #3a2c0c; color: #ffd98a; }
+  .tone-dice { background: #1a2a3a; color: #7ec8e3; }
+  .tone-rps { background: #3a1a1a; color: #ff8a8a; }
+  .tone-betrayal { background: #2a1a3a; color: #c9a0ff; }
+  .tone-speed { background: #1a3a2a; color: #8affc1; }
+  .tone-wheel { background: #3a2a1a; color: #ffc97a; }
+  .tone-linkedfate { background: #1a3a3a; color: #7afff5; }
+  .tone-impostor { background: #2a1a2a; color: #ff9aff; }
+  .tone-swapper { background: #3a1a2a; color: #ff9ab5; }
+  .tone-misfortune { background: #3a1a1a; color: #ff4444; }
+  .tone-neutral { background: #1a1a2a; color: #aaa; }
+  .card-evil { border-color: #ff4444; }
+  .card-legendary { border-color: #ffd700; box-shadow: 0 0 8px rgba(255,215,0,0.2); }
+  .back-btn { display: block; margin: 0 auto 24px; padding: 10px 24px; background: #151b2d; border: 1px solid #75572e; border-radius: 8px; color: #f7e5c0; cursor: pointer; font-size: 14px; }
+  .back-btn:hover { border-color: #ffc93c; color: #ffc93c; }
+</style>
+</head>
+<body>
+<h1>PHOENIX — Card Collection</h1>
+<p class="subtitle">All 23 cards in the game. Read the rules, understand the effects.</p>
+<button class="back-btn" onclick="window.location.href='index.html'">← Back to Menu</button>
+<div class="card-grid" id="card-grid"></div>
+<script src="js/cards.js"></script>
+<script>
+  const cards = window.PhoenixCards.CARDS;
+  const grid = document.getElementById('card-grid');
+  cards.forEach(card => {
+    const tile = document.createElement('div');
+    tile.className = 'card-tile' + (card.legendary ? ' card-legendary' : '') + (card.evil ? ' card-evil' : '');
+    const glyph = document.createElement('span');
+    glyph.className = 'card-glyph';
+    glyph.textContent = card.glyph;
+    tile.appendChild(glyph);
+    const short = document.createElement('div');
+    short.className = 'card-short';
+    short.textContent = card.short;
+    tile.appendChild(short);
+    const name = document.createElement('h3');
+    name.textContent = card.name;
+    tile.appendChild(name);
+    const tone = document.createElement('span');
+    tone.className = 'card-tone tone-' + (card.tone || 'neutral');
+    tone.textContent = card.tone ? card.tone.toUpperCase() : 'NEUTRAL';
+    tile.appendChild(tone);
+    if (card.evil) {
+      const evil = document.createElement('span');
+      evil.className = 'card-tone';
+      evil.style.background = '#3a1a1a';
+      evil.style.color = '#ff6666';
+      evil.textContent = 'EVIL';
+      tile.appendChild(evil);
+    }
+    if (card.legendary) {
+      const leg = document.createElement('span');
+      leg.className = 'card-tone';
+      leg.style.background = '#3a2c0c';
+      leg.style.color = '#ffd700';
+      leg.textContent = 'LEGENDARY';
+      tile.appendChild(leg);
+    }
+    const blurb = document.createElement('div');
+    blurb.className = 'card-blurb';
+    blurb.textContent = card.blurb;
+    tile.appendChild(blurb);
+    const rule = document.createElement('div');
+    rule.className = 'card-rule';
+    rule.textContent = card.rule;
+    tile.appendChild(rule);
+    const target = document.createElement('div');
+    target.className = 'card-target';
+    target.textContent = card.targetNote;
+    tile.appendChild(target);
+    grid.appendChild(tile);
+  });
+</script>
+</body>
+</html>
