@@ -34,6 +34,7 @@
     linkedfate: ['A chain links two players with a resonant hum', [L('string',0,.4,.6,220),L('bell',.1,.5,.5,440),L('air',.3,.4,.3,1200,600)]],
     impostor: ['A shadow moves among the players, then a dramatic reveal', [L('breath',0,.4,.5,800,400),L('cloth',.2,.2,.4,1200),L('bell',.5,.6,.6,330),L('rumble',.6,.5,.4,80)]],
     swapper: ['Two ally portraits swap in a burst of light', [L('air',0,.15,.5,1500,3000),L('paper',.1,.12,.6,2200),L('cloth',.2,.15,.4,800),L('bell',.3,.3,.5,660)]],
+    'wheelofmisfortune': ['Evil wheel spins with a menacing laugh', [L('groan',0,.8,.9,80,50),L('breath',.1,.6,.5,400,200),L('groan',.3,.4,.7,90,60),L('breath',.5,.5,.4,350,180),L('rumble',.7,.6,.5,60),L('groan',.9,.3,.6,70,45)]],
     'alvin-burn': ['Close, brittle paper combustion: crackle, flame and ash', [L('crackle',0,.78,.4,3400),L('fire',.04,.77,.95,900,330),L('paper',.55,.26,.3,1900)]],
     'curse-trigger': ['Ritual seal cracks, followed by a guttural exhalation', [L('wood',0,.13,.6,150),L('bell',0,.5,.4,137),L('groan',.06,.51,.65,65,42)]],
     'hunter-block': ['Deflected attack: taut string recoil and arrow-like return', [L('string',0,.28,.65,225),L('air',.05,.26,.6,3800,700),L('wood',.29,.16,.45,390)]],

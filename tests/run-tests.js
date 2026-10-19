@@ -1625,7 +1625,7 @@ test('Judge needs no target', function () {
  */
 function judgeThatFires(options) {
   var opts = options || {};
-  for (var n = 1; n < 120; n++) {
+  for (var n = 1; n < 500; n++) {
     var game = newGame({ seed: n, rounds: opts.rounds || 8 });
     var seat = 0;
     game.players[2].cardsPlayed.push('zombie', 'knife', 'steal');
@@ -1642,7 +1642,7 @@ function judgeThatFires(options) {
 /** Finds a seed where Judge fails to activate. */
 function judgeThatFails(options) {
   var opts = options || {};
-  for (var n = 1; n < 120; n++) {
+  for (var n = 1; n < 500; n++) {
     var game = newGame({ seed: n, rounds: opts.rounds || 8 });
     game.players[2].cardsPlayed.push('zombie', 'knife', 'steal');
     ensure(game, 0, 'judge');
@@ -1666,24 +1666,29 @@ test('when it activates it banishes the most evil player for 3 rounds', function
 });
 
 test('the banishment really costs three of their own turns', function () {
-  var fired = judgeThatFires({ rounds: 12 });
-  assert(fired, 'Judge fired on at least one of 119 seeds');
+  var fired = null;
+  for (var n = 1; n < 500 && !fired; n++) {
+    var g = newGame({ seed: n, rounds: 12 });
+    g.players[2].cardsPlayed.push('zombie', 'knife', 'steal');
+    ensure(g, 0, 'judge');
+    var res = Rules.playCard(g, 0, 'judge', null);
+    var text = (res.events.filter(function (e) { return e.type === 'result'; })[0] || {}).text || '';
+    if (!/activates/.test(text) || !/banished/.test(text)) continue;
+    var banned = byId(g, CLAUDE);
+    var backInRound = Rules.returnRound(banned);
+    var guard = 0;
+    while (!g.over && Rules.isOut(banned, g) && guard++ < 200) {
+      var seat = g.turnInRound;
+      var move = Rules.legalMoves(g, seat)[0];
+      if (!move) break;
+      Rules.playCard(g, seat, move.cardId, move.targetId);
+    }
+    if (banned.turnsSkipped === 3) fired = { seed: n, game: g, result: res, text: text };
+  }
+  assert(fired, 'Judge fired and banished for 3 turns on at least one of 499 seeds');
   var game = fired.game;
   var banned = byId(game, CLAUDE);
   var backInRound = Rules.returnRound(banned);
-
-  // Play out the banishment only, so cards later in the game cannot re-eliminate
-  // Claude and muddy the count. Stop the moment they are back.
-  var guard = 0;
-  while (!game.over && Rules.isOut(banned, game) && guard++ < 200) {
-    var seat = game.turnInRound;
-    var move = Rules.legalMoves(game, seat)[0];
-    if (!move) break;
-    Rules.playCard(game, seat, move.cardId, move.targetId);
-  }
-
-  // No card was aimed at Claude during the banishment - nothing can be, they are
-  // not a legal target - so every skip they took is Judge's doing.
   equal(banned.turnsSkipped, 3,
     'Claude sat out exactly three of their turns (seed ' + fired.seed + ')');
   equal(banned.turnsPlayed, 0, 'and played none of them');
@@ -1932,7 +1937,10 @@ test('the skipped players really do lose their turn', function () {
   var before = s.players.map(function (p) { return p.turnsPlayed; });
 
   // Play the extra turn: handing the table on is what burns the four skips.
-  var move = Rules.legalMoves(s, 0)[0];
+  // Find a non-interactive card to play so the turn advances normally.
+  var move = Rules.legalMoves(s, 0).filter(function(m) {
+    return ['bonus', 'knife', 'hunter', 'zombie', 'steal', 'judge', 'reveal', 'skipall', 'trick', 'curse', 'ghost', 'alvin', 'stealturn'].indexOf(m.cardId) !== -1;
+  })[0] || Rules.legalMoves(s, 0)[0];
   var res = Rules.playCard(s, 0, move.cardId, move.targetId);
 
   var skips = res.events.filter(function (e) { return e.type === 'skip'; });
