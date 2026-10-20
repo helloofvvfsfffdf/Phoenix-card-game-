@@ -1,0 +1,278 @@
+/* PHOENIX - the immersive (3D) prototype.
+ *
+ * The page around the 3D stage: the HUD, the loading line and the plain
+ * message a browser without WebGL is given.
+ *
+ * The HUD is deliberately quiet. It sits at the edges, it never covers the
+ * cards, and everything in it is big enough to use with a thumb.
+ */
+:root {
+  --immersive-ink: #f3e6c8;
+  --immersive-dim: #a9b6cd;
+  --immersive-gold: #ffd16b;
+  --immersive-edge: rgba(255, 209, 107, .35);
+  --immersive-panel: rgba(9, 14, 24, .82);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #070b13;
+  color: var(--immersive-ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.immersive-body {
+  position: relative;
+}
+
+.immersive-stage {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 50% 38%, #1a2438, #06090f 72%);
+}
+
+.immersive-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  touch-action: none;
+}
+
+/* ---- the loading and the failure ---- */
+
+.immersive-loading,
+.immersive-failure {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 40%, #162034, #06090f 70%);
+  z-index: 20;
+}
+
+.immersive-loading[hidden],
+.immersive-failure[hidden] {
+  display: none;
+}
+
+.immersive-loading-title {
+  margin: 0;
+  font-size: clamp(28px, 7vw, 54px);
+  letter-spacing: 12px;
+  color: var(--immersive-gold);
+}
+
+.immersive-loading-line {
+  margin: 0;
+  color: var(--immersive-dim);
+  letter-spacing: 2px;
+}
+
+.immersive-failure h1 {
+  margin: 0;
+  font-size: clamp(18px, 3.4vw, 28px);
+  letter-spacing: 2px;
+  color: #ff9d7a;
+}
+
+.immersive-failure p {
+  max-width: 560px;
+  line-height: 1.6;
+  color: var(--immersive-dim);
+}
+
+.immersive-failure a {
+  color: var(--immersive-gold);
+}
+
+/* ---- the HUD ---- */
+
+.immersive-hud {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.immersive-hud button,
+.immersive-hud select,
+.immersive-hud input,
+.immersive-hud a {
+  pointer-events: auto;
+}
+
+.immersive-hud-top,
+.immersive-hud-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  padding: 10px 14px;
+  border: 1px solid var(--immersive-edge);
+  border-radius: 14px;
+  background: var(--immersive-panel);
+  backdrop-filter: blur(6px);
+}
+
+.immersive-hud-top {
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.immersive-hud-bottom {
+  align-self: flex-end;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.immersive-hud-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.immersive-hud-block-right {
+  margin-left: auto;
+}
+
+.immersive-hud-label {
+  margin: 0;
+  font-size: 9.5px;
+  letter-spacing: 2px;
+  color: var(--immersive-dim);
+}
+
+.immersive-hud-value {
+  margin: 0;
+  font-size: 13px;
+  color: var(--immersive-ink);
+  white-space: nowrap;
+}
+
+.immersive-hud-selected {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--immersive-gold);
+}
+
+.immersive-hud-status {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--immersive-dim);
+  max-width: 46ch;
+}
+
+.immersive-hud-hand {
+  min-width: 0;
+}
+
+.immersive-hud select,
+.immersive-hud input[type='range'] {
+  font: inherit;
+  font-size: 12px;
+  color: var(--immersive-ink);
+  background: rgba(12, 20, 34, .9);
+  border: 1px solid var(--immersive-edge);
+  border-radius: 8px;
+  padding: 5px 8px;
+}
+
+.immersive-hud input[type='range'] {
+  width: 120px;
+  padding: 0;
+  accent-color: var(--immersive-gold);
+}
+
+.immersive-hud input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--immersive-gold);
+}
+
+.immersive-hud-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.immersive-hud-actions button,
+.immersive-hud-actions a {
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 1px solid var(--immersive-gold);
+  border-radius: 10px;
+  background: #d49b36;
+  color: #16110b;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 1.4px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.immersive-hud-actions a {
+  background: transparent;
+  color: var(--immersive-gold);
+  border-color: var(--immersive-edge);
+}
+
+.immersive-hud-actions button:active {
+  transform: translateY(1px);
+}
+
+/* On a phone the HUD takes the top and the bottom, and nothing sits in the
+ * middle of the screen where the cards are. */
+@media (max-width: 720px) {
+  .immersive-hud {
+    padding: 8px;
+  }
+
+  .immersive-hud-top {
+    gap: 6px 12px;
+    padding: 8px 10px;
+  }
+
+  .immersive-hud-block-right {
+    margin-left: 0;
+  }
+
+  .immersive-hud-bottom {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 8px 10px;
+  }
+
+  .immersive-hud-actions button,
+  .immersive-hud-actions a {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .immersive-hud-actions button:active {
+    transform: none;
+  }
+}

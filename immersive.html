@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>PHOENIX - Immersive Table (prototype)</title>
+  <link rel="stylesheet" href="css/immersive.css" />
+</head>
+<body class="immersive-body">
+  <!-- The 3D stage. Everything else is drawn on top of it. -->
+  <div id="immersive-stage" class="immersive-stage"></div>
+
+  <!-- The loading and the failure. A browser without WebGL is told plainly
+       instead of being shown a black screen. -->
+  <div id="immersive-loading" class="immersive-loading">
+    <p class="immersive-loading-title">PHOENIX</p>
+    <p class="immersive-loading-line">Setting the table…</p>
+  </div>
+  <div id="immersive-failure" class="immersive-failure" hidden>
+    <h1>THIS BROWSER CANNOT RUN THE 3D TABLE</h1>
+    <p>
+      The immersive table needs WebGL, and this browser does not have it.
+      The ordinary 2D game works everywhere, so carry on with that - or try
+      a different browser, or turn hardware acceleration on.
+    </p>
+    <p><a href="index.html">BACK TO THE MENU</a></p>
+  </div>
+
+  <!-- The HUD. Small, out of the way, and never over the cards. -->
+  <div id="immersive-hud" class="immersive-hud">
+    <div class="immersive-hud-top">
+      <div class="immersive-hud-block">
+        <p class="immersive-hud-label">TABLE</p>
+        <p class="immersive-hud-value">Owner &amp; Friends · 5 players</p>
+      </div>
+      <div class="immersive-hud-block">
+        <p class="immersive-hud-label">YOU ARE</p>
+        <p class="immersive-hud-value">Ash · seat 1</p>
+      </div>
+      <div class="immersive-hud-block immersive-hud-block-right">
+        <label class="immersive-hud-label" for="immersive-quality">QUALITY</label>
+        <select id="immersive-quality">
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+      <div class="immersive-hud-block">
+        <label class="immersive-hud-label" for="immersive-sensitivity">LOOK SPEED</label>
+        <input id="immersive-sensitivity" type="range" min="0.3" max="2" step="0.1" value="1" />
+      </div>
+      <div class="immersive-hud-block">
+        <label class="immersive-hud-label" for="immersive-reduced">REDUCED MOTION</label>
+        <input id="immersive-reduced" type="checkbox" />
+      </div>
+    </div>
+
+    <div class="immersive-hud-bottom">
+      <div class="immersive-hud-hand">
+        <p class="immersive-hud-label">IN HAND</p>
+        <p id="immersive-hand" class="immersive-hud-value">0 of 7 cards in hand</p>
+        <p id="immersive-selected" class="immersive-hud-selected">Nothing selected</p>
+        <p id="immersive-status" class="immersive-hud-status"></p>
+      </div>
+      <div class="immersive-hud-actions">
+        <button id="immersive-draw" type="button">DRAW</button>
+        <button id="immersive-play" type="button">PLAY CARD</button>
+        <button id="immersive-reset" type="button">RESET</button>
+        <a href="index.html">BACK TO THE MENU</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/cards.js"></script>
+  <script type="module" src="js/immersive/prototype.js"></script>
+</body>
+</html>
