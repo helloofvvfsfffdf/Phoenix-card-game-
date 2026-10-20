@@ -30,6 +30,7 @@ const Rules = require('./rules');
 const EXPANSION_CARD_IDS = [
   'musicalchairs', 'russianroulette', 'memorymayhem', 'bankrobbery',
   'pointswap', 'hostage', 'president', 'joshuasurvey', 'trailer',
+  'enjoyingthetrailer',
   'mimic', 'dehydrated', 'nothing', 'reverseofdoom', 'support'
 ];
 

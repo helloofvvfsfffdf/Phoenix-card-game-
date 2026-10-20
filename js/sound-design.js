@@ -49,6 +49,7 @@
     support: ['A hold line rings, then a stamp thuds down', [L('bell',0,.3,.4,480),L('bell',.3,.3,.4,480),L('bell',.6,.3,.4,480),L('wood',.9,.2,.8,300)]],
     'joshuasurvey': ['A pencil scratches, a bell rings, a stamp thuds', [L('paper',0,.24,.5,2600),L('bell',.26,.4,.5,660),L('wood',.5,.2,.8,280)]],
     'trailer': ['A projector whirs up and a big score lands', [L('air',0,.3,.45,600,2200),L('rumble',.2,.6,.6,90),L('bell',.5,.7,.7,330)]],
+    'enjoyingthetrailer': ['The projector whirs up again and the score lands twice as hard', [L('air',0,.34,.5,600,2200),L('rumble',.16,.66,.62,86),L('bell',.44,.78,.74,330),L('bell',.66,.6,.5,494)]],
     'alvin-burn': ['Close, brittle paper combustion: crackle, flame and ash', [L('crackle',0,.78,.4,3400),L('fire',.04,.77,.95,900,330),L('paper',.55,.26,.3,1900)]],
     'curse-trigger': ['Ritual seal cracks, followed by a guttural exhalation', [L('wood',0,.13,.6,150),L('bell',0,.5,.4,137),L('groan',.06,.51,.65,65,42)]],
     'hunter-block': ['Deflected attack: taut string recoil and arrow-like return', [L('string',0,.28,.65,225),L('air',.05,.26,.6,3800,700),L('wood',.29,.16,.45,390)]],

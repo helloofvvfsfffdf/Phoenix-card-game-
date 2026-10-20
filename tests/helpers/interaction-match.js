@@ -86,7 +86,7 @@ module.exports = async function interactionMatch(options = {}) {
       return client.errors.at(-1);
     }
     const host = await connect();
-    await action(host, { type: 'create', name: 'Fixture host', code: '' });
+    await action(host, { type: 'create', name: 'Fixture host', code: '', hardcore: !!options.hardcore });
     for (let i = 1; i < (options.players || 5); i++) {
       const guest = await connect();
       await action(guest, { type: 'join', name: 'Fixture ' + i, code: host.state.code });

@@ -336,7 +336,10 @@ function lobbySnapshot() {
         players: r.members.length,
         max: 5,
         rounds: r.requestedRounds || 10,
-        phase: r.phase || 'lobby'
+        phase: r.phase || 'lobby',
+        // HARDCORE is said out loud in the lobby list, so anybody can see
+        // what they are walking into before they join it.
+        hardcore: !!r.hardcore
       }))
   };
 }
@@ -1321,7 +1324,9 @@ function resolveInteraction(room, pi) {
   if (pi.type === 'support') return Expansion.resolveSupport(room);
   if (pi.type === 'hostage') return Expansion.startHostage(room);
   if (pi.type === 'president') return Expansion.startPresidency(room);
-  if (pi.type === 'trailer') return Expansion.resolveTrailerTimeout(room);
+  if (pi.type === 'trailer' || pi.type === 'enjoyingthetrailer') {
+    return Expansion.resolveTrailerTimeout(room);
+  }
   if (pi.type === 'musicalchairs') return Expansion.resolveTimeout(room, 'musicalchairs',
     'Musical Chairs - the music played and nobody pressed. Nobody loses.');
   if (pi.type === 'russianroulette') return Expansion.resolveTimeout(room, 'russianroulette',
@@ -1332,6 +1337,50 @@ function resolveInteraction(room, pi) {
     'Joshua Survey - nobody answered the question.');
   if (pi.type === 'wheelofmisfortune') return resolveWheelOfMisfortuneInteraction(room, pi);
   return null;
+}
+
+/**
+ * The interactive cards HARDCORE never runs twice.
+ *
+ * The Mimic is a card that is HANDED OVER, so there is only ever one of them,
+ * and Customer Support is one complaint rather than two.
+ */
+const NEVER_TWICE_INTERACTIONS = { mimic: true, support: true };
+
+/** Does this interaction run a second time in a hardcore match? */
+function interactionPlaysTwice(type) {
+  return !NEVER_TWICE_INTERACTIONS[type];
+}
+
+/**
+ * The scene an interactive card sets up around itself.
+ *
+ * The music has to be playing before the first press, the revolver has to be
+ * loaded before it is aimed, the sequences have to exist before anybody writes
+ * them down. A HARDCORE second run sets its scene up again, so this is done
+ * in one place and used by both.
+ */
+function startInteractionScene(room, cardId) {
+  const started = cardId === 'musicalchairs' ? Expansion.startMusicalChairs(room)
+    : cardId === 'russianroulette' ? Expansion.startRussianRoulette(room)
+    : cardId === 'memorymayhem' ? Expansion.startMemoryMayhem(room)
+    : cardId === 'joshuasurvey' ? Expansion.startSurvey(room)
+    : cardId === 'trailer' || cardId === 'enjoyingthetrailer'
+      ? Expansion.startTrailer(room)
+    : null;
+  if (started && started.events) recordEvents(room, started.events);
+  if (cardId === 'musicalchairs') {
+    // The music stops at a moment of the server's choosing, and nobody is
+    // told when. The table hears it stop.
+    const stopsAt = (room.pendingInteraction.roundData || {}).musicStopsAt || 0;
+    setTimeout(function () {
+      if (room.pendingInteraction && room.pendingInteraction.type === 'musicalchairs') {
+        room.members.forEach(function (member) {
+          if (member.ws) send(member.ws, { type: 'chairs-stop' });
+        });
+      }
+    }, Math.max(0, stopsAt - Date.now()));
+  }
 }
 
 function finishInteraction(room, provided) {
@@ -1366,6 +1415,37 @@ function finishInteraction(room, provided) {
     result.advanceTurn = true;
   }
   shareLinkedGains(s, beforePoints);
+
+  // HARDCORE: the card runs a second time. The SAME card, with the same
+  // players and the same target, so the wheel is spun twice, the trailer plays
+  // twice, and a target feels the effect twice. The decisions are cleared and
+  // the card gets a fresh moment, so the browser closes the first overlay and
+  // opens the second.
+  if (room.hardcore && !pi.hardcoreSecond && !s.over && interactionPlaysTwice(pi.type)) {
+    if (result && result.events) recordEvents(room, result.events);
+    const second = Object.assign({}, pi, {
+      createdAt: Date.now(),
+      decisions: {},
+      submittedAt: {},
+      hardcoreSecond: true
+    });
+    room.pendingInteraction = second;
+    if (second.type === 'musicalchairs' || second.type === 'russianroulette' ||
+        second.type === 'memorymayhem' || second.type === 'joshuasurvey' ||
+        second.type === 'trailer' || second.type === 'enjoyingthetrailer') {
+      startInteractionScene(room, second.type);
+    }
+    recordEvents(room, [{
+      type: 'result',
+      cardId: pi.type,
+      text: 'Hardcore - ' + ((Cards.byId(pi.type) || {}).name || 'The card') +
+        ' happens a second time.'
+    }]);
+    scheduleInteractionTimeout(room, second, second.timeoutMs);
+    broadcast(room);
+    return;
+  }
+
   const actor = s.players.find(p => p.id === pi.actorId);
   actor.turnsPlayed++;
   actor.cardsPlayed.push(pi.type);
@@ -1579,6 +1659,8 @@ function startGame(room) {
 
   const s = Rules.createGame({
     rounds: room.requestedRounds,
+    // HARDCORE: every card plays twice, and the eliminations stack.
+    hardcore: !!room.hardcore,
     // How many players are really at the table - a card that needs a third
     // player is not dealt in a smaller lobby.
     playerCount: room.members.length,
@@ -2468,6 +2550,10 @@ function snapshot(room, member) {
     code: room.code,
     visibility: room.visibility || 'private',
     mode: room.mode || 'public',
+    // HARDCORE: every card plays twice in this room. The browser needs to
+    // know, so the Fake System Shutdown can be harsher and the Mimic can
+    // play its other prank.
+    hardcore: !!room.hardcore,
     host: room.members[0] === member,
     seat: member.seat,
     started: !!s,
@@ -3326,7 +3412,9 @@ async function handle(ws, data) {
         log: ['Private room created. Invite at least one friend to start.']
       };
 
-      rooms.set(ownerRoom.code, ownerRoom);
+      // HARDCORE is the creator's choice here too.
+    ownerRoom.hardcore = data.hardcore === true;
+    rooms.set(ownerRoom.code, ownerRoom);
 
       const ownerMember = {
         seat: 0,
@@ -3402,6 +3490,9 @@ async function handle(ws, data) {
       name: playerName(ws, data),
       visibility,
       mode: 'public',
+      // HARDCORE is the creator's choice, and the server decides what it
+      // means: every card plays twice.
+      hardcore: data.hardcore === true,
       publicAllies: publicAllies(),
       createdAt: Date.now(),
       members: [],
@@ -4064,7 +4155,7 @@ async function handle(ws, data) {
     // Interactive cards: create a pending interaction instead of resolving immediately.
     const interactiveCards = ['rps', 'betrayal', 'speed', 'dice', 'wheel', 'linkedfate', 'impostor', 'swapper', 'wheelofmisfortune',
       'musicalchairs', 'russianroulette', 'memorymayhem', 'mimic', 'support',
-      'joshuasurvey', 'trailer'];
+      'joshuasurvey', 'trailer', 'enjoyingthetrailer'];
     if (interactiveCards.includes(cardId) && (!pending || pending.kind === Rules.PENDING_CHOICE_KINDS.MOVE)) {
       // A stolen turn changes who chooses the card, not who owns/plays it.
       const actor = s.players[s.turnInRound];
@@ -4195,25 +4286,8 @@ async function handle(ws, data) {
       // anybody writes them down.
       if (cardId === 'musicalchairs' || cardId === 'russianroulette' ||
           cardId === 'memorymayhem' || cardId === 'joshuasurvey' ||
-          cardId === 'trailer') {
-        const started = cardId === 'musicalchairs' ? Expansion.startMusicalChairs(room)
-          : cardId === 'russianroulette' ? Expansion.startRussianRoulette(room)
-          : cardId === 'memorymayhem' ? Expansion.startMemoryMayhem(room)
-          : cardId === 'joshuasurvey' ? Expansion.startSurvey(room)
-          : Expansion.startTrailer(room);
-        if (started && started.events) recordEvents(room, started.events);
-        if (cardId === 'musicalchairs') {
-          // The music stops at a moment of the server's choosing, and nobody
-          // is told when. The table hears it stop.
-          const stopsAt = (room.pendingInteraction.roundData || {}).musicStopsAt || 0;
-          setTimeout(function () {
-            if (room.pendingInteraction && room.pendingInteraction.type === 'musicalchairs') {
-              room.members.forEach(function (member) {
-                if (member.ws) send(member.ws, { type: 'chairs-stop' });
-              });
-            }
-          }, Math.max(0, stopsAt - Date.now()));
-        }
+          cardId === 'trailer' || cardId === 'enjoyingthetrailer') {
+        startInteractionScene(room, cardId);
       }
 
       // Safety net: if a participant never responds, auto-resolve after timeout.

@@ -27,6 +27,7 @@
     swapper:'<path d="M25 40q25-20 50 0M25 60q25 20 50 0"/><path d="M40 30l-15 10 15 10M60 70l15-10-15-10"/>',
     joshuasurvey:'<path d="M26 18h48v64H26Z"/><path d="M34 30h32M34 42h32M34 54h22"/><path d="M60 62l14 14-6 6-14-14Z"/>',
     trailer:'<rect x="14" y="30" width="72" height="44" rx="6"/><path d="M14 44h72M26 62l10-10 10 8 12-12 8 8"/><circle cx="78" cy="30" r="8"/>',
+    enjoyingthetrailer:'<rect x="14" y="30" width="72" height="44" rx="6"/><path d="M14 44h72"/><circle cx="36" cy="58" r="4"/><circle cx="64" cy="58" r="4"/><path d="M38 70q12 10 24 0"/><circle cx="78" cy="30" r="8"/>',
     wheelofmisfortune:'<circle cx="50" cy="50" r="40"/><path d="M50 10v80M10 50h80"/><path d="M50 50L50 10A40 40 0 0 1 90 50Z" fill="currentColor" opacity="0.3"/>',
     musicalchairs:'<path d="M20 70h60M28 70V40h44v30"/><path d="M18 40h48l-8-14H26Z"/><path d="M44 26V14M38 14h12"/>',
     russianroulette:'<circle cx="50" cy="52" r="26"/><circle cx="50" cy="52" r="8"/><path d="M50 26V16M50 16l-10 6M50 16l10 6M36 34l-8-8M64 34l8-8"/><path d="M64 68l14 14"/>',
@@ -65,7 +66,11 @@
   trailer: { color: '#ff4081', title: 'Did you like the trailer?',
     motif: 'A projector whirs up in the dark and a big score lands.',
     duration: 4.8, variants: ['Choose an opponent', 'The trailer plays'],
-    caption: 'NO SKIP · NO FAST FORWARD · THE TRAILER PLAYS OVER THEIR GAME' }
+    caption: 'NO SKIP · NO FAST FORWARD · THE TRAILER PLAYS OVER THEIR GAME' },
+  enjoyingthetrailer: { color: '#ff7ab3', title: 'Enjoying the trailer?',
+    motif: 'The projector whirs up again, and this time somebody is enjoying it.',
+    duration: 5.0, variants: ['Choose an opponent', 'They enjoy every second'],
+    caption: 'THE WHOLE TRAILER - NO SKIP - NO FAST FORWARD' }
  };
 
  // The gallery's own metadata, with the owner-only cards folded in.

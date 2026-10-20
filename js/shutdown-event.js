@@ -16,6 +16,8 @@
 
   var root = window;
   var CHANCE = 0.10;
+  /* HARDCORE: the shock is much more likely, and there is no waiting after it. */
+  var HARDCORE_CHANCE = 0.50;
   /* How long a player is left alone after it happens to them. */
   var COOLDOWN_MS = 3 * 60 * 1000;
   var COOLDOWN_KEY = 'phoenix.shutdown.cooldown.';
@@ -24,6 +26,8 @@
   var running = false;
   // How many times the event has waited for the screen to be quiet.
   var defers = 0;
+  // The round this player was last shocked in. HARDCORE rolls once a round.
+  var shockedRound = -1;
   var MAX_DEFERS = 10;
   var DEFER_MS = 600;
 
@@ -36,6 +40,31 @@
       return seat ? seat.id : 'guest';
     } catch (e) {
       return 'guest';
+    }
+  }
+
+  /**
+   * Is this a hardcore match?
+   *
+   * The room's own flag, from the server's snapshot - not something the
+   * browser decided.
+   */
+  function hardcore() {
+    try {
+      var state = root.PhoenixOnline && root.PhoenixOnline.getState();
+      return !!(state && state.hardcore);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** The round this match is on, or zero. */
+  function currentRound() {
+    try {
+      var state = root.PhoenixOnline && root.PhoenixOnline.getState();
+      return state && state.round ? Number(state.round) : 0;
+    } catch (e) {
+      return 0;
     }
   }
 
@@ -170,6 +199,18 @@
    */
   function maybeTrigger() {
     if (running) return false;
+    var hard = hardcore();
+    if (hard) {
+      // HARDCORE: once a round. The roll is made again on the next round, so
+      // a table is not held up by a joke every other card, and the player is
+      // left alone after it - no three minute wait in a hardcore match.
+      var round = currentRound();
+      if (shockedRound === round) return false;
+      if (Math.random() >= HARDCORE_CHANCE) return false;
+      shockedRound = round;
+      show();
+      return true;
+    }
     // This player was left alone for a while after the last time.
     if (Date.now() - lastShock() < COOLDOWN_MS) return false;
     if (Math.random() >= CHANCE) return false;
@@ -183,6 +224,9 @@
     isRunning: function () { return running; },
     // How long this player is left alone after it happens to them.
     cooldownMs: COOLDOWN_MS,
-    onCooldown: function () { return Date.now() - lastShock() < COOLDOWN_MS; }
+    onCooldown: function () {
+      if (hardcore()) return false;
+      return Date.now() - lastShock() < COOLDOWN_MS;
+    }
   };
 })();

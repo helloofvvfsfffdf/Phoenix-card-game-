@@ -506,6 +506,24 @@
       targetNote: 'Pick one opponent to watch the trailer.'
     },
     {
+      id: 'enjoyingthetrailer',
+      name: 'Enjoying the Trailer',
+      short: 'Enjoying',
+      glyph: '\u{1F3AD}',
+      tone: 'trailer',
+      kind: 'owner',
+      ownerOnly: true,
+      inDeck: false,
+      // Like the other two owner-only cards, it is dealt in an OWNER room by
+      // name and nowhere else. It is a card in an ordinary match and in a
+      // hardcore one alike - hardcore doubles its effect like any other.
+      inLiveGame: false,
+      needsTarget: true,
+      blurb: 'They enjoy the trailer. All of it.',
+      rule: 'Choose an opponent and the trailer plays over their game. They have to watch the whole of it, and there is no skip and no fast-forward. Their game resumes when it ends.',
+      targetNote: 'Pick one opponent to enjoy the trailer.'
+    },
+    {
       id: 'mimic',
       name: 'The Mimic',
       short: 'Mimic',

@@ -47,6 +47,7 @@
     support: ['Customer Support', '\u{1F3DE}', '#f5b041', 'reveal', 'triangle', [349, 392, 440], 0.7],
     'joshuasurvey': ['Joshua Survey', '\u{1F4CB}', '#ffd16b', 'reveal', 'sine', [440, 554, 659], 0.8],
     'trailer': ['Did You Like the Trailer?', '\u{1F3AC}', '#ff4081', 'impact', 'sawtooth', [220, 330, 440], 1.0],
+    'enjoyingthetrailer': ['Enjoying the Trailer', '\u{1F3AD}', '#ff7ab3', 'impact', 'sawtooth', [220, 330, 440, 220], 1.0],
     'curse-trigger': ['Curse triggered', '⛧', '#b682ef', 'impact', 'triangle', [220, 110], 0.5],
     'hunter-block': ['Hunter reflection', '⌖', '#c6ffab', 'shield', 'triangle', [660, 880, 330], 0.45],
     'ally-phoenix': ['Phoenix · Sneaky Snatcher', '▱', '#ffd05e', 'transfer', 'triangle', [392, 587, 784], 0.45],
@@ -77,7 +78,7 @@
   }
   // The OWNER-ONLY cards are not in the list either: they belong to the owner
   // server, and this list is for everybody.
-  var OWNER_ONLY = ['joshuasurvey', 'trailer'];
+  var OWNER_ONLY = ['joshuasurvey', 'trailer', 'enjoyingthetrailer'];
   function isOwnerOnlyEffect(key) {
     return OWNER_ONLY.indexOf(key) !== -1;
   }
