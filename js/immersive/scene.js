@@ -37,7 +37,11 @@ export const PALETTE = {
 };
 
 /**
- * True when this browser can run WebGL at all.
+ * True when this browser can run the 3D table.
+ *
+ * WebGL 2 is asked for, because that is what the current Three.js needs: a
+ * browser with only the old WebGL 1 would fail later, in a far less polite
+ * way, so it is turned away here with a message instead.
  *
  * Asked BEFORE anything is built, so a browser that cannot do it is told
  * plainly instead of showing a black screen.
@@ -45,8 +49,7 @@ export const PALETTE = {
 export function webglAvailable() {
   try {
     const canvas = document.createElement('canvas');
-    return !!(window.WebGLRenderingContext &&
-      (canvas.getContext('webgl2') || canvas.getContext('webgl')));
+    return !!(window.WebGL2RenderingContext && canvas.getContext('webgl2'));
   } catch (error) {
     return false;
   }
