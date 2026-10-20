@@ -144,7 +144,13 @@
       // Misfortune both belong to the player who played the card.
       const casterOnly = pi.type === 'wheel' || pi.type === 'wheelofmisfortune';
       const eligible = (pi.participants || []).includes(myId) && (!casterOnly || pi.actorId === myId);
-      const locked = (pi.submitted || []).includes(myId);
+      // A card that can ask the same player more than once must not lock
+      // their buttons: the revolver passes around and can come back, the
+      // memory sequences come one at a time, an early press has to be made
+      // again, and the owner judges every answer in turn.
+      const answersMoreThanOnce = ['musicalchairs', 'russianroulette', 'memorymayhem',
+        'joshuasurvey'].includes(pi.type);
+      const locked = !answersMoreThanOnce && (pi.submitted || []).includes(myId);
       document.querySelectorAll('.interactive-overlay button, .interactive-overlay input').forEach(el => {
         el.disabled = !eligible || locked;
         if (!eligible) el.hidden = true;
@@ -560,6 +566,10 @@
           $('menu-feedback').textContent = message.message;
         }
       } else if (message.type === 'effect') {
+      } else if (message.type === 'chairs-stop') {
+        // The music has stopped. The server decides when, and nobody is told.
+        const chairs = window.PhoenixMusicalChairsInteractive;
+        if (chairs && typeof chairs.stopped === 'function') chairs.stopped();
       } else if (message.type === 'rickroll') {
         // The Mimic's prank. The SERVER is holding this player's turn;
         // the video is simply what they see while it does.
@@ -1437,7 +1447,7 @@ function renderPlaying() {
     // controls are locked until the video is over.
     document.body.classList.toggle('phoenix-rickroll-locked', !!s.watchingVideo);
 
-    // THE DEHYDRATED EFFECT. The target's whole screen turns for five rounds.
+    // THE DEHYDRATED EFFECT. The target's whole screen turns for two rounds.
     if (window.PhoenixDehydrated) window.PhoenixDehydrated.apply(!!s.dehydrated);
 
     renderHand();
@@ -1504,6 +1514,19 @@ function renderPlaying() {
 
       const meta = el('div', 'online-seat-meta');
       meta.append(el('strong', '', player.name + (index === state.seat ? ' (you)' : '')));
+
+      // THE HOSTAGE SITUATION. Everybody can see who is the criminal, who
+      // is being held, and who is the police officer.
+      const situation = state.hostage;
+      if (situation) {
+        if (player.id === situation.criminalId) {
+          meta.append(el('small', 'online-role online-role-criminal', '🔒 Criminal'));
+        } else if (player.id === situation.hostageId) {
+          meta.append(el('small', 'online-role online-role-hostage', '⛓️ Hostage'));
+        } else if (player.id === situation.officerId) {
+          meta.append(el('small', 'online-role online-role-officer', '🚓 Police officer'));
+        }
+      }
 
       const seatBadges = badgesFor(player);
       if (seatBadges) meta.append(seatBadges);

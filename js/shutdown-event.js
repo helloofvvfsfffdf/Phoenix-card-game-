@@ -15,7 +15,10 @@
   'use strict';
 
   var root = window;
-  var CHANCE = 0.05;
+  var CHANCE = 0.10;
+  /* How long a player is left alone after it happens to them. */
+  var COOLDOWN_MS = 3 * 60 * 1000;
+  var COOLDOWN_KEY = 'phoenix.shutdown.cooldown.';
   var overlay = null;
   var timers = [];
   var running = false;
@@ -23,6 +26,33 @@
   var defers = 0;
   var MAX_DEFERS = 10;
   var DEFER_MS = 600;
+
+  /** The player this browser is playing as. */
+  function playerId() {
+    try {
+      var state = root.PhoenixOnline && root.PhoenixOnline.getState();
+      if (!state || !state.players || state.seat === undefined) return 'guest';
+      var seat = state.players[state.seat];
+      return seat ? seat.id : 'guest';
+    } catch (e) {
+      return 'guest';
+    }
+  }
+
+  /** When this player was last shocked, or zero. */
+  function lastShock() {
+    try {
+      return Number(window.localStorage.getItem(COOLDOWN_KEY + playerId())) || 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function rememberShock() {
+    try {
+      window.localStorage.setItem(COOLDOWN_KEY + playerId(), String(Date.now()));
+    } catch (e) { /* no storage; the event simply happens again sooner */ }
+  }
 
   function clearTimers() {
     timers.forEach(function (t) { clearTimeout(t); });
@@ -91,6 +121,7 @@
     }
 
     running = true;
+    rememberShock();
     document.body.classList.add('phoenix-fake-shutdown');
 
     overlay = document.createElement('div');
@@ -139,6 +170,8 @@
    */
   function maybeTrigger() {
     if (running) return false;
+    // This player was left alone for a while after the last time.
+    if (Date.now() - lastShock() < COOLDOWN_MS) return false;
     if (Math.random() >= CHANCE) return false;
     show();
     return true;
@@ -147,6 +180,9 @@
   root.PhoenixFakeShutdown = {
     maybeTrigger: maybeTrigger,
     dismiss: dismiss,
-    isRunning: function () { return running; }
+    isRunning: function () { return running; },
+    // How long this player is left alone after it happens to them.
+    cooldownMs: COOLDOWN_MS,
+    onCooldown: function () { return Date.now() - lastShock() < COOLDOWN_MS; }
   };
 })();

@@ -528,7 +528,7 @@
       needsTarget: true,
       inLiveGame: true,
       blurb: 'Their screen goes round and round.',
-      rule: 'The target is told they seem dehydrated. Their whole game interface rotates for 5 complete rounds. Everything stays reachable - the cards still play - it is just extremely annoying.',
+      rule: 'The target is told they seem dehydrated. Their whole game interface rotates for 2 complete rounds, and then it wears off. Everything stays reachable - the cards still play - it is just extremely annoying.',
       targetNote: 'Pick one opponent.'
     },
     {

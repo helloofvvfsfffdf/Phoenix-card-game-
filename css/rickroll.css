@@ -20,6 +20,13 @@
   width: min(1100px, 100%);
   text-align: center;
 }
+.phoenix-rickroll-rule {
+  margin: 14px 0 0;
+  text-align: center;
+  color: #ffb4b4;
+  font-size: 14px;
+  letter-spacing: 1px;
+}
 .phoenix-rickroll-frame {
   position: relative;
   width: 100%;
@@ -28,6 +35,19 @@
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 20px 70px rgba(0, 0, 0, 0.8);
+}
+.phoenix-rickroll-loading {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #cfd6e6;
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  background: #05070d;
 }
 .phoenix-rickroll-frame iframe {
   position: absolute;

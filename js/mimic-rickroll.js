@@ -92,6 +92,8 @@
         ? 'The video could not be loaded here, so the card simply does nothing. You can carry on.'
         : 'The video would not start, so the card simply does nothing. You can carry on.';
     }
+    var loading = overlay && overlay.querySelector('.phoenix-rickroll-loading');
+    if (loading) loading.textContent = 'The video is not coming.';
     if (button) {
       button.hidden = false;
       button.onclick = finish;
@@ -137,8 +139,11 @@
     overlay.setAttribute('aria-label', 'The Mimic');
     overlay.innerHTML =
       '<div class="phoenix-rickroll-panel">' +
-      '  <div class="phoenix-rickroll-frame" id="phoenix-rickroll-frame"></div>' +
+      '  <div class="phoenix-rickroll-frame" id="phoenix-rickroll-frame">' +
+      '    <p class="phoenix-rickroll-loading">Loading the video…</p>' +
+      '  </div>' +
       '  <p class="phoenix-rickroll-note">The card was a Mimic. This was never going to work.</p>' +
+      '  <p class="phoenix-rickroll-rule">You have to finish the whole video to carry on. There is no skip and no fast-forward.</p>' +
       '  <button type="button" class="phoenix-rickroll-continue" hidden>CONTINUE</button>' +
       '</div>';
     document.body.appendChild(overlay);
@@ -176,6 +181,9 @@
           },
           events: {
             onReady: function (event) {
+              // The video is here, so the loading line is not needed.
+              var loading = overlay && overlay.querySelector('.phoenix-rickroll-loading');
+              if (loading) loading.remove();
               // The browser may refuse to start with sound. Asking for it
               // plainly is the supported way to get there.
               try {

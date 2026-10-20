@@ -5,7 +5,15 @@ module.exports = function interactionView(pi, viewerId) {
   if (!pi) return null;
   const phase = pi.phase || 'main';
   const data = pi.roundData || {};
-  const roundData = pi.type === 'impostor'
+  // The moment the music stops is the server's business, not the table's:
+  // with a countdown on screen, everybody knows exactly when to press.
+  const roundData = pi.type === 'musicalchairs'
+    ? (function () {
+        const copy = Object.assign({}, data);
+        delete copy.musicStopsAt;
+        return copy;
+      })()
+    : pi.type === 'impostor'
     ? {
         myWord: pi.participants.includes(viewerId) && data.playerWords
           ? data.playerWords[viewerId] || null : null,

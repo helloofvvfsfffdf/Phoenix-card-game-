@@ -364,12 +364,24 @@ test('negative scores are valid and are not clamped', function () {
 
 suite('Dehydrated');
 
-test('the target is marked for five complete rounds', function () {
+test('the target is marked for two complete rounds', function () {
   const s = game();
   const target = byId(s, 'chatgpt');
   playCard(s, 'dehydrated');
   assert(s.dehydrated[target.id], 'the target is marked');
-  equal(s.dehydrated[target.id].untilRound, s.round + 5, 'for five rounds');
+  // The round it is played in, and the one after it: two rounds.
+  equal(s.dehydrated[target.id].untilRound, s.round + 1, 'for two rounds');
+});
+
+test('and it wears off when the rounds are up', function () {
+  const s = game();
+  const r = room(s);
+  const target = byId(s, 'chatgpt');
+  playCard(s, 'dehydrated');
+  assert(s.dehydrated[target.id], 'the target is marked');
+  s.round = s.round + 2;
+  Expansion.onRoundEnd(r);
+  assert(!s.dehydrated[target.id], 'and the effect is over');
 });
 
 suite('Nothing');
@@ -786,6 +798,30 @@ test('response time breaks a tie on accuracy', function () {
 
 suite('Hostage Situation');
 
+test('it is only dealt when there are at least three players', function () {
+  // The card calls the police, and the police officer has to be somebody
+  // else at the table - so a two-player lobby never deals it.
+  const two = Rules.createGame({ seed: 7, playerCount: 2 });
+  const five = Rules.createGame({ seed: 7, playerCount: 5 });
+  const everyCard = function (state) {
+    return state.deck.concat(state.players.map(function (p) { return state.hands[p.id]; }))
+      .reduce(function (all, hand) { return all.concat(hand); }, []);
+  };
+  equal(everyCard(two).filter(function (id) { return id === 'hostage'; }).length, 0,
+    'a two-player game never deals it');
+  assert(everyCard(five).filter(function (id) { return id === 'hostage'; }).length > 0,
+    'a five-player game deals it');
+});
+
+test('the buttons of a player who may answer twice are not locked', function () {
+  const client = fs.readFileSync(path.join(ROOT, 'js', 'online-client.js'), 'utf8');
+  assert(client.indexOf('answersMoreThanOnce') !== -1,
+    'the client knows which conversations may ask twice');
+  ['musicalchairs', 'russianroulette', 'memorymayhem', 'joshuasurvey'].forEach(function (id) {
+    assert(client.indexOf("'" + id + "'") !== -1, id + ' may ask the same player twice');
+  });
+});
+
 test('it takes a hostage, and picks a police officer', function () {
   const s = game();
   playCard(s, 'hostage');
@@ -836,8 +872,28 @@ test('the presidency lasts five rounds and pays 5,000 a round', function () {
   playCard(s, 'president');
   assert(s.president, 'there is a president');
   equal(s.president.id, actor.id, 'it is the player');
-  equal(s.president.untilRound, s.round + 5, 'for five rounds');
-  equal(actor.points, 5000, 'and they are paid');
+  // The round they take office in, and the four after it: five rounds.
+  equal(s.president.untilRound, s.round + 4, 'for five rounds');
+  equal(actor.points, 5000, 'and they are paid for taking office');
+});
+
+test('the president is paid 5,000 for every round they complete', function () {
+  const s = game();
+  const r = room(s);
+  const actor = byId(s, 'human');
+  playCard(s, 'president');
+  const before = actor.points;
+  // The round ends.
+  s.round = s.round + 1;
+  Expansion.onRoundEnd(r);
+  equal(actor.points, before + 5000, 'the round paid them');
+  assert(s.president, 'and they are still in office');
+  // ...and when the term is over, the office and the pay both end.
+  s.round = s.president.untilRound + 1;
+  const last = actor.points;
+  Expansion.onRoundEnd(r);
+  equal(actor.points, last, 'the last round paid nothing');
+  assert(!s.president, 'and the presidency is over');
 });
 
 test('a ban binds EVERYBODY, the president included', function () {
@@ -927,9 +983,17 @@ test('it is a browser-only event, and never touches the operating system', funct
 
 test('it is a five percent chance, and it never overlaps', function () {
   const source = fs.readFileSync(path.join(ROOT, 'js', 'shutdown-event.js'), 'utf8');
-  assert(source.indexOf('var CHANCE = 0.05;') !== -1, 'a five percent chance');
+  assert(source.indexOf('var CHANCE = 0.10;') !== -1, 'a ten percent chance');
   assert(source.indexOf('if (running) return false;') !== -1,
     'and it refuses to start while one is already running');
+});
+
+test('a player who has just had it is left alone for three minutes', function () {
+  const source = fs.readFileSync(path.join(ROOT, 'js', 'shutdown-event.js'), 'utf8');
+  assert(source.indexOf('var COOLDOWN_MS = 3 * 60 * 1000;') !== -1, 'three minutes');
+  assert(source.indexOf('COOLDOWN_KEY = ') !== -1, 'the cooldown is kept under the player\'s own id');
+  assert(source.indexOf('if (Date.now() - lastShock() < COOLDOWN_MS) return false;') !== -1,
+    'and the event waits for it to be over');
 });
 
 test('it is not a card, and it is not in any presentation list', function () {
@@ -955,6 +1019,16 @@ test('it uses the official YouTube player, with no skip and no fast-forward', fu
   assert(source.indexOf('dQw4w9WgXcQ') !== -1, 'the official Rick Astley video');
   assert(source.indexOf('autoplay: 1') !== -1, 'autoplay is attempted');
   assert(source.indexOf('PlayerState.ENDED') !== -1, 'and the end is detected');
+});
+
+test('it says the rule, and it is never a blank screen', function () {
+  const source = fs.readFileSync(path.join(ROOT, 'js', 'mimic-rickroll.js'), 'utf8');
+  assert(source.indexOf('You have to finish the whole video') !== -1,
+    'the player is told they have to finish the whole video');
+  assert(source.indexOf('There is no skip and no fast-forward') !== -1,
+    'and that there is no skip');
+  assert(source.indexOf('phoenix-rickroll-loading') !== -1,
+    'the frame says it is loading, so it is never a blank screen');
 });
 
 test('it always has a way out, so a match can never be stuck', function () {

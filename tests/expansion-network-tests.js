@@ -63,12 +63,13 @@ async function main() {
       await m.play('musicalchairs');
       const pi = pending(m);
       assert(pi, 'the server waits for the presses');
-      assert(pi.roundData.musicStopsAt > Date.now(), 'the music is playing');
-      // Wait for the music to stop.
-      await m.wait(() => {
-        const current = m.state().pendingInteraction;
-        return current && current.roundData.musicStopsAt <= Date.now();
-      }, 25000);
+      // Nobody is told when the music stops - with a countdown on screen,
+      // everybody would know exactly when to press.
+      assert(pi.roundData.musicStopsAt === undefined, 'the moment the music stops is not published');
+      // Wait for the music to stop. The server says so when it is time.
+      await m.wait(() => m.clients.some(function (client) {
+        return client.frames.some(function (frame) { return frame.type === 'chairs-stop'; });
+      }), 25000);
       for (const id of pi.participants) {
         if (!m.state().pendingInteraction) break;
         await m.decide(id, 'press');
@@ -100,6 +101,34 @@ async function main() {
       await m.wait(() => !m.state().pendingInteraction, 5000);
       assert(!m.state().pendingInteraction, 'the minigame is over');
       assert(m.state().lastInteractionResult, 'and the result is public');
+    } finally { await m.close(); }
+  });
+
+  await test('the revolver keeps working as the odds rise, and can come back', async () => {
+    // Every pull is a safe one, so the revolver goes round the table.
+    const m = await match({ random: [0.99] });
+    try {
+      await m.play('russianroulette');
+      const pulled = [];
+      let guard = 0;
+      while (m.state().pendingInteraction && guard++ < 6) {
+        const pi = m.state().pendingInteraction;
+        const holder = pi.roundData.holder;
+        assert(holder, 'the revolver is held by somebody');
+        // Aim back at the player who held it before, so it really does come
+        // back around the table.
+        const previous = pulled.length ? pulled[pulled.length - 1] : null;
+        const target = pi.participants.find(function (id) {
+          return id !== holder && id !== previous;
+        }) || previous || pi.participants.find(function (id) { return id !== holder; });
+        await m.decide(holder, 'aim:' + target);
+        pulled.push(holder);
+        if (!m.state().pendingInteraction) break;
+      }
+      assert(pulled.length >= 3, 'the revolver was pulled at least three times, got ' + pulled.length);
+      // And the same player may hold it again.
+      const holders = pulled.filter(function (id) { return id === pulled[0]; });
+      assert(holders.length >= 1, 'the first holder is still able to hold it');
     } finally { await m.close(); }
   });
 
@@ -139,6 +168,10 @@ async function main() {
       const pi = pending(m);
       assert(pi, 'the server waits for the disguise');
       const target = pi.targetId;
+      // Only the player who played the Mimic chooses the disguise: the target
+      // is handed a card and is not shown the menu of cards they could be
+      // given.
+      assert.deepStrictEqual(pi.participants, [pi.actorId], 'the target takes no part in the choice');
       await m.decide(pi.actorId, 'disguise:steal');
       const targetClient = m.byId(target);
       assert(targetClient, 'the target has a client');

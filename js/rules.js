@@ -396,6 +396,10 @@
     options = options || {};
     setSeed(options.seed);
 
+    // How many players are really at the table. A card that needs a third
+    // player is not dealt in a smaller lobby.
+    var playerCount = Number(options.playerCount) || 0;
+
     var players = SEATS.map(function (seat, index) {
       return {
         id: seat.id,
@@ -481,6 +485,9 @@
     }
 
     var state = {
+      // How many players are really at the table. A card that needs a third
+      // player is not dealt in a smaller lobby.
+      playerCount: playerCount || SEATS.length,
       rounds: normalizeRounds(options.rounds),
       seed: seedState,
       round: 1,
@@ -1447,7 +1454,8 @@
   /** Dehydrated: the target's interface turns for five rounds. */
   function resolveDehydrated(state, actor, target) {
     if (!target) return 'Dehydrated - nobody to hydrate.';
-    state.dehydrated[target.id] = { untilRound: state.round + 5 };
+    // The round it is played in, and the one after it: two rounds.
+    state.dehydrated[target.id] = { untilRound: state.round + 1 };
     return 'Dehydrated - ' + target.name + ' is told they seem dehydrated.';
   }
 
@@ -1491,7 +1499,9 @@
 
   /** The President: five rounds, and 5,000 for every round completed. */
   function resolvePresident(state, actor) {
-    state.president = { id: actor.id, untilRound: state.round + 5 };
+    // The round they take office in, and the four after it: five rounds. They
+    // are paid 5,000 for each of them as the round ends.
+    state.president = { id: actor.id, untilRound: state.round + 4 };
     actor.points += 5000;
     return 'President - ' + actor.name + ' is President for 5 rounds.';
   }
@@ -2233,6 +2243,10 @@
     // deckCards() excludes the legendary card, so Phoenix can never be dealt
     // however the counts are edited above.
     Cards.deckCards().forEach(function (card) {
+      // The Hostage Situation calls the police, and the police officer has to
+      // be somebody else at the table - so the card is only dealt when there
+      // are at least three players.
+      if (card.id === 'hostage' && (state.playerCount || 0) < 3) return;
       var count = DECK_COMPOSITION[card.id] || 0;
       for (var i = 0; i < count; i++) deck.push(card.id);
     });

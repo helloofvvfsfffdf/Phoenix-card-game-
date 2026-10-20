@@ -167,15 +167,27 @@ function onRoundEnd(room) {
   const s = room.state;
   if (!s) return;
 
-  // The president earns for the round they completed, and their term runs out.
-  if (s.president && s.round > s.president.untilRound) {
-    endPresidency(room);
+  // The president earns 5,000 for every round they complete, and their term
+  // runs out when the round passes it.
+  if (s.president) {
+    if (s.round > s.president.untilRound) {
+      endPresidency(room);
+    } else {
+      addPoints(room, s.president.id, 5000);
+    }
   }
 
   // A trap that never fired expires with the round.
   if (s.traps) {
     Object.keys(s.traps).forEach(id => {
       if (s.round > s.traps[id].untilRound) delete s.traps[id];
+    });
+  }
+
+  // And so does a screen that has been turned for long enough.
+  if (s.dehydrated) {
+    Object.keys(s.dehydrated).forEach(id => {
+      if (s.round > s.dehydrated[id].untilRound) delete s.dehydrated[id];
     });
   }
 }
@@ -189,7 +201,8 @@ function startPresidency(room) {
   const actor = s.players.find(p => p.id === room.pendingInteraction.actorId);
   s.president = {
     id: actor.id,
-    untilRound: s.round + 5
+    // The round they take office in, and the four after it: five rounds.
+    untilRound: s.round + 4
   };
   s.bannedCards = s.bannedCards || [];
   addPoints(room, actor.id, 5000);
@@ -344,7 +357,8 @@ function resolveDehydrated(room) {
     return { events: [{ type: 'result', cardId: 'dehydrated', text: 'Dehydrated - nobody to hydrate.' }], advanceTurn: true };
   }
   s.dehydrated = s.dehydrated || {};
-  s.dehydrated[target.id] = { untilRound: s.round + 5 };
+  // The round it is played in, and the one after it: two rounds.
+  s.dehydrated[target.id] = { untilRound: s.round + 1 };
   return {
     events: [{
       type: 'result', cardId: 'dehydrated',
@@ -560,6 +574,9 @@ function startMemoryMayhem(room) {
   const pi = room.pendingInteraction;
   pi.roundData = pi.roundData || {};
   pi.roundData.sequences = buildMemorySequences();
+  // The symbols themselves, so the player can be offered the very ones the
+  // sequences are made of - nobody can type a star.
+  pi.roundData.symbols = MEMORY_SYMBOLS.slice();
   pi.roundData.phaseIndex = 0;
   pi.roundData.answers = {};
   pi.roundData.times = {};

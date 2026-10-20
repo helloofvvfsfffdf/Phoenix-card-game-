@@ -96,7 +96,15 @@
   /* Musical Chairs                                                      */
   /* ------------------------------------------------------------------ */
 
-  var chairs = { overlay: null, audio: null, clock: null, disabledUntil: 0 };
+  var chairs = { overlay: null, audio: null, clock: null, disabledUntil: 0, stopped: false };
+
+  /** The music has stopped - the server says so, and nobody else knows when. */
+  function chairsStopped() {
+    chairs.stopped = true;
+    stopChairsAudio();
+    var status = document.getElementById('mc-status');
+    if (status) status.textContent = 'The music has stopped. PRESS NOW!';
+  }
 
   function stopChairsAudio() {
     if (chairs.audio) {
@@ -119,6 +127,7 @@
   }
 
   function chairsBuild() {
+    chairs.stopped = false;
     if (chairs.overlay && document.body.contains(chairs.overlay)) {
       chairs.overlay.hidden = false;
       return;
@@ -144,15 +153,15 @@
     var button = document.getElementById('mc-press');
     if (!status) return;
 
-    var stopsIn = Math.max(0, Math.ceil(((data.musicStopsAt || 0) - Date.now()) / 1000));
     var mine = (pi.submitted || []).indexOf(myId()) !== -1;
     if (mine) {
       status.textContent = 'You have pressed. Waiting for everybody else.';
       if (button) button.disabled = true;
     } else {
-      status.textContent = stopsIn > 0
-        ? 'The music is playing. It stops in ' + stopsIn + ' seconds.'
-        : 'The music has stopped. PRESS NOW!';
+      // No countdown: the table hears the music stop, and that is the signal.
+      status.textContent = chairs.stopped
+        ? 'The music has stopped. PRESS NOW!'
+        : 'The music is playing. Press only AFTER it stops.';
       if (button) button.disabled = false;
     }
     if (feedback && data.message) feedback.textContent = data.message;
@@ -229,19 +238,62 @@
       '  <p id="mm-status">Watch the sequence.</p>' +
       '  <div class="mm-sequence" id="mm-sequence"></div>' +
       '  <div class="mm-answer" id="mm-answer" hidden>' +
-      '    <label for="mm-input">Type the symbols you saw</label>' +
-      '    <input id="mm-input" type="text" maxlength="12" autocomplete="off" aria-label="The sequence you saw">' +
-      '    <button type="button" id="mm-submit" class="primary">SUBMIT</button>' +
+      '    <p class="mm-answer-label">Tap the symbols you saw, in order</p>' +
+      '    <div class="mm-picked" id="mm-picked" aria-live="polite"></div>' +
+      '    <div class="mm-symbols" id="mm-symbols" role="group" aria-label="The symbols"></div>' +
+      '    <div class="mm-answer-actions">' +
+      '      <button type="button" id="mm-clear" class="online-secondary">CLEAR</button>' +
+      '      <button type="button" id="mm-submit" class="primary">SUBMIT</button>' +
+      '    </div>' +
       '  </div>' +
       '  <p id="mm-feedback" aria-live="polite"></p>');
     document.getElementById('mm-submit').onclick = function () {
-      var input = document.getElementById('mm-input');
-      var value = (input && input.value ? input.value : '').trim();
-      send('mem:' + (memory.sequenceIndex || 0) + ':' + value);
-      if (input) input.disabled = true;
+      send('mem:' + (memory.sequenceIndex || 0) + ':' + memory.picked.join(''));
+      memory.locked = true;
       var button = document.getElementById('mm-submit');
       if (button) button.disabled = true;
+      var clear = document.getElementById('mm-clear');
+      if (clear) clear.disabled = true;
+      var symbols = document.getElementById('mm-symbols');
+      if (symbols) symbols.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
     };
+    document.getElementById('mm-clear').onclick = function () {
+      memory.picked = [];
+      renderPicked();
+    };
+  }
+
+  /** What the player has tapped so far, shown back to them. */
+  function renderPicked() {
+    var picked = document.getElementById('mm-picked');
+    if (!picked) return;
+    picked.replaceChildren();
+    (memory.picked || []).forEach(function (symbol) {
+      picked.appendChild(el('span', 'mm-symbol mm-symbol-picked', symbol));
+    });
+  }
+
+  /**
+   * The symbols, as buttons.
+   *
+   * Nobody can type a star, so the player taps the symbols they saw instead.
+   */
+  function renderSymbols(symbols, length) {
+    var box = document.getElementById('mm-symbols');
+    if (!box) return;
+    box.replaceChildren();
+    (symbols || []).forEach(function (symbol) {
+      var button = el('button', 'mm-symbol-button', symbol);
+      button.type = 'button';
+      button.setAttribute('aria-label', 'The ' + symbol + ' symbol');
+      button.onclick = function () {
+        if (memory.locked) return;
+        if (length && memory.picked.length >= length) return;
+        memory.picked = (memory.picked || []).concat([symbol]);
+        renderPicked();
+      };
+      box.appendChild(button);
+    });
   }
 
   function memoryOnState(msg) {
@@ -273,8 +325,10 @@
         display.replaceChildren();
         if (answer) {
           answer.hidden = false;
-          var input = document.getElementById('mm-input');
-          if (input) { input.disabled = false; input.value = ''; input.focus(); }
+          memory.picked = [];
+          memory.locked = false;
+          renderPicked();
+          renderSymbols(data.symbols || [], sequence.length);
         }
       }, data.revealMs || 2500);
     }
@@ -292,7 +346,20 @@
 
   var mimic = { overlay: null };
 
+  /** Is this player the one who played the Mimic? */
+  function mimicIsChooser() {
+    var state = root.PhoenixOnline && root.PhoenixOnline.getState();
+    var pi = state && state.pendingInteraction;
+    if (!pi || pi.type !== 'mimic') return false;
+    return !pi.actorId || pi.actorId === myId();
+  }
+
   function mimicBuild() {
+    // Only the player who played the Mimic chooses the disguise.
+    if (!mimicIsChooser()) {
+      if (mimic.overlay) mimic.overlay = teardown(mimic.overlay);
+      return;
+    }
     if (mimic.overlay && document.body.contains(mimic.overlay)) {
       mimic.overlay.hidden = false;
       return;
@@ -304,6 +371,7 @@
   }
 
   function mimicOnState(msg) {
+    if (!mimicIsChooser()) return;
     var choices = document.getElementById('mimic-choices');
     if (!choices) return;
     choices.replaceChildren();
@@ -485,7 +553,7 @@
   }
 
   register('PhoenixMusicalChairsInteractive', {
-    build: chairsBuild, onState: chairsOnState, close: chairsClose
+    build: chairsBuild, onState: chairsOnState, close: chairsClose, stopped: chairsStopped
   });
   register('PhoenixRussianRouletteInteractive', {
     build: rouletteBuild, onState: rouletteOnState, close: rouletteClose

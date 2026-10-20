@@ -38,6 +38,10 @@
   .mm-sequence { min-height: 56px; }
   .mm-answer { flex-direction: column; align-items: stretch; }
   .mm-answer input, .mm-answer button { width: 100%; }
+  /* The symbol picker has to fit a phone. */
+  .mm-symbol-button { width: 44px; height: 44px; font-size: 24px; }
+  .mm-symbols { gap: 6px; }
+  .mm-answer-label { font-size: 13px; text-align: center; }
 
   /* The revolver. */
   .rr-revolver { width: 104px; height: 104px; font-size: 18px; margin: 12px auto; }

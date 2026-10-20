@@ -17,8 +17,34 @@
   border-radius: 12px;
 }
 .mm-sequence { display: flex; flex-wrap: wrap; justify-content: center; min-height: 70px; margin: 12px 0; }
-.mm-answer { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; }
-.mm-answer input { min-height: 44px; padding: 8px 12px; }
+.mm-answer { display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; }
+.mm-answer-label { margin: 0; color: #cfd6e6; font-size: 14px; }
+/* What the player has tapped so far. */
+.mm-picked { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; min-height: 40px; }
+.mm-symbol-picked { border-color: #7ec8e3; background: #24304f; }
+/* The symbols themselves, as buttons - nobody can type a star. */
+.mm-symbols { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.mm-symbol-button {
+  width: 54px; height: 54px; margin: 0; font-size: 30px; line-height: 1;
+  color: #f3ede2; background: #1b2138; border: 1px solid #4a5a9d;
+  border-radius: 12px; cursor: pointer;
+}
+.mm-symbol-button:hover:not(:disabled) { border-color: #7ec8e3; }
+.mm-symbol-button:disabled { opacity: .45; cursor: not-allowed; }
+.mm-answer-actions { display: flex; gap: 10px; justify-content: center; }
+
+/* --- The Hostage Situation's roles --- */
+.online-role {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.online-role-criminal { color: #ff8a8a; }
+.online-role-hostage { color: #ffd16b; }
+.online-role-officer { color: #7ec8e3; }
 
 /* --- Russian Roulette --- */
 .roulette-overlay .interactive-shell { max-width: 620px; }

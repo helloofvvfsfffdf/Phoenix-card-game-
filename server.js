@@ -1397,6 +1397,7 @@ function finishInteraction(room, provided) {
     applyTed(room);
     applyMaple(room);
     applyLinkedFate(room);
+    applyRoundEndHousekeeping(room);
   }
 
   broadcast(room);
@@ -1543,6 +1544,9 @@ function startGame(room) {
 
   const s = Rules.createGame({
     rounds: room.requestedRounds,
+    // How many players are really at the table - a card that needs a third
+    // player is not dealt in a smaller lobby.
+    playerCount: room.members.length,
     // The two owner-only cards are dealt ONLY in an owner room. The room's
     // mode is decided by the server when the owner password is checked, so a
     // client cannot ask for them.
@@ -2410,7 +2414,10 @@ function snapshot(room, member) {
     // The expansion's live state, so every client can show the same thing.
     president: s && s.president ? s.president : null,
     bannedCards: s && s.bannedCards ? s.bannedCards.slice() : [],
-    dehydrated: s && s.dehydrated ? s.dehydrated[mine] || null : null,
+    // The rotation is only sent while it is actually on, so the client
+    // never has to work out whether the rounds are up.
+    dehydrated: s && s.dehydrated && s.dehydrated[mine] &&
+      s.dehydrated[mine].untilRound >= s.round ? s.dehydrated[mine] : null,
     hasTrap: !!(s && s.traps && s.traps[mine]),
     hostage: s && s.hostage ? s.hostage : null,
     // A HOSTAGE'S HAND belongs to the criminal - that is what "controlling
@@ -2549,6 +2556,7 @@ function skipUnplayableTurns(room) {
         applyTed(room);
         applyMaple(room);
         applyLinkedFate(room);
+        applyRoundEndHousekeeping(room);
       }
     }
   }
@@ -3978,11 +3986,16 @@ async function handle(ws, data) {
 
       // Set up participants based on card type.
       if (cardId === 'rps' || cardId === 'speed' || cardId === 'dice' || cardId === 'linkedfate' || cardId === 'swapper' ||
-          cardId === 'mimic' || cardId === 'support' || cardId === 'russianroulette' ||
+          cardId === 'support' || cardId === 'russianroulette' ||
           cardId === 'trailer') {
-        // The caster and the target. The Mimic, the complaint form, the
-        // revolver and the trailer are all between two people.
+        // The caster and the target. The complaint form, the revolver and the
+        // trailer are all between two people.
         room.pendingInteraction.participants = [id, targetId];
+      } else if (cardId === 'mimic') {
+        // Only the player who played the Mimic chooses what it pretends to
+        // be. The target is handed a card; they have no say in it, and they
+        // are not shown the menu of cards they could be given.
+        room.pendingInteraction.participants = [id];
       } else if (cardId === 'wheel' || cardId === 'wheelofmisfortune') {
         // Wheel affects all players, no target needed
         const eligible = s.players.filter(p => p.enabled && !Rules.isOut(p, s));
@@ -4046,6 +4059,18 @@ async function handle(ws, data) {
           : cardId === 'joshuasurvey' ? Expansion.startSurvey(room)
           : Expansion.startTrailer(room);
         if (started && started.events) recordEvents(room, started.events);
+        if (cardId === 'musicalchairs') {
+          // The music stops at a moment of the server's choosing, and nobody
+          // is told when. The table hears it stop.
+          const stopsAt = (room.pendingInteraction.roundData || {}).musicStopsAt || 0;
+          setTimeout(function () {
+            if (room.pendingInteraction && room.pendingInteraction.type === 'musicalchairs') {
+              room.members.forEach(function (member) {
+                if (member.ws) send(member.ws, { type: 'chairs-stop' });
+              });
+            }
+          }, Math.max(0, stopsAt - Date.now()));
+        }
       }
 
       // Safety net: if a participant never responds, auto-resolve after timeout.
@@ -4146,6 +4171,7 @@ async function handle(ws, data) {
         applyTed(room);
         applyMaple(room);
         applyLinkedFate(room);
+        applyRoundEndHousekeeping(room);
       }
 
     broadcast(room);
