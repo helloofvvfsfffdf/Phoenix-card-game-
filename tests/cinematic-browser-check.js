@@ -67,6 +67,8 @@ async function main() {
     await call('Page.addScriptToEvaluateOnNewDocument',{source:`localStorage.setItem('phoenix.music.v1',JSON.stringify({track:'off',volume:.25}));localStorage.setItem('phoenix.effects.v1',JSON.stringify({sound:false,volume:.35,visuals:'full'}));`});
     await navigate(base + '/');
     const visible = await evaluate(`!document.hidden`); assert(visible, 'native headless document must be visible');
+    // The music module installs a moment after the document is ready.
+    await evaluate("new Promise((r,j)=>{let n=0;const t=setInterval(()=>{if(document.getElementById('phoenix-music')){clearInterval(t);r(true);}else if(n++>120){clearInterval(t);j(Error('the music element never appeared'));}},50);})");
     await evaluate(`(() => {
       window.smokeErrors=[];addEventListener('error',e=>smokeErrors.push(e.message));addEventListener('unhandledrejection',e=>smokeErrors.push(String(e.reason)));
       const connect=AudioNode.prototype.connect;AudioNode.prototype.connect=function(dest,...args){if(dest instanceof AudioDestinationNode){const mute=this.context.createGain();mute.gain.value=0;connect.call(this,mute);return connect.call(mute,dest);}return connect.call(this,dest,...args);};
@@ -93,7 +95,9 @@ async function main() {
     console.log('PASS: '+previews.results.length+' native Web Audio previews, controls, mute/zero volume and bounded PCM');
     if (process.env.PHOENIX_BROWSER_OWNER_PASSWORD) {
       const multiplayer = await evaluate(`(async()=>{
-        window.smokePeers=[];window.smokeStates=new Map();const Native=WebSocket;
+        window.smokePeers=[];window.actorOf=(peers,states)=>{const host=states.get(peers[0]);const current=host&&host.current;
+      if(current&&host.hostage&&host.hostage.hostageId===current){const criminal=peers.find(w=>{const st=states.get(w);return st&&st.players&&st.seat!==undefined&&st.players[st.seat].id===host.hostage.criminalId;});if(criminal)return criminal;}
+      return peers.find(w=>{const st=states.get(w);return st&&st.acting;});};;window.INTERACTIVE=['rps','betrayal','speed','dice','wheel','linkedfate','impostor','swapper','wheelofmisfortune','musicalchairs','russianroulette','memorymayhem','mimic','support','joshuasurvey','trailer'];;window.smokeStates=new Map();const Native=WebSocket;
         function track(ws){smokePeers.push(ws);ws.addEventListener('message',e=>{const s=JSON.parse(e.data);if(s.type==='state')smokeStates.set(ws,s);});return ws;}
         window.WebSocket=class extends Native{constructor(...args){super(...args);track(this);window.smokeHost=this;}};
         const next=ws=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>{ws.removeEventListener('message',handler);reject(new Error('snapshot timeout'));},5000);function handler(e){const s=JSON.parse(e.data);if(!['state','error'].includes(s.type))return;clearTimeout(timer);ws.removeEventListener('message',handler);s.type==='error'?reject(new Error(s.message)):resolve(s);}ws.addEventListener('message',handler);});
@@ -106,7 +110,7 @@ async function main() {
         while(['turnDice','allyDice'].includes(smokeStates.get(smokeHost).phase)){if(guard++>150)throw new Error('dice');await action(smokePeers[smokeStates.get(smokeHost).dice.next],{type:'roll'});}
         const allies=['ted','phoenix','elsie'];while(smokeStates.get(smokeHost).phase==='draft')await action(smokePeers[smokeStates.get(smokeHost).draftTurn],{type:'chooseAlly',ally:allies.shift()});
         await new Promise(r=>setTimeout(r,500));const matchPaused=a.paused;let moves=0;
-        while(!smokeStates.get(smokeHost).over&&moves++<150){const ws=require('./helpers/acting-client')(smokePeers,w=>smokeStates.get(w)),s=smokeStates.get(ws),m=s.moves.find(m=>m.cardId!=='phoenix'&&!(s.mapleBlocked||[]).includes(m.cardId))||s.moves.find(m=>!(s.mapleBlocked||[]).includes(m.cardId));await action(ws,{type:'move',cardId:m.cardId,targetId:m.targetId});}
+        while(!smokeStates.get(smokeHost).over&&moves++<150){const ws=actorOf(smokePeers,smokeStates),s=smokeStates.get(ws),m=s.moves.find(m=>m.cardId!=='phoenix'&&!(s.mapleBlocked||[]).includes(m.cardId)&&!INTERACTIVE.includes(m.cardId))||s.moves.find(m=>!(s.mapleBlocked||[]).includes(m.cardId)&&!INTERACTIVE.includes(m.cardId));await action(ws,{type:'move',cardId:m.cardId,targetId:m.targetId});}
         const final=smokeStates.get(smokeHost),result=PhoenixEffects.matchResult(final),stage=PhoenixCinematics.diagnostics().celebration;window.smokeWinner=final.winner;
         await new Promise(r=>setTimeout(r,result==='victory'?11000:5500));const cleaned=PhoenixCinematics.diagnostics();
         // Repeated authoritative state uses the actual message handler again.
@@ -145,7 +149,7 @@ async function main() {
           await smokeAction(smokeHost,{type:'start',rounds:10});let guard=0;while(['turnDice','allyDice'].includes(smokeStates.get(smokeHost).phase)){if(guard++>150)throw Error('dice');await smokeAction(smokePeers[smokeStates.get(smokeHost).dice.next],{type:'roll'});}
           const allies=['ted','phoenix','elsie'];while(smokeStates.get(smokeHost).phase==='draft')await smokeAction(smokePeers[smokeStates.get(smokeHost).draftTurn],{type:'chooseAlly',ally:allies.shift()});
           const initial=smokePeers.map(ws=>({seat:smokeStates.get(ws).seat,moves:smokeStates.get(ws).moves}));let fired=false,actorIsBrowser=false,totalBefore=0,totalAfter=0;guard=0;
-          while(!smokeStates.get(smokeHost).over&&guard++<200){const ws=require('./helpers/acting-client')(smokePeers,w=>smokeStates.get(w)),s=smokeStates.get(ws);const allowed=s.moves.filter(m=>!(s.mapleBlocked||[]).includes(m.cardId));
+          while(!smokeStates.get(smokeHost).over&&guard++<200){const ws=actorOf(smokePeers,smokeStates),s=smokeStates.get(ws);const allowed=s.moves.filter(m=>!(s.mapleBlocked||[]).includes(m.cardId)&&!INTERACTIVE.includes(m.cardId));
             const m=allowed.find(m=>m.cardId==='phoenix')||allowed.find(m=>['bonus','hunter','ghost','reveal','trick'].includes(m.cardId))||allowed[0];if(!m)throw Error('no legal move');
             if(m.cardId==='phoenix'){totalBefore=s.players.reduce((a,p)=>a+p.points,0);actorIsBrowser=ws===smokeHost;await smokeAction(ws,{type:'move',cardId:m.cardId,targetId:m.targetId});fired=true;totalAfter=smokeStates.get(ws).players[smokeStates.get(ws).seat].points;break;}
             await smokeAction(ws,{type:'move',cardId:m.cardId,targetId:m.targetId});}
