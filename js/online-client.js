@@ -1581,8 +1581,16 @@ function renderPlaying() {
     const president = state.president;
     const me = state.players[state.seat];
     const isPresident = !!(president && me && president.id === me.id);
+    // Only the President sees it at all.
     box.hidden = !isPresident;
-    if (!isPresident) return;
+    if (!isPresident) {
+      const body = $('online-president-body');
+      if (body) body.hidden = true;
+      const toggle = $('online-president-toggle');
+      if (toggle) toggle.setAttribute('aria-expanded', 'false');
+      box.classList.remove('is-open');
+      return;
+    }
 
     const body = $('online-president-body');
     const toggle = $('online-president-toggle');
@@ -1594,13 +1602,7 @@ function renderPlaying() {
     const banned = state.bannedCards || [];
     const locked = !!state.presidentTurn || !!state.presidentChanged;
 
-    if (hint) {
-      hint.textContent = state.presidentTurn
-        ? 'take your turn'
-        : state.presidentChanged
-          ? 'changed this round'
-          : 'open';
-    }
+    if (hint) hint.textContent = '';
     if (note) {
       note.textContent = state.presidentTurn
         ? 'You are President and it is your turn. Take it - the law you have made applies to you as well.'
@@ -1611,9 +1613,15 @@ function renderPlaying() {
 
     list.replaceChildren();
     const Cards = window.PhoenixCards;
+    const Art = window.PhoenixCardCinematicArt;
     if (!Cards) return;
     Cards.CARDS.forEach(function (card) {
       const row = el('div', 'online-president-card');
+      // The card as the card itself, not a line of text.
+      const face = el('span', 'online-president-card-face');
+      face.innerHTML = (Art && Art.icon) ? Art.icon(card.id) : '';
+      face.setAttribute('aria-hidden', 'true');
+      row.appendChild(face);
       const name = el('span', 'online-president-card-name', card.name);
       row.appendChild(name);
       const illegal = banned.indexOf(card.id) !== -1;
@@ -1744,6 +1752,8 @@ function renderPlaying() {
         const open = body.hidden;
         body.hidden = !open;
         presidentToggle.setAttribute('aria-expanded', String(open));
+        const box = $('online-president');
+        if (box) box.classList.toggle('is-open', open);
       };
     }
     $('online-create').onclick = () => join('create');
