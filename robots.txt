@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
 
+# The API is not content - it is the game's own plumbing, and there is
+# nothing there for a search engine to read.
+Disallow: /api/
+
 Sitemap: https://phoenix-card-game.onrender.com/sitemap.xml
