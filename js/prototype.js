@@ -128,6 +128,31 @@
         window.location.href = 'card-collection.html';
       });
     });
+    var rulesButton = $('menu-rules');
+    if (rulesButton) {
+      rulesButton.addEventListener('click', function () {
+        window.location.href = 'rules.html';
+      });
+    }
+
+    // SINGLE PLAYER and MULTIPLAYER TESTING are the creator's own tools, so
+    // they are only offered to the owner. The server refuses them anyway;
+    // this is so nobody is led to a door that is locked.
+    function showOwnerTools() {
+      var account = window.PhoenixAccount && window.PhoenixAccount.current
+        ? window.PhoenixAccount.current()
+        : null;
+      var isOwner = !!(account && account.role === 'owner');
+      ['menu-single', 'menu-test'].forEach(function (id) {
+        var button = $(id);
+        if (button) button.hidden = !isOwner;
+      });
+    }
+    if (window.PhoenixAccount && window.PhoenixAccount.refresh) {
+      window.PhoenixAccount.refresh().then(showOwnerTools, showOwnerTools);
+    } else {
+      showOwnerTools();
+    }
     ['btn-new', 'btn-play-again'].forEach(function (id) {
       $(id).addEventListener('click', function () {
         if (mode === 'test') {

@@ -514,6 +514,9 @@
       kind: 'evil',
       needsTarget: true,
       inLiveGame: true,
+      // The whole point of this card is that nobody knows what it does until
+      // it is played, so the rules page does not give it away.
+      secret: true,
       blurb: 'Hand over a card that is not what it looks like.',
       rule: 'Choose an opponent, then choose an ordinary card to disguise. The target receives a card that looks exactly like it - same name, artwork and rules - but when they play it the real effect never happens. Instead, they are Rickrolled. The Mimic is used up afterwards.',
       targetNote: 'Pick one opponent, then the card to disguise.'

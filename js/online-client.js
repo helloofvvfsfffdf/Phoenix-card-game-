@@ -551,6 +551,30 @@
         // only place the dashboard is revealed, so it stays password-gated.
         revealAdminPanel();
         return;
+      } else if (message.type === 'friend-request') {
+        // A friend is waiting for permission. The owner is told the moment it
+        // arrives, not the next time they happen to open the dashboard.
+        PhoenixOnline.friendRequests = PhoenixOnline.friendRequests || [];
+        if (!PhoenixOnline.friendRequests.some(function (r) {
+          return r.id === message.request.id;
+        })) {
+          PhoenixOnline.friendRequests.push(message.request);
+        }
+        renderAdminPanel();
+        return;
+      } else if (message.type === 'admin_friend_requests') {
+        PhoenixOnline.friendRequests = message.requests || [];
+        renderAdminPanel();
+        return;
+      } else if (message.type === 'admin_friend_respond_result') {
+        var line = $('admin-friend-feedback');
+        if (line) {
+          line.textContent = message.message ||
+            (message.ok ? 'The request has been answered.' : 'That could not be done.');
+          line.classList.toggle('is-error', !message.ok);
+        }
+        renderAdminPanel();
+        return;
       } else if (message.type === 'admin_rooms') {
         PhoenixOnline.adminRooms = message.rooms;
         renderAdminPanel();
@@ -785,6 +809,9 @@
     // Ask for the current room list. The server answers with admin_rooms, which
     // renderAdminPanel() draws - without this the lobby list stayed empty.
     send({ type: 'admin_rooms' });
+    // And for the friend requests that are waiting, in case one arrived while
+    // the dashboard was closed.
+    send({ type: 'admin_friend_requests' });
   }
 
   /**
@@ -1084,15 +1111,108 @@ function renderLobbyList(rooms) {
 }
 
 // Admin dashboard rendering
+/**
+ * WHO IS ONLINE.
+ *
+ * Every connection the server can see, with the room it is sitting at. The
+ * owner already owns the server, so this is only ever shown to them.
+ */
+function renderAdminPlayers() {
+  const box = $('admin-online-list');
+  if (!box) return;
+  const state = PhoenixOnline.adminState;
+  const online = (state && state.online) || [];
+  box.replaceChildren();
+  if (!online.length) {
+    box.append(el('p', 'admin-online-empty', 'Nobody is connected right now.'));
+    return;
+  }
+  online.forEach(function (player) {
+    const row = el('div', 'admin-online-row');
+    row.append(el('span', 'admin-online-name', player.name));
+    const tags = [];
+    if (player.owner) tags.push('OWNER');
+    else if (player.signedIn) tags.push('SIGNED IN');
+    else tags.push('NOT SIGNED IN');
+    if (player.admin) tags.push('ADMIN');
+    tags.push(player.room ? 'ROOM ' + player.room : 'LOBBY');
+    row.append(el('span', 'admin-online-tags', tags.join(' \u00b7 ')));
+    box.appendChild(row);
+  });
+}
+
+/**
+ * THE FRIEND REQUESTS.
+ *
+ * One row per friend who is waiting: their name, how long they have left,
+ * and the two buttons. Accepting makes the account - with no email address,
+ * because there is nobody to send a code to - and declining tells them so.
+ */
+function renderAdminFriends() {
+  const box = $('admin-friend-list');
+  if (!box) return;
+  const requests = (PhoenixOnline.friendRequests || []).filter(function (r) {
+    return r.state === 'pending';
+  });
+  box.replaceChildren();
+
+  if (!requests.length) {
+    const empty = document.createElement('p');
+    empty.className = 'mod-sub';
+    empty.textContent = 'No friend is waiting.';
+    box.appendChild(empty);
+    return;
+  }
+
+  requests.forEach(function (request) {
+    const row = document.createElement('div');
+    row.className = 'mod-hit';
+
+    const who = document.createElement('div');
+    const name = document.createElement('span');
+    name.className = 'mod-hit-name';
+    name.textContent = request.username;
+    who.appendChild(name);
+    const left = document.createElement('span');
+    left.className = 'mod-hit-id';
+    const seconds = Math.max(0, Math.round((request.expiresAt - Date.now()) / 1000));
+    left.textContent = seconds + ' second' + (seconds === 1 ? '' : 's') + ' left to answer';
+    who.appendChild(left);
+    row.appendChild(who);
+
+    const accept = document.createElement('button');
+    accept.type = 'button';
+    accept.className = 'online-primary';
+    accept.textContent = 'ACCEPT';
+    accept.onclick = function () { answerFriend(request.id, 'accept'); };
+    row.appendChild(accept);
+
+    const decline = document.createElement('button');
+    decline.type = 'button';
+    decline.className = 'online-secondary';
+    decline.textContent = 'DECLINE';
+    decline.onclick = function () { answerFriend(request.id, 'decline'); };
+    row.appendChild(decline);
+
+    box.appendChild(row);
+  });
+}
+
+function answerFriend(id, decision) {
+  send({ type: 'admin_friend_respond', id: id, decision: decision });
+}
+
 function renderAdminPanel() {
   const panel = $('admin-panel');
   if (!panel) return;
+  renderAdminFriends();
   panel.hidden = false;
   const stateDiv = $('admin-state');
   if (stateDiv && PhoenixOnline.adminState) {
     const s = PhoenixOnline.adminState;
     stateDiv.textContent = `Multiplayer Open: ${s.multiplayerOpen}, Creation Locked: ${s.creationLocked}`;
   }
+  renderAdminPlayers();
   const list = $('admin-room-list');
   if (!list) return;
   list.replaceChildren();

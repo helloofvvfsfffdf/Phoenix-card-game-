@@ -141,6 +141,38 @@
   line-height: 1.5;
 }
 
+/* ---- the owner's way in for a friend ---- */
+
+.account-friend-choose {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #2c3a5c;
+}
+
+.account-friend-choose .account-fineprint {
+  margin: 8px 0 0;
+  text-align: left;
+}
+
+.account-friend-panel {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid #75572e;
+  border-radius: 12px;
+  background: rgba(21, 27, 45, .92);
+  text-align: left;
+}
+
+.account-friend-panel input {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.account-friend-panel .account-actions {
+  margin-top: 4px;
+}
+
 /* ---- main-menu account line ---- */
 
 .menu-account {

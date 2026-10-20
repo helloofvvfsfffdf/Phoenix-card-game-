@@ -38,6 +38,7 @@ const { openState } = require('./helpers/legacy-account-fixture');
 
 const ROOT = path.join(__dirname, '..');
 const Moderation = require(path.join(ROOT, 'js', 'moderation.js'));
+const Auth = require(path.join(ROOT, 'js', 'auth.js'));
 
 let passed = 0;
 const failures = [];
@@ -88,6 +89,31 @@ function freePort() {
 
 function unitSuite() {
   console.log('\n\u001b[1mAddresses, privacy and owner authorisation\u001b[0m');
+
+  test('a name with a swear word in it is caught, however it is spelled', () => {
+    // The filter is a real filter: a name is refused when it holds one of
+    // these words, however the person spelled it.
+    assert.strictEqual(Auth.nameHasBannedWord('fuckface'), true);
+    assert.strictEqual(Auth.nameHasBannedWord('f.u.c.kface'), true);
+    assert.strictEqual(Auth.nameHasBannedWord('sh1t'), true);
+    assert.strictEqual(Auth.nameHasBannedWord('asshole'), true);
+    assert.strictEqual(Auth.nameHasBannedWord('NICEPLAYER'), false);
+  });
+
+  test('the name filter leaves ordinary words alone', () => {
+    // A word has to BE a word: "classic" is not "ass", and "hello" is not
+    // "hell". A filter that ate ordinary names would be worse than none.
+    assert.strictEqual(Auth.filterName('classic'), 'classic');
+    assert.strictEqual(Auth.filterName('hello'), 'hello');
+    assert.strictEqual(Auth.filterName('condemn'), 'condemn');
+    assert.strictEqual(Auth.filterName('pass'), 'pass');
+    assert.strictEqual(Auth.filterName('Phoenix'), 'Phoenix');
+  });
+
+  test('the name filter keeps the name, with the word starred out', () => {
+    assert.strictEqual(Auth.filterName('fuckface'), '****face');
+    assert.strictEqual(Auth.filterName('niceguy'), 'niceguy');
+  });
 
   test('IPv4, IPv4-in-IPv6 and IPv6 each normalise to a matchable key', () => {
     assert.deepStrictEqual(Moderation.normalizeIp('203.0.113.9'),
@@ -788,7 +814,14 @@ async function main() {
   fakeFor = fake;
   let bundle = null;
   try {
-    bundle = await startServer(fake.url);
+    // The owner's password is known here so the test can open the owner's
+    // ADMIN SOCKET, which is where a friend request arrives.
+    bundle = await startServer(fake.url, {
+      PHOENIX_OWNER_PASSWORD: 'friend-flow-owner-password-1234',
+      // The real waiting time is two minutes. The test shortens it so the
+      // timeout can actually be watched.
+      PHOENIX_FRIEND_REQUEST_MS: '4000'
+    });
     serverLog = bundle.output;
     const port = bundle.port;
     console.log('\n\u001b[1mFull stack: a real server, real sockets, a real database stand-in\u001b[0m');
@@ -1213,6 +1246,152 @@ async function main() {
       assert.strictEqual(state.code, 'HANK2');
       ws.ws.close();
     });
+
+    /* ============ 3c. A FRIEND OF THE OWNER ============ */
+    await test('a friend asks for permission, and the owner is told at once',
+      async () => {
+        // The owner's admin socket: the place a request arrives.
+        const admin = await makeBrowser().connect(port);
+        admin.ws.send(JSON.stringify({
+          type: 'admin_auth', password: 'friend-flow-owner-password-1234'
+        }));
+        await waitFor(admin, 'admin_state');
+
+        const friend = makeBrowser();
+        const asked = await friend.post(port, '/api/friend/request',
+          { username: 'friendofmine', password: 'password-1234' },
+          { 'X-Forwarded-For': '198.51.100.61' });
+        assert.strictEqual(asked.data.ok, true, JSON.stringify(asked.data));
+        assert.ok(asked.data.id, 'the request has an id');
+        assert.strictEqual(asked.data.expiresInSeconds, 4,
+          'and the player is told how long they have');
+
+        const pushed = await waitFor(admin, 'friend-request', 8000);
+        assert.strictEqual(pushed.request.username, 'friendofmine',
+          'the owner is told who is asking');
+        assert.ok(!JSON.stringify(pushed).includes('password-1234'),
+          'and never the password');
+
+        // Nobody has answered yet, so there is no account and no session.
+        const pending = await friend.get(port, '/api/friend/status?id=' + asked.data.id);
+        assert.strictEqual(pending.data.state, 'pending');
+        assert.strictEqual(fake.state.accounts.some(a => a.username === 'friendofmine'),
+          false, 'and no account exists yet');
+
+        admin.ws.close();
+      });
+
+    await test('the owner ACCEPTS, and the friend plays with no email at all',
+      async () => {
+        const admin = await makeBrowser().connect(port);
+        admin.ws.send(JSON.stringify({
+          type: 'admin_auth', password: 'friend-flow-owner-password-1234'
+        }));
+        await waitFor(admin, 'admin_state');
+
+        const friend = makeBrowser();
+        const asked = await friend.post(port, '/api/friend/request',
+          { username: 'friendaccepted', password: 'password-1234' },
+          { 'X-Forwarded-For': '198.51.100.61' });
+        assert.strictEqual(asked.data.ok, true, JSON.stringify(asked.data));
+
+        admin.ws.send(JSON.stringify({
+          type: 'admin_friend_respond', id: asked.data.id, decision: 'accept'
+        }));
+        const answered = await waitFor(admin, 'admin_friend_respond_result', 8000);
+        assert.strictEqual(answered.ok, true, JSON.stringify(answered));
+        assert.strictEqual(answered.state, 'accepted');
+
+        // The account exists, with no address on it.
+        const row = fake.state.accounts.find(a => a.username === 'friendaccepted');
+        assert.ok(row, 'the account was made');
+        assert.ok(!row.email, 'with no email address');
+
+        // The friend is signed in, and the access is the same as anybody
+        // else's: the socket lets them make a room straight away.
+        const status = await friend.get(port, '/api/friend/status?id=' + asked.data.id);
+        assert.strictEqual(status.data.state, 'approved');
+        assert.ok(status.data.account, 'and the account comes back');
+        const me = await friend.get(port, '/api/me');
+        assert.strictEqual(me.data.account.username, 'friendaccepted',
+          'the friend is signed in');
+        assert.strictEqual(me.data.verification.required, false,
+          'and is not held up for an email address');
+
+        const ws = await friend.connect(port, { 'X-Forwarded-For': '198.51.100.61' });
+        ws.ws.send(JSON.stringify({ type: 'create', name: 'Friend', code: 'FRND1' }));
+        const state = await waitFor(ws, 'state', 8000);
+        assert.strictEqual(state.code, 'FRND1', 'so they can play like anybody else');
+        ws.ws.close();
+        admin.ws.close();
+      });
+
+    await test('the owner DECLINES, and the friend is told so', async () => {
+      const admin = await makeBrowser().connect(port);
+      admin.ws.send(JSON.stringify({
+        type: 'admin_auth', password: 'friend-flow-owner-password-1234'
+      }));
+      await waitFor(admin, 'admin_state');
+
+      const friend = makeBrowser();
+      const asked = await friend.post(port, '/api/friend/request',
+        { username: 'notwelcome', password: 'password-1234' },
+        { 'X-Forwarded-For': '198.51.100.62' });
+      assert.strictEqual(asked.data.ok, true, JSON.stringify(asked.data));
+
+      admin.ws.send(JSON.stringify({
+        type: 'admin_friend_respond', id: asked.data.id, decision: 'decline'
+      }));
+      const answered = await waitFor(admin, 'admin_friend_respond_result', 8000);
+      assert.strictEqual(answered.ok, true, JSON.stringify(answered));
+      assert.strictEqual(answered.state, 'declined');
+
+      const status = await friend.get(port, '/api/friend/status?id=' + asked.data.id);
+      assert.strictEqual(status.data.state, 'declined');
+      assert.strictEqual(fake.state.accounts.some(a => a.username === 'notwelcome'),
+        false, 'and no account was made');
+      const me = await friend.get(port, '/api/me');
+      assert.strictEqual(me.data.authenticated, false, 'and the friend is not signed in');
+      admin.ws.close();
+    });
+
+    await test('a request nobody answers TIMES OUT', async () => {
+      const friend = makeBrowser();
+      const asked = await friend.post(port, '/api/friend/request',
+        { username: 'tooslow', password: 'password-1234' },
+        { 'X-Forwarded-For': '198.51.100.63' });
+      assert.strictEqual(asked.data.ok, true, JSON.stringify(asked.data));
+
+      await settle(5000);
+      const status = await friend.get(port, '/api/friend/status?id=' + asked.data.id);
+      assert.strictEqual(status.data.state, 'expired', 'the request timed out');
+      assert.strictEqual(fake.state.accounts.some(a => a.username === 'tooslow'),
+        false, 'and no account was made');
+    });
+
+    await test('a friend request cannot be answered by anybody but the owner',
+      async () => {
+        const stranger = await makeBrowser().connect(port);
+        stranger.ws.send(JSON.stringify({
+          type: 'admin_friend_respond', id: 'whatever', decision: 'accept'
+        }));
+        const refused = await waitFor(stranger, 'error', 8000);
+        assert.ok(/administrator/i.test(refused.message), refused.message);
+        stranger.ws.close();
+      });
+
+    await test('a friend request with a taken or a bad name is refused',
+      async () => {
+        const friend = makeBrowser();
+        const taken = await friend.post(port, '/api/friend/request',
+          { username: 'phoenixowner', password: 'password-1234' });
+        assert.strictEqual(taken.data.ok, false, 'a name that is taken is refused');
+        assert.ok(/taken/i.test(taken.data.message), taken.data.message);
+
+        const short = await friend.post(port, '/api/friend/request',
+          { username: 'shorty', password: 'abc' });
+        assert.strictEqual(short.data.ok, false, 'and so is a short password');
+      });
 
     /* ============ 4. NETWORK AND DEVICE ============ */
     await test('an optional network ban blocks a NEW account and a SECOND device',

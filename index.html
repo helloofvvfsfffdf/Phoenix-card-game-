@@ -39,14 +39,15 @@
       <h1>PHOENIX</h1>
       <p class="menu-subtitle">RISE · PLAY · SURVIVE</p>
       <nav class="menu-actions" aria-label="Main menu">
-        <button type="button" id="menu-single" class="menu-primary"><span class="menu-symbol">▶</span> SINGLE PLAYER <small>CREATOR ONLY</small></button>
-        <button type="button" id="menu-test"><span class="menu-symbol">⚗</span> MULTIPLAYER TESTING <small>LOCAL · CONTROL ALL PLAYERS</small></button>
+        <button type="button" id="menu-single" class="menu-primary" hidden><span class="menu-symbol">▶</span> SINGLE PLAYER <small>CREATOR ONLY</small></button>
+        <button type="button" id="menu-test" hidden><span class="menu-symbol">⚗</span> MULTIPLAYER TESTING <small>LOCAL · CONTROL ALL PLAYERS</small></button>
         <button type="button" id="menu-multi"><span class="menu-symbol">♟</span> MULTIPLAYER <small>PRIVATE ROOMS · INVITE CODE</small></button>
         <button type="button" id="menu-gallery"><span class="menu-symbol">▦</span> GALLERY <small>PRIVATE · INVITE CODE</small></button>
         <button type="button" id="menu-badges"><span class="menu-symbol">👑</span> BADGES <small>COLLECTION · FEATURED · VERIFY OWNER</small></button>
         <button type="button" id="menu-announcements"><span class="menu-symbol">📣</span> ANNOUNCEMENTS <small>OFFICIAL POSTS · LAST 30 DAYS</small></button>
         <button type="button" id="menu-leaderboard"><span class="menu-symbol">🏆</span> LEADERBOARD <small>PLAYERS RANKED BY WINS</small></button>
         <button type="button" id="menu-cards"><span class="menu-symbol">▣</span> CARD COLLECTION <small>ALL 35 CARDS</small></button>
+        <button type="button" id="menu-rules"><span class="menu-symbol">§</span> RULES <small>HOW TO PLAY · EVERY CARD</small></button>
         <button type="button" id="menu-cinematics"><span class="menu-symbol">✦</span> CARD CINEMATICS <small>WATCH ALL 23 · SILENT PREVIEW GALLERY</small></button>
         <button type="button" id="menu-settings"><span class="menu-symbol">⚙</span> SETTINGS <small>MUSIC, SOUND &amp; EFFECTS</small></button>
         <button type="button" id="menu-owner"><span class="menu-symbol">🔒</span> OWNER DASHBOARD <small>SERVER ADMIN · PASSWORD REQUIRED</small></button>
@@ -447,6 +448,32 @@
       </div>
     </form>
     <button id="account-toggle" type="button" class="account-toggle">New here? Create an account</button>
+
+    <!-- The owner's way in for a friend who cannot get through the email
+         process. The owner is asked, and the owner's answer is what makes the
+         account. -->
+    <div class="account-friend-choose">
+      <button id="account-friend" type="button" class="account-toggle">LOGIN WITH OWNER AUTHORIZATION</button>
+      <p class="account-fineprint">
+        For a friend of the owner who is struggling with the email process.
+        Make a username and a password, ask the owner for permission, and
+        the account is made for you without an email address.
+      </p>
+    </div>
+
+    <div id="account-friend-panel" class="account-friend-panel" hidden>
+      <input id="account-friend-username" name="username" type="text" autocomplete="off"
+             maxlength="22" placeholder="Username" aria-label="Username" />
+      <input id="account-friend-password" name="password" type="password"
+             autocomplete="new-password" maxlength="128" placeholder="Password"
+             aria-label="Password" />
+      <div class="account-actions">
+        <button id="account-friend-back" type="button">BACK</button>
+        <button id="account-friend-send" type="button">REQUEST PERMISSION</button>
+      </div>
+      <p id="account-friend-status" class="account-feedback" aria-live="polite"></p>
+    </div>
+
     <p id="account-feedback" class="account-feedback" aria-live="polite"></p>
     <p class="account-fineprint">Usernames are 3-22 letters, digits or underscore. Passwords need 8+ characters.</p>
   </div>
@@ -608,6 +635,9 @@
     <button id="admin-reopen" class="online-primary">Reopen Multiplayer</button>
     <button id="admin-lock" class="online-primary">Lock Lobby Creation</button>
     <button id="admin-unlock" class="online-primary">Unlock Lobby Creation</button>
+    <h3>Players online</h3>
+    <div id="admin-online-list" class="admin-online-list"></div>
+
     <h3>Active public lobbies</h3>
     <div id="admin-room-list" class="admin-room-list"></div>
 
@@ -629,6 +659,18 @@
     <p id="announce-feedback" aria-live="polite"></p>
     <ul id="announce-list" class="announce-list"></ul>
     <p class="announcement-empty" id="announce-empty"></p>
+
+    <!-- FRIEND REQUESTS. A friend of the owner who cannot get through the
+         email process asks for permission here, and the owner's answer is
+         what makes the account. The server re-checks the role on every call. -->
+    <h3>Friend requests</h3>
+    <p class="announce-hint">
+      A friend who is struggling with the email process can ask for an
+      account. You have two minutes to accept or decline. Accepted, the
+      account is made with no email address and plays like any other.
+    </p>
+    <div id="admin-friend-list" class="mod-results"></div>
+    <p id="admin-friend-feedback" aria-live="polite"></p>
 
     <!-- BAN MANAGEMENT. Owner only, and the server re-checks the role on every
          single call - these controls are only a way of ASKING. Nothing here

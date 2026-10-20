@@ -156,13 +156,19 @@ async function main() {
   let bundle = null;
   const stateFile = path.join(tempDir, 'state1.json');
   try {
-    bundle = await startServer(path.join(tempDir, 'fresh-closed.json'), false);
-    const closedVisitor = await connect(bundle.port);
-    closedVisitor.ws.send(JSON.stringify({ type: 'create', name: 'Maintenance probe', code: '' }));
-    const closedResponse = await waitFor(closedVisitor, 'error');
-    check('a fresh server refuses multiplayer until explicitly reopened', () =>
-      assert(/closed/i.test(closedResponse.message)));
-    closedVisitor.ws.close();
+    // A server with NO stored state at all comes up OPEN.
+    //
+    // A hosted instance that has been idle throws its disk away when it
+    // wakes up, so the first player to arrive after that must be able to
+    // play rather than being told multiplayer is closed. The owner's own
+    // switch still closes it, and a stored choice survives the restart -
+    // both of which are checked further down.
+    bundle = await startServer(path.join(tempDir, 'fresh-open.json'), false);
+    const freshVisitor = await connect(bundle.port);
+    const freshState = await create(freshVisitor, 'First player', '');
+    check('a fresh server comes up with multiplayer open', () =>
+      assert.strictEqual(typeof freshState.code, 'string'));
+    freshVisitor.ws.close();
     await stopServer(bundle);
     bundle = await startServer(stateFile);
     const port = bundle.port;

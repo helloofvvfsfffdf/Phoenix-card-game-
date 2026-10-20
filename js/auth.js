@@ -540,11 +540,59 @@ function validEmail(raw) {
   return email.length >= 5 && email.length <= 254 && EMAIL_RE.test(email);
 }
 
+/* ---------- the name filter ---------- */
+
+/**
+ * The words a name may not contain.
+ *
+ * A name is shown to everybody in a match, so it is filtered for the words
+ * that would make somebody uncomfortable. A word is caught however it is
+ * spelled, and whatever is left of a name with one in it is replaced with
+ * an asterisk, so the person still has a name.
+ */
+const BANNED_NAME_WORDS = [
+  'anal', 'anus', 'arse', 'ass', 'bastard', 'bitch', 'bollock', 'boob', 'bugger',
+  'bullshit', 'cock', 'coon', 'crap', 'cunt', 'damn', 'dick', 'dildo', 'dyke',
+  'fag', 'faggot', 'fuck', 'fucker', 'goddamn', 'homo', 'jizz', 'kike',
+  'nigga', 'nigger', 'paki', 'porn', 'prick', 'pussy', 'queer', 'retard',
+  'retarded', 'rimjob', 'shit', 'slag', 'slut', 'spastic', 'tits', 'twat',
+  'wanker', 'whore', 'wop'
+];
+
+/**
+ * Replace every banned word in a name with asterisks.
+ *
+ * Pure, so it is unit-tested: the same name always comes out the same way,
+ * and nothing else about the name is touched.
+ */
+function filterName(username) {
+  let out = String(username || '');
+  for (const word of BANNED_NAME_WORDS) {
+    // A word however it is spelled - f.u.c.k is caught as well - but it has
+    // to BE a word, so the letters may be separated by punctuation and a
+    // letter may be written as a digit.
+    const letters = word.split('').map(function (letter) {
+      return '(?:' + letter + '|[0-9])[.\\-_ ]*';
+    }).join('');
+    const pattern = new RegExp('\\b' + letters, 'gi');
+    out = out.replace(pattern, '*'.repeat(word.length));
+  }
+  return out;
+}
+
+/** Does this name still contain something it should not? */
+function nameHasBannedWord(username) {
+  return filterName(username) !== String(username || '');
+}
+
 /* ---------- register / login ---------- */
 async function register(username, password, email) {
   username = String(username || '').trim();
   if (!/^[A-Za-z0-9_]{3,22}$/.test(username)) {
     return { ok: false, message: 'Username must be 3-22 letters, digits or underscore.' };
+  }
+  if (nameHasBannedWord(username)) {
+    return { ok: false, message: 'That name is not allowed. Pick another one.' };
   }
   if (typeof password !== 'string' || password.length < 8) {
     return { ok: false, message: 'Password must be at least 8 characters.' };
@@ -688,6 +736,96 @@ function projectAccount(row) {
   };
 }
 
+/* ---------- an account the owner has vouched for ---------- */
+
+/**
+ * Create an account with NO email address, for a friend the owner has
+ * accepted.
+ *
+ * The account has no address and no code, and it still plays: the owner's
+ * acceptance is the proof that stands in for a verified address, so the
+ * account is written with its verification stamp already on it. That stamp
+ * is what lets it past the email gate - the same access as anybody with a
+ * proved address, which is the whole point of the friend's sign-up.
+ *
+ * The stamp is written in a second statement on purpose. The trigger that
+ * keeps the normalised address in step clears the stamp whenever the
+ * address is empty, so it is set after the row exists, in an update that
+ * does not touch the address at all.
+ *
+ * @param {string} username
+ * @param {string} passwordHash a bcrypt hash - the caller hashed it
+ */
+async function registerApproved(username, passwordHash) {
+  username = String(username || '').trim();
+  if (!/^[A-Za-z0-9_]{3,22}$/.test(username)) {
+    return { ok: false, message: 'Username must be 3-22 letters, digits or underscore.' };
+  }
+  if (nameHasBannedWord(username)) {
+    return { ok: false, message: 'That name is not allowed. Pick another one.' };
+  }
+  if (typeof passwordHash !== 'string' || !/^\$2[aby]\$\d{2}\$.{53}$/.test(passwordHash)) {
+    return { ok: false, message: 'That password could not be read.' };
+  }
+
+  const lookup = await client()
+    .from('accounts').select('id').eq('username', username).maybeSingle();
+  if (lookup.error) {
+    logDbError('registerApproved: username lookup failed', lookup.error);
+    return { ok: false, message: 'Accounts are temporarily unavailable. Try again shortly.',
+             code: userRef(lookup.error) };
+  }
+  if (lookup.data) return { ok: false, message: 'That username is already taken.' };
+
+  const hasEmail = await schemaHasEmail();
+  const inserted = await client().from('accounts')
+    .insert({ username, password_hash: passwordHash, role: 'player' })
+    .select(hasEmail ? 'id, username, role, email, email_verified_at'
+                      : 'id, username, role');
+
+  if (inserted.error) {
+    logDbError('registerApproved: INSERT into public.accounts failed', inserted.error);
+    if (String(inserted.error.code) === '23505') {
+      return { ok: false, message: 'That username is already taken.' };
+    }
+    return { ok: false, message: 'The account could not be made. Please try again.' };
+  }
+
+  const row = Array.isArray(inserted.data) ? inserted.data[0] : inserted.data;
+  if (!row) {
+    return { ok: false, message: 'The account could not be made. Please try again.' };
+  }
+
+  if (hasEmail) {
+    // The owner's acceptance stands in for the proof an address would have
+    // given. This update does not touch the address, so the trigger that
+    // keeps the address in step does not fire and does not clear it.
+    const { error: stampError } = await client()
+      .from('accounts')
+      .update({ email_verified_at: new Date().toISOString() })
+      .eq('id', row.id);
+    if (stampError) {
+      logDbError('registerApproved: the verification stamp could not be written', stampError);
+      // The account exists, so the session is still made and the player is
+      // still let in; the only thing missing is the stamp, and without it
+      // the email gate would ask them for an address.
+      row.email_verified_at = null;
+    } else {
+      row.email_verified_at = new Date().toISOString();
+    }
+  }
+
+  const session = await createSession(row.id);
+  if (session.error) {
+    logDbError('registerApproved: session INSERT failed (account created, sign-in failed)',
+      session.error);
+    return { ok: false,
+             message: 'Your account was created, but sign-in failed. Please sign in instead.',
+             code: userRef(session.error) };
+  }
+  return { ok: true, account: projectAccount(row), token: session.token };
+}
+
 /* ---------- owner claim (atomic, via the DB RPC) ---------- */
 async function claimOwner(accountId, setupKey) {
   if (!OWNER_SETUP_KEY) {
@@ -738,6 +876,10 @@ module.exports = {
   client, freshClient, hashToken, parseCookies, isSecure,
   getSessionAccount, sessionCookie, clearSessionCookie,
   register, login, destroySession, claimOwner,
+  // An account the owner has vouched for, made with no address.
+  registerApproved: registerApproved,
+  // The name filter, for the places that make a name of their own.
+  filterName: filterName, nameHasBannedWord: nameHasBannedWord,
   schemaHasEmail, projectAccount, validEmail, _resetEmailProbe,
   describeError, redact
 };

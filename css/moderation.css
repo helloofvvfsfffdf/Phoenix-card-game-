@@ -321,3 +321,29 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   .mod-issue:not([hidden]) { animation: none; }
 }
+
+/* ======================================================================== */
+/* 4. THE DASHBOARD - WHO IS ONLINE                                          */
+/* ======================================================================== */
+
+.admin-online-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 18px;
+}
+
+.admin-online-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border: 1px solid #2c3a5c;
+  border-radius: 10px;
+  background: rgba(12, 20, 38, .9);
+}
+
+.admin-online-name { color: #f7e5c0; font-weight: 700; }
+.admin-online-tags { color: #8fa4c8; font-size: 11px; letter-spacing: 1px; }
+.admin-online-empty { color: #8fa4c8; font-size: 13px; margin: 4px 0 12px; }

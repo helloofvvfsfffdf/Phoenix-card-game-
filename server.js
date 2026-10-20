@@ -19,6 +19,8 @@ const Announcements = require('./js/announcements.js');
 const Wins = require('./js/wins.js');
 const EmailVerification = require('./js/email-verification.js');
 const Moderation = require('./js/moderation.js');
+const ServerState = require('./js/server-state.js');
+const FriendAccess = require('./js/friend-access.js');
 const interactionView = require('./js/interaction-view.js');
 const SpeedInteraction = require('./js/speed-interaction.js');
 
@@ -87,10 +89,7 @@ const authCleanup = setInterval(() => {
 authCleanup.unref();
 
 /**
- * Owner-controlled server switches, kept durable across process restarts so a
- * manual close or a creation lock survives a restart (a fresh Render deploy
- * wipes the throwaway filesystem, which is fine - it resets to the safe
- * defaults).
+ * Owner-controlled server switches, kept durable across process restarts.
  *
  *   multiplayerOpen - false after the owner shuts down all games. New creates
  *                     and joins are refused until the owner reopens.
@@ -98,32 +97,69 @@ authCleanup.unref();
  *                     new lobby; existing lobbies keep running and players can
  *                     still join them.
  *
- * The file is gitignored. Its path can be pointed elsewhere with
- * PHOENIX_STATE_FILE so test servers stay isolated from each other.
+ * The state is kept in js/server-state.js: a copy on disk AND a copy in the
+ * database, because a Render free instance throws its disk away on every
+ * deploy and every spin-down - a server that boots up after a quiet spell
+ * must not come back with its switches reset. A server with no stored state
+ * at all starts OPEN, so the first player to arrive can play.
  */
-const STATE_FILE = process.env.PHOENIX_STATE_FILE || path.join(ROOT, '.phoenix-server-state.json');
-// A fresh/replaced instance must not silently reopen during maintenance.
-const serverState = { multiplayerOpen: false, creationLocked: false };
+const serverState = ServerState.defaults();
 
-function loadServerState() {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-    if (typeof parsed.multiplayerOpen === 'boolean') serverState.multiplayerOpen = parsed.multiplayerOpen;
-    if (typeof parsed.creationLocked === 'boolean') serverState.creationLocked = parsed.creationLocked;
-    console.log(`[PHOENIX diagnostic] State loaded: open=${serverState.multiplayerOpen} locked=${serverState.creationLocked}`);
-  } catch (e) {
-    /* No state file yet (or unreadable): defaults are safe. */
-  }
+/**
+ * The switches are read while the server is starting. Every gameplay message
+ * waits for this promise, so the very first player to arrive is answered with
+ * the owner's real setting and not with a default that has not arrived yet.
+ *
+ * It starts life resolved: a server with no state to read is ready at once.
+ */
+let stateReady = Promise.resolve();
+
+/**
+ * Read the switches before the server starts listening, so the very first
+ * request already sees the right values.
+ */
+async function loadServerState() {
+  const loaded = await ServerState.load();
+  serverState.multiplayerOpen = loaded.multiplayerOpen;
+  serverState.creationLocked = loaded.creationLocked;
+  console.log(`[PHOENIX diagnostic] State loaded: open=${serverState.multiplayerOpen} locked=${serverState.creationLocked}`);
 }
 
+/**
+ * Save the switches. The change has already been applied in memory, so a
+ * failure here is logged and never blocks the owner.
+ */
 function saveServerState() {
-  try {
-    const tmp = STATE_FILE + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(serverState, null, 2));
-    fs.renameSync(tmp, STATE_FILE);
-  } catch (e) {
-    console.log(`[PHOENIX diagnostic] Could not persist server state: ${e.message}`);
+  ServerState.save(serverState).catch(err => {
+    console.log('[PHOENIX diagnostic] Could not persist server state: ' +
+      (err && err.message ? err.message : String(err)));
+  });
+}
+
+/**
+ * Everybody on the server right now.
+ *
+ * A connection's name is the account's name, or "not signed in" for a
+ * connection with no account, and the room is the code of the table it is
+ * sitting at. Nothing here is secret: the owner already owns the server.
+ */
+function onlinePlayers() {
+  const out = [];
+  for (const client of wss.clients) {
+    if (!client || client.readyState !== WebSocket.OPEN) continue;
+    const account = client.account;
+    const member = client.member;
+    out.push({
+      name: (account && account.username) || 'not signed in',
+      signedIn: !!account,
+      owner: !!(account && account.role === 'owner'),
+      admin: !!client.admin,
+      room: member && member.room ? member.room.code : null,
+      seat: member ? member.seat : null,
+      since: client.connectedAt || null
+    });
   }
+  return out;
 }
 
 function adminStateMessage(ws) {
@@ -131,7 +167,8 @@ function adminStateMessage(ws) {
     type: 'admin_state',
     admin: !!ws.admin,
     multiplayerOpen: serverState.multiplayerOpen,
-    creationLocked: serverState.creationLocked
+    creationLocked: serverState.creationLocked,
+    online: onlinePlayers()
   };
 }
 
@@ -176,8 +213,6 @@ const abandonedCleanup = setInterval(() => {
   }
 }, 60 * 1000);
 abandonedCleanup.unref();
-
-loadServerState();
 
 /**
  * Multiplayer Testing is gated by the same private access code the server was
@@ -2001,12 +2036,54 @@ const httpServer = http.createServer(async (req, res) => {
       ok: true, authenticated: true, available: true, account,
       verification: status
         ? { required: Boolean(status.required), verified: Boolean(status.verified),
-            email: status.email || null, awaitingCode: Boolean(status.awaitingCode),
+            email: status.email || null,
+            awaitingCode: Boolean(status.awaitingCode),
             resendInSeconds: status.resendInSeconds || 0,
             expiresInSeconds: status.expiresInSeconds || 0,
             attemptsLeft: status.attemptsLeft === undefined ? null : status.attemptsLeft,
             notice: EmailVerification.REQUIRED_NOTICE }
         : { required: false, verified: false }
+    });
+  }
+
+  // ---- A friend of the owner's sign-up ---------------------------------------
+  // The way in for somebody who cannot get through the email process: they ask
+  // the OWNER for permission, and the owner's answer is what makes the account.
+  if (pathname === '/api/friend/request' && req.method === 'POST') {
+    if (!Auth.isConfigured()) {
+      return sendJson({ ok: false, message: 'Accounts are not available on this server.' }, 503);
+    }
+    const body = await readJsonBody();
+    const result = await FriendAccess.create({
+      username: body.username,
+      password: body.password
+    });
+    if (!result.ok) {
+      return sendJson({ ok: false, message: result.message }, 400);
+    }
+    // The owner is told straight away, on their own connection.
+    notifyOwnerFriendRequest(result.request);
+    return sendJson({
+      ok: true,
+      id: result.id,
+      expiresAt: result.expiresAt,
+      expiresInSeconds: result.expiresInSeconds
+    });
+  }
+
+  if (pathname === '/api/friend/status' && req.method === 'GET') {
+    const id = new URL(req.url, 'http://localhost').searchParams.get('id') || '';
+    const result = FriendAccess.status(id);
+    if (result.state === 'approved' && result.token) {
+      // The session cookie is set here, once, and never handed out again.
+      res.setHeader('Set-Cookie', [
+        Auth.sessionCookie(result.token, Auth.SESSION_TTL_SEC, Auth.isSecure(req))
+      ]);
+    }
+    return sendJson({
+      ok: true,
+      state: result.state,
+      account: result.account || null
     });
   }
 
@@ -2686,7 +2763,7 @@ function leaveRoom(ws, reason) {
   broadcast(room);
 }
 
-function handleAdmin(ws, data) {
+async function handleAdmin(ws, data) {
   if (data.type === 'admin_auth') {
     // A signed-in OWNER account is already authorised by its server-side
     // session, so it opens the dashboard with NO separate owner password.
@@ -2734,6 +2811,35 @@ function handleAdmin(ws, data) {
       multiplayerOpen: serverState.multiplayerOpen,
       creationLocked: serverState.creationLocked
     });
+    return;
+  }
+
+  if (data.type === 'admin_friend_requests') {
+    send(ws, { type: 'admin_friend_requests', requests: FriendAccess.list() });
+    return;
+  }
+
+  if (data.type === 'admin_friend_respond') {
+    const result = await FriendAccess.respond(data.id, data.decision);
+    if (!result.ok) {
+      send(ws, { type: 'admin_friend_respond_result', ok: false, message: result.message });
+      return;
+    }
+    send(ws, {
+      type: 'admin_friend_respond_result',
+      ok: true,
+      id: data.id,
+      state: result.state === 'approved' ? 'accepted' : 'declined',
+      username: result.username,
+      message: result.state === 'approved'
+        ? result.username + ' may play now.'
+        : result.username + ' has been told the request was declined.'
+    });
+    // Everyone who has the dashboard open sees the list change.
+    for (const sock of liveSockets()) {
+      if (!sock.admin) continue;
+      send(sock, { type: 'admin_friend_requests', requests: FriendAccess.list() });
+    }
     return;
   }
 
@@ -2829,6 +2935,21 @@ async function applyRestrictionsToLiveConnections() {
     } else if (!ban && wasBanned) {
       send(sock, { type: 'banned-cleared' });
     }
+  }
+}
+
+/**
+ * Tell the owner that a friend is waiting for permission.
+ *
+ * Only a connection the server has already authorised as an administrator
+ * hears about it, and only the username and the time are sent - never the
+ * password, which was hashed the moment the request was made.
+ */
+function notifyOwnerFriendRequest(request) {
+  if (!request) return;
+  for (const sock of liveSockets()) {
+    if (!sock.admin) continue;
+    send(sock, { type: 'friend-request', request: request });
   }
 }
 
@@ -3074,6 +3195,11 @@ async function handle(ws, data) {
     return;
   }
 
+  // The owner's switches may still be on their way in from the database when
+  // the server has only just started. Waiting here means nobody is told
+  // "multiplayer is closed" because of a race they had no part in.
+  await stateReady;
+
   // Gallery sessions, BEFORE anything else and before `ws.member` is consulted.
   //
   // They deliberately do not touch ws.member: a gallery visitor is not in a room,
@@ -3086,7 +3212,7 @@ async function handle(ws, data) {
   // Owner administration, before `ws.member` is consulted: an admin must be able
   // to authenticate and inspect the whole server without ever creating a room.
   if (String(data.type).startsWith('admin_')) {
-    return handleAdmin(ws, data);
+    return await handleAdmin(ws, data);
   }
 
   // ---- Account security gate ------------------------------------------------
@@ -3336,9 +3462,6 @@ async function handle(ws, data) {
   }
 
   if (data.type === 'join') {
-    if (Auth.isConfigured() && !ws.account) {
-      return error(ws, 'Please sign in to play.');
-    }
     if (ws.member) {
       return error(ws, 'Already in a room.');
     }
@@ -3362,6 +3485,10 @@ async function handle(ws, data) {
         ws,
         'Room not found. Check the invite code.'
       );
+    }
+
+    if (Auth.isConfigured() && !ws.account) {
+      return error(ws, 'Please sign in to play.');
     }
 
     if (room.phase !== 'lobby') {
@@ -4211,6 +4338,7 @@ function ally(id) {
 
 wss.on('connection', (ws, request) => {
   ws.lastPongAt = Date.now();
+  ws.connectedAt = Date.now();
   let latencyProbe = null;
   const roundTrips = [];
   ws.roundTripMs = 0;
@@ -4377,6 +4505,15 @@ const connectionHeartbeat = setInterval(() => {
   }
 }, 5000);
 connectionHeartbeat.unref();
+
+// The owner's switches are read while the server starts. The listen itself
+// is never delayed by a slow database: the gameplay path waits for the read
+// instead, so the first player to arrive is answered with the owner's real
+// setting.
+stateReady = loadServerState().catch(err => {
+  console.error('[PHOENIX state] the state could not be read -> ' +
+    (err && err.message ? err.message : String(err)));
+});
 
 httpServer.listen(
   PORT,

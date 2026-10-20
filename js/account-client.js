@@ -590,6 +590,127 @@
       };
     }
 
+    /* ---------- the owner's way in for a friend ---------- */
+
+    // The friend types a name and a password, asks the owner, and waits.
+    // The waiting is a poll, because the friend is on the account screen and
+    // has no game socket open: the answer comes back through the same server
+    // that holds the request.
+    var friendTimer = null;
+    var friendRequestId = null;
+
+    function friendStop() {
+      if (friendTimer) clearInterval(friendTimer);
+      friendTimer = null;
+      friendRequestId = null;
+    }
+
+    function friendStatus(message, isError) {
+      var node = $('account-friend-status');
+      if (!node) return;
+      node.textContent = message || '';
+      node.classList.toggle('is-error', isError !== false);
+    }
+
+    function friendOpen() {
+      var panel = $('account-friend-panel');
+      var form = $('account-form');
+      var toggle = $('account-toggle');
+      var friend = $('account-friend');
+      var choose = document.querySelector('.account-friend-choose');
+      if (panel) panel.hidden = false;
+      if (form) form.hidden = true;
+      if (toggle) toggle.hidden = true;
+      if (friend) friend.hidden = true;
+      if (choose) choose.hidden = true;
+      friendStatus('');
+      var name = $('account-friend-username');
+      if (name) setTimeout(function () { name.focus(); }, 40);
+    }
+
+    function friendBack() {
+      friendStop();
+      var panel = $('account-friend-panel');
+      var form = $('account-form');
+      var toggle = $('account-toggle');
+      var friend = $('account-friend');
+      var choose = document.querySelector('.account-friend-choose');
+      if (panel) panel.hidden = true;
+      if (form) form.hidden = false;
+      if (toggle) toggle.hidden = false;
+      if (friend) friend.hidden = false;
+      if (choose) choose.hidden = false;
+      friendStatus('');
+    }
+
+    function friendAsk() {
+      var name = ($('account-friend-username').value || '').trim();
+      var password = $('account-friend-password').value || '';
+      if (!name || !password) {
+        friendStatus('Make a username and a password first.', true);
+        return;
+      }
+      var button = $('account-friend-send');
+      if (button) button.disabled = true;
+      friendStatus('Asking the owner…', false);
+
+      post('/api/friend/request', { username: name, password: password })
+        .then(function (out) {
+          if (!out.res.ok || !out.data.ok) {
+            friendStatus((out.data && out.data.message) ||
+              'The request could not be sent.', true);
+            return;
+          }
+          friendRequestId = out.data.id;
+          friendStatus('Please wait until the owner accepts you.', false);
+          // The owner has two minutes. After that the request times out and
+          // the friend is told so.
+          friendTimer = setInterval(friendCheck, 2000);
+          friendCheck();
+        })
+        .catch(function () {
+          friendStatus('Cannot reach the server. Try again.', true);
+        })
+        .then(function () {
+          if (button) button.disabled = false;
+        });
+    }
+
+    function friendCheck() {
+      if (!friendRequestId) { friendStop(); return; }
+      fetch('/api/friend/status?id=' + encodeURIComponent(friendRequestId),
+            { credentials: 'same-origin', cache: 'no-store' })
+        .then(function (res) { return res.json().catch(function () { return null; }); })
+        .then(function (status) {
+          if (!status || status.ok === false) return;
+          if (status.state === 'pending') return;
+
+          friendStop();
+          if (status.state === 'approved') {
+            friendStatus('Accepted. Welcome to PHOENIX.', false);
+            signedIn({ account: status.account }, null);
+            return;
+          }
+          if (status.state === 'declined') {
+            friendStatus('Your request was declined.', true);
+            return;
+          }
+          friendStatus('Your request timed out. The owner did not answer in time.', true);
+        })
+        .catch(function () { /* the next tick tries again */ });
+    }
+
+    var friendBtn = $('account-friend');
+    if (friendBtn) {
+      friendBtn.onclick = friendOpen;
+      // The option only exists where an account system does.
+      friendBtn.hidden = !available;
+    }
+    var friendBackBtn = $('account-friend-back');
+    if (friendBackBtn) friendBackBtn.onclick = friendBack;
+    var friendSendBtn = $('account-friend-send');
+    if (friendSendBtn) friendSendBtn.onclick = friendAsk;
+
     var logout = $('menu-logout');
     if (logout) {
       logout.onclick = function () {

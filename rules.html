@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PHOENIX - The Rules</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/menu-v2.css" />
+  <link rel="stylesheet" href="css/card-collection.css" />
+  <style>
+    .rules-shell { max-width: 900px; margin: 0 auto; padding: 32px 20px 60px; }
+    .rules-shell h1 { color: #ffd16b; letter-spacing: 3px; margin: 0 0 6px; }
+    .rules-sub { color: #b6c7dd; margin: 0 0 26px; }
+    .rules-win {
+      border: 1px solid #75572e; border-radius: 16px; padding: 18px 20px;
+      background: rgba(21, 27, 45, .92); margin-bottom: 26px;
+    }
+    .rules-win-line { color: #e4d2ad; line-height: 1.5; margin: 0 0 8px; }
+    .rules-win-line:first-child { color: #ffe6a0; font-weight: 800; letter-spacing: 1px; }
+    .rules-card {
+      border: 1px solid #2c3a5c; border-radius: 14px; padding: 14px 16px;
+      background: rgba(12, 20, 38, .9); margin-bottom: 12px;
+    }
+    .rules-card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .rules-card-name { margin: 0; color: #f7e5c0; font-size: 1.05rem; }
+    .rules-card-kind {
+      font-size: 10px; letter-spacing: 2px; color: #9fb4d8;
+      border: 1px solid #34446c; border-radius: 999px; padding: 2px 8px;
+    }
+    .rules-card-blurb { margin: 6px 0 0; color: #ffd16b; font-size: 0.95rem; }
+    .rules-card-secret {
+      margin: 6px 0 0; color: #c9a0ff; font-size: 0.95rem;
+      font-style: italic; letter-spacing: 0.5px;
+    }
+    .rules-card-rule { margin: 6px 0 0; color: #cfd8f0; line-height: 1.5; }
+    .rules-card-target { margin: 6px 0 0; color: #8fa4c8; font-size: 0.85rem; }
+    .rules-count { color: #8fa4c8; margin: 0 0 18px; }
+  </style>
+</head>
+<body>
+  <main class="rules-shell">
+    <h1>THE RULES</h1>
+    <p class="rules-sub">How PHOENIX is won, and what every card in the deck does.</p>
+    <section id="rules-win" class="rules-win"></section>
+    <p id="rules-count" class="rules-count"></p>
+    <section id="rules-cards"></section>
+    <p class="rules-sub"><a href="index.html">Back to the menu</a></p>
+  </main>
+  <script src="js/cards.js"></script>
+  <script src="js/rules-page.js"></script>
+</body>
+</html>
