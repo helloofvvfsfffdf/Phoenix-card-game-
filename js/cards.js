@@ -515,8 +515,8 @@
       ownerOnly: true,
       inDeck: false,
       // Like the other two owner-only cards, it is dealt in an OWNER room by
-      // name and nowhere else. It is a card in an ordinary match and in a
-      // hardcore one alike - hardcore doubles its effect like any other.
+      // name and nowhere else. It is a card in an ordinary match like any
+      // other, and it is the owner's alone.
       inLiveGame: false,
       needsTarget: true,
       blurb: 'They enjoy the trailer. All of it.',

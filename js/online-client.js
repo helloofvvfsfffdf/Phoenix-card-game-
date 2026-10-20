@@ -841,10 +841,8 @@
       // Optional custom invite code: blank (or missing) creates a PUBLIC lobby,
       // a 3-6 character code creates a PRIVATE lobby joinable with that code.
       const code = $('online-create-code').value.trim();
-      // HARDCORE is the creator's choice, and the server decides what it means.
-      const hardcore = !!($('online-hardcore') && $('online-hardcore').checked);
       connect(() => {
-        send({ type: 'create', code, hardcore });
+        send({ type: 'create', code });
       });
       return;
     }
@@ -867,10 +865,8 @@
         feedback('Enter the owner password to create a room.');
         return;
       }
-      // HARDCORE works in an Owner & Friends room too.
-      const hardcore = !!($('online-owner-hardcore') && $('online-owner-hardcore').checked);
       connect(() => {
-        send({ type: 'create', code: '', ownerPassword, hardcore });
+        send({ type: 'create', code: '', ownerPassword });
         $('online-owner-password').value = '';
       });
       return;
@@ -1107,9 +1103,6 @@ function renderLobbyList(rooms) {
     row.append(el('span', 'lobby-code', r.code));
     row.append(el('span', 'lobby-host', r.host || '?'));
     row.append(el('span', 'lobby-players', r.players + '/' + r.max));
-    // HARDCORE is said out loud, so anybody can see what they are walking
-    // into before they join it.
-    if (r.hardcore) row.append(el('span', 'lobby-hardcore', 'HARDCORE'));
     const btn = el('button', 'online-primary lobby-join', 'JOIN');
     btn.type = 'button';
     btn.onclick = () => PhoenixOnline.join({ type: 'join', code: r.code });

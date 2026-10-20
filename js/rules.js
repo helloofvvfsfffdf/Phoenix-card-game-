@@ -508,18 +508,6 @@
       standings: [],
       players: players,
 
-      // HARDCORE. When this is on, every card plays TWICE: its effect happens
-      // twice, and a card aimed at somebody lands on them twice. The
-      // eliminations stack with it, so a knife played twice is two rounds out
-      // and not one.
-      //
-      // Three cards are never doubled, and the reason is in the rules:
-      //   phoenix  - the legendary card is spent once, for good.
-      //   support  - Customer Support is a single complaint, not two.
-      //   mimic    - the Mimic is HANDED OVER, so there is only ever one of
-      //              them; in hardcore it plays a different prank instead.
-      hardcore: !!options.hardcore,
-
       // Deck. `deck` is the draw pile (index 0 is the top), `discard` is what
       // has been played, and `hands` holds each player's cards as card ids.
       deck: [],
@@ -682,19 +670,10 @@
    * Re-striking a player who is already out does nothing, so a card can never
    * extend an elimination - and a longer banishment cannot lengthen a longer one
    * that is already running.
-   *
-   * HARDCORE is the one exception, and it is the whole point of it: a card
-   * that lands on somebody who is already out ADDS to the rounds they are
-   * sitting out. A knife played twice is out for two rounds, not one, and the
-   * table can see both strikes in the log.
    */
   function eliminate(state, player, rounds) {
     var span = Math.max(1, Math.floor(Number(rounds) || 1));
-    if (isOut(player, state)) {
-      if (!state.hardcore) return player.outUntilRound;
-      player.outUntilRound += span;
-      return player.outUntilRound;
-    }
+    if (isOut(player, state)) return player.outUntilRound;
     player.outUntilRound = alreadyActedThisRound(state, player)
       ? state.round + span
       : state.round + span - 1;
@@ -1652,21 +1631,6 @@
   /* --------------------------------------------------------------------- */
 
   /**
-   * The cards HARDCORE never plays twice.
-   *
-   * The Phoenix is spent once and gone for good, Customer Support is one
-   * complaint rather than two, and the Mimic is a card that is HANDED OVER:
-   * there is only ever one of them, so it cannot be played twice. In hardcore
-   * the Mimic does something else instead.
-   */
-  var NEVER_TWICE = { phoenix: true, support: true, mimic: true };
-
-  /** Does this card play a second time in a hardcore match? */
-  function playsTwice(cardId) {
-    return !NEVER_TWICE[cardId];
-  }
-
-  /**
    * Plays a card for the player whose turn it is, then advances the turn.
    * Returns { ok, error?, events }. `events` are the log lines the UI prints;
    * they carry text so the log can never drift from the engine.
@@ -1772,14 +1736,6 @@
       var text = RESOLVERS[card.id](state, actor, target);
       if (card.id === 'skipall') keepTurn = true;
       events.push({ type: 'result', cardId: card.id, text: text });
-
-      // HARDCORE: the card plays a second time, and its effect lands again -
-      // on the same target, because that is who the card was aimed at. The
-      // second result is its own line in the log, so the table sees both.
-      if (state.hardcore && !state.over && playsTwice(card.id)) {
-        var again = RESOLVERS[card.id](state, actor, target);
-        events.push({ type: 'result', cardId: card.id, text: again, hardcore: true });
-      }
     }
 
     actor.turnsPlayed++;
