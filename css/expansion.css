@@ -33,6 +33,18 @@
 .mm-symbol-button:disabled { opacity: .45; cursor: not-allowed; }
 .mm-answer-actions { display: flex; gap: 10px; justify-content: center; }
 
+/* --- The result of a conversation --- */
+.interaction-result {
+  margin: 0 0 18px;
+  padding: 14px 18px;
+  border: 1px solid #ffd16b;
+  border-radius: 12px;
+  background: rgba(255, 209, 107, 0.12);
+  color: #ffe6a0;
+  font-size: 17px;
+  line-height: 1.45;
+}
+
 /* --- The Hostage Situation's roles --- */
 .online-role {
   display: block;

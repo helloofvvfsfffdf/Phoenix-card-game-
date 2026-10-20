@@ -21,7 +21,7 @@ module.exports = function(test,equal,deepEqual,assert) {
     var options=E.previews(), b=effectsBrowser();
     equal(b.nodes['settings-effects-choice'].children.length,options.length);
     ['victory','defeat','draw','bonus','alvin-burn','curse-trigger','hunter-block'].forEach(function(k){assert(options.some(function(p){return p.key===k;}));});
-    ['ally-tilly','ally-louie','ally-simba','ally-elsie','ally-phoenix','ally-ted','ally-maple','block-ted','block-tilly','maple-restriction'].forEach(function(k){assert(!options.some(function(p){return p.key===k;}),k+' is not in the preview list');});
+    ['ally-tilly','ally-louie','ally-simba','ally-elsie','ally-phoenix','ally-ted','ally-maple','block-ted','block-tilly','maple-restriction','joshuasurvey','trailer'].forEach(function(k){assert(!options.some(function(p){return p.key===k;}),k+' is not in the preview list');});
     equal(E.publicEvent('victory',0),null,'no synthetic victory enters the server effect channel');
     equal(b.api.diagnostics().audio,'uninitialised');
   });

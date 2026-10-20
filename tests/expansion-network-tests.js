@@ -80,6 +80,35 @@ async function main() {
     } finally { await m.close(); }
   });
 
+  await test('the Hostage Situation is never dealt to a two-player lobby', async () => {
+    // The card calls the police, and the police officer has to be somebody
+    // else at the table - so a two-player lobby never deals it.
+    // A natural deal, so the hands are the real ones.
+    const m = await match({ players: 2, naturalDeal: true });
+    try {
+      const seated = m.clients[0].state.players.filter(function (p) { return p.connected; });
+      assert.strictEqual(seated.length, 2, 'the lobby has two players');
+      // Nobody was dealt the hostage card, and nobody can draw it either.
+      const dealt = [];
+      m.clients.forEach(function (client) {
+        (client.state.hand || []).forEach(function (id) { dealt.push(id); });
+      });
+      assert.strictEqual(dealt.filter(function (id) { return id === 'hostage'; }).length, 0,
+        'a two-player lobby never deals the hostage card');
+      // The engine agrees, and a five-player game does deal it.
+      const Rules = require('../js/rules');
+      const all = function (state) {
+        return state.deck.concat(state.players.map(function (p) { return state.hands[p.id]; }));
+      };
+      assert.strictEqual(all(Rules.createGame({ seed: 5, playerCount: 2 }))
+        .filter(function (id) { return id === 'hostage'; }).length, 0,
+        'the engine leaves it out too');
+      assert.ok(all(Rules.createGame({ seed: 5, playerCount: 5 }))
+        .filter(function (id) { return id === 'hostage'; }).length > 0,
+        'and a five-player game deals it');
+    } finally { await m.close(); }
+  });
+
   suite('Russian Roulette');
 
   await test('the holder aims, the server pulls the trigger, and it ends', async () => {

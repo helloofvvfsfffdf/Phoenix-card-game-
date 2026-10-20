@@ -108,6 +108,14 @@
       };
       const shell = document.querySelector('.interactive-overlay .interactive-shell');
       if (shell) {
+        // The answer, in front of everything, and the old controls put away
+        // so nobody is left looking at a form that is already finished.
+        const banner = document.createElement('p');
+        banner.className = 'interaction-result';
+        const said = (result.events || []).map(function (e) { return e.text || ''; }).join(' ');
+        banner.textContent = said || 'The result is in the table log.';
+        shell.insertBefore(banner, shell.firstChild);
+        shell.querySelectorAll('.mc-stage, .mc-symbols, .mm-answer, .mm-picked').forEach(function (el) { el.hidden = true; });
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = 'Continue';

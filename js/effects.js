@@ -75,8 +75,16 @@
   function isAllyEffect(key) {
     return key.indexOf('ally-') === 0 || key.indexOf('block-') === 0 || key === 'maple-restriction';
   }
+  // The OWNER-ONLY cards are not in the list either: they belong to the owner
+  // server, and this list is for everybody.
+  var OWNER_ONLY = ['joshuasurvey', 'trailer'];
+  function isOwnerOnlyEffect(key) {
+    return OWNER_ONLY.indexOf(key) !== -1;
+  }
   function previews() {
-    return Object.keys(DEFINITIONS).filter(function (key) { return DORMANT.indexOf(key) < 0 && !isAllyEffect(key); }).map(function (key) {
+    return Object.keys(DEFINITIONS).filter(function (key) {
+      return DORMANT.indexOf(key) < 0 && !isAllyEffect(key) && !isOwnerOnlyEffect(key);
+    }).map(function (key) {
       return { key: key, label: DEFINITIONS[key][0] + (key === 'hunter-block' ? ' (reflection support)' : '') };
     }).concat([{ key: 'victory', label: 'Victory fanfare' }, { key: 'defeat', label: 'Defeat coda' }, { key: 'draw', label: 'Draw coda' }]);
   }

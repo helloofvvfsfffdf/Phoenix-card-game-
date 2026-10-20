@@ -21,6 +21,15 @@
 .wheel-overlay-misfortune .wheel-segment-number { color: #ffe3e3; }
 .wheel-overlay-misfortune .wheel-outcomes li { border-color: #6b1d1d; }
 .wheel-overlay-misfortune .wheel-outcome-odds { color: #ff9c9c; }
+/* The segment the wheel landed on. Both wheels get it, and it is
+   impossible to miss: it grows, it glows, and it comes to the front. */
+.wheel-overlay .wheel-segment.wheel-result {
+  transform: scale(1.28);
+  border-color: #fff;
+  box-shadow: 0 0 0 3px #fff, 0 0 26px #ffd16b;
+  z-index: 3;
+  position: relative;
+}
 .wheel-overlay-misfortune .wheel-segment.wheel-result {
-  box-shadow: 0 0 0 3px #fff, 0 0 18px #ff3b3b;
+  box-shadow: 0 0 0 3px #fff, 0 0 26px #ff3b3b;
 }

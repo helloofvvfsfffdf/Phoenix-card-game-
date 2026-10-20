@@ -531,8 +531,8 @@ function russianRouletteAim(room, playerId, targetId) {
       done: true,
       events: [{
         type: 'result', cardId: 'russianroulette',
-        text: 'Russian Roulette - the revolver fires on ' + target.name +
-          '. They are eliminated for 3 rounds, and the minigame is over.'
+        text: 'THE REVOLVER FIRES! ' + target.name +
+          ' takes the shot and is out for 3 rounds. The minigame is over.'
       }]
     };
   }

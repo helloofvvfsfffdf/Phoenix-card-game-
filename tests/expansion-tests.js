@@ -285,6 +285,11 @@ test('the sound effect preview lists every card, and no ally', function () {
     'support'].forEach(function (id) {
     assert(previews.some(function (p) { return p.key === id; }), id + ' is in the preview');
   });
+  // The owner-only cards belong to the owner server, so they are not in a
+  // list everybody can audition.
+  ['joshuasurvey', 'trailer'].forEach(function (id) {
+    assert(!previews.some(function (p) { return p.key === id; }), id + ' is not in the preview');
+  });
   ['ally-phoenix', 'ally-ted', 'ally-maple', 'ally-tilly', 'ally-louie',
     'ally-simba', 'ally-elsie', 'block-tilly', 'block-ted', 'block-louie',
     'block-simba', 'block-elsie', 'maple-restriction'].forEach(function (id) {

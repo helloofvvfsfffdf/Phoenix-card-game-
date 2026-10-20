@@ -3986,11 +3986,17 @@ async function handle(ws, data) {
 
       // Set up participants based on card type.
       if (cardId === 'rps' || cardId === 'speed' || cardId === 'dice' || cardId === 'linkedfate' || cardId === 'swapper' ||
-          cardId === 'support' || cardId === 'russianroulette' ||
+          cardId === 'support' ||
           cardId === 'trailer') {
-        // The caster and the target. The complaint form, the revolver and the
-        // trailer are all between two people.
+        // The caster and the target. The complaint form and the trailer are
+        // all between two people.
         room.pendingInteraction.participants = [id, targetId];
+      } else if (cardId === 'russianroulette') {
+        // The revolver passes around the table, so anybody may end up holding
+        // it. A list of the first two players would leave the third player
+        // unable to act.
+        const everyone = s.players.filter(function (p) { return p.enabled && !Rules.isOut(p, s); });
+        room.pendingInteraction.participants = everyone.map(function (p) { return p.id; });
       } else if (cardId === 'mimic') {
         // Only the player who played the Mimic chooses what it pretends to
         // be. The target is handed a card; they have no say in it, and they
