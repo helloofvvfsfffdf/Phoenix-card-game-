@@ -973,6 +973,72 @@ test('the Wheel of Misfortune is an Evil card, with its own sound', function () 
 /* The secret event                                                       */
 /* ===================================================================== */
 
+suite('The President');
+
+test('playing the card makes them first in the play order, and they stay first', function () {
+  const s = game();
+  const actor = byId(s, 'human');
+  playCard(s, 'president');
+  equal(s.firstSeat, actor.seat, 'they open every round from then on');
+  // The presidency is five rounds, and then it is over.
+  const presidency = s.president;
+  assert(presidency, 'they are President');
+  equal(presidency.untilRound, s.round + 4, 'for five rounds');
+  // The order does not go back when the presidency ends.
+  s.president = null;
+  equal(s.firstSeat, actor.seat, 'they are still first');
+});
+
+test('the menu is the President\'s alone, and it lists every card', function () {
+  const client = fs.readFileSync(path.join(ROOT, 'js', 'online-client.js'), 'utf8');
+  assert(client.indexOf('renderPresidentMenu') !== -1, 'the menu is drawn');
+  assert(client.indexOf('Cards.CARDS.forEach') !== -1, 'with every card in the game');
+  assert(client.indexOf("type: 'president_ban'") !== -1, 'and a switch for each one');
+  assert(client.indexOf('MAKE ILLEGAL') !== -1, 'that makes a card illegal');
+  assert(client.indexOf('MAKE LEGAL') !== -1, 'and makes it legal again');
+  // It is shut while it is their own turn, and after a change.
+  assert(client.indexOf('state.presidentTurn') !== -1, 'the menu knows it is their turn');
+  assert(client.indexOf('state.presidentChanged') !== -1, 'and whether they have already changed one');
+});
+
+test('the law is a switch, and it binds everybody', function () {
+  const server = fs.readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+  // The switch: illegal becomes legal again.
+  assert(server.indexOf('s.bannedCards.splice(at, 1)') !== -1, 'a banned card can be made legal again');
+  // One change a round.
+  assert(server.indexOf('You have already changed the law this round') !== -1, 'one change a round');
+  // And it is locked on their own turn.
+  assert(server.indexOf('Take your turn first') !== -1, 'the menu is locked on their own turn');
+  // The refusal says what happened.
+  assert(server.indexOf('That card is against the law') !== -1, 'and the player is told why');
+});
+
+suite('The Memory Mayhem');
+
+test('each sequence is revealed once, not every time somebody answers', function () {
+  const client = fs.readFileSync(path.join(ROOT, 'js', 'interactive-expansion.js'), 'utf8');
+  // Every answer from the table arrives as a new state, and the reveal must
+  // not start again for the same sequence.
+  assert(client.indexOf('memory.revealedFor !== index') !== -1, 'the reveal is tied to the sequence');
+  assert(client.indexOf('memory.revealedFor = index') !== -1, 'and remembers which one it showed');
+});
+
+test('the server says which symbols the sequences are made of', function () {
+  const module = fs.readFileSync(path.join(ROOT, 'js', 'expansion.js'), 'utf8');
+  assert(module.indexOf('pi.roundData.symbols = MEMORY_SYMBOLS.slice()') !== -1,
+    'so the player can be offered the very symbols');
+});
+
+suite('The Rickroll');
+
+test('it waits for the official API, which announces itself by a global', function () {
+  const source = fs.readFileSync(path.join(ROOT, 'js', 'mimic-rickroll.js'), 'utf8');
+  // The YouTube IFrame Player API calls window.onYouTubeIframeAPIReady. Any
+  // other name and the player is never created.
+  assert(source.indexOf('onYouTubeIframeAPIReady') !== -1, 'it listens for the official global');
+  assert(source.indexOf('new root.YT.Player(') !== -1, 'and creates the player');
+});
+
 suite('The secret Fake System Shutdown');
 
 test('it is a browser-only event, and never touches the operating system', function () {

@@ -1458,6 +1458,7 @@ function renderPlaying() {
     // THE DEHYDRATED EFFECT. The target's whole screen turns for two rounds.
     if (window.PhoenixDehydrated) window.PhoenixDehydrated.apply(!!s.dehydrated);
 
+    renderPresidentMenu();
     renderHand();
     renderLog();
     if (window.PhoenixMatchShowcase) window.PhoenixMatchShowcase.decorate('online-screen');
@@ -1567,6 +1568,67 @@ function renderPlaying() {
     });
   }
 
+  /**
+   * THE PRESIDENT'S MENU.
+   *
+   * Every card in the game, with the switch that makes it illegal. It is the
+   * President's alone, it is shut while it is their own turn, and they may only
+   * change one card a round.
+   */
+  function renderPresidentMenu() {
+    const box = $('online-president');
+    if (!box) return;
+    const president = state.president;
+    const me = state.players[state.seat];
+    const isPresident = !!(president && me && president.id === me.id);
+    box.hidden = !isPresident;
+    if (!isPresident) return;
+
+    const body = $('online-president-body');
+    const toggle = $('online-president-toggle');
+    const hint = $('online-president-hint');
+    const note = $('online-president-note');
+    const list = $('online-president-cards');
+    if (!body || !toggle || !list) return;
+
+    const banned = state.bannedCards || [];
+    const locked = !!state.presidentTurn || !!state.presidentChanged;
+
+    if (hint) {
+      hint.textContent = state.presidentTurn
+        ? 'take your turn'
+        : state.presidentChanged
+          ? 'changed this round'
+          : 'open';
+    }
+    if (note) {
+      note.textContent = state.presidentTurn
+        ? 'You are President and it is your turn. Take it - the law you have made applies to you as well.'
+        : state.presidentChanged
+          ? 'You have already changed the law this round. Wait a full round before you change it again.'
+          : 'Make a card illegal and nobody may play it - including you. You may change one card a round.';
+    }
+
+    list.replaceChildren();
+    const Cards = window.PhoenixCards;
+    if (!Cards) return;
+    Cards.CARDS.forEach(function (card) {
+      const row = el('div', 'online-president-card');
+      const name = el('span', 'online-president-card-name', card.name);
+      row.appendChild(name);
+      const illegal = banned.indexOf(card.id) !== -1;
+      const button = el('button', 'online-president-toggle-button ' + (illegal ? 'is-illegal' : ''), illegal ? 'MAKE LEGAL' : 'MAKE ILLEGAL');
+      button.type = 'button';
+      button.disabled = !!locked;
+      button.title = illegal ? 'Let this card be played again' : 'Nobody may play this card';
+      button.onclick = function () {
+        send({ type: 'president_ban', cardId: card.id });
+      };
+      row.appendChild(button);
+      list.appendChild(row);
+    });
+  }
+
   function renderHand() {
     const hand = $('online-hand');
     hand.replaceChildren();
@@ -1672,6 +1734,18 @@ function renderPlaying() {
     settingsButton.onclick = () => window.PhoenixMusicSettings.open();
     $('online-back').insertAdjacentElement('beforebegin', settingsButton);
     $('online-back').onclick = leave;
+
+    // THE PRESIDENT'S MENU opens and shuts.
+    const presidentToggle = $('online-president-toggle');
+    if (presidentToggle) {
+      presidentToggle.onclick = () => {
+        const body = $('online-president-body');
+        if (!body) return;
+        const open = body.hidden;
+        body.hidden = !open;
+        presidentToggle.setAttribute('aria-expanded', String(open));
+      };
+    }
     $('online-create').onclick = () => join('create');
     $('online-join').onclick = () => join('join');
 

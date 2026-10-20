@@ -281,6 +281,23 @@ async function main() {
     } finally { await m.close(); }
   });
 
+  await test('the President is first, and the menu is theirs alone', async () => {
+    const m = await match();
+    try {
+      await m.play('president');
+      const presidentId = m.state().president.id;
+      // The President opens every round from then on.
+      const seat = m.state().players.find(function (p) { return p.id === presidentId; }).seat;
+      assert.strictEqual(m.state().firstSeat, seat, 'they are first in the play order');
+      // The menu is locked while it is their own turn.
+      const president = m.byId(presidentId);
+      if (m.state().current === presidentId) {
+        const error = await m.rejected(president, { type: 'president_ban', cardId: 'bonus' });
+        assert(/Take your turn first/.test(error.message), 'the menu is locked on their own turn: ' + error.message);
+      }
+    } finally { await m.close(); }
+  });
+
   suite('Customer Support');
 
   await test('the complaint is rejected, and the administration fee is kept', async () => {

@@ -93,7 +93,7 @@
     pointswap: 3,      // chaos
     hostage: 3,        // evil and long-running
     president: 2,      // special, and it shapes the whole match
-    mimic: 2,          // evil, rare, and it needs a disguise
+    mimic: 5,          // evil and rare, but not so rare that it never comes up
     dehydrated: 4,     // evil, and it is temporary
     nothing: 3,        // neutral, and it does nothing at all
     reverseofdoom: 2,  // legendary, and it is a trap
@@ -496,6 +496,13 @@
       roundStartSeat: firstRoundStart,
       rotateStart: rotateStart,
       turnIndex: 0,
+      // The seat that starts every round. A President takes it, and keeps it
+      // for the rest of the match - the presidency is not what makes them
+      // first, their time as President is.
+      firstSeat: null,
+      // The round the President last changed a card in. They may only change
+      // one once a round.
+      presidentChangedRound: 0,
       over: false,
       winnerSeat: -1,
       standings: [],
@@ -1475,14 +1482,26 @@
     if (!target) return 'The Mimic - there is nobody to hand it to.';
     var face = disguise && Cards.byId(disguise) ? disguise : 'bonus';
     state.mimics[target.id] = face;
+
+    // The Mimic card is HANDED OVER, not copied. It was just played, so it is
+    // in the discard; the target takes it, and the deck stays honest.
+    var card = 'mimic';
+    for (var i = state.discard.length - 1; i >= 0; i--) {
+      if (state.discard[i] === 'mimic') {
+        card = state.discard.splice(i, 1)[0];
+        break;
+      }
+    }
     var hand = handOf(state, target.id);
     var at = hand.indexOf(face);
     if (at !== -1) {
       // They already hold that card, so the Mimic takes its place: a hand may
-      // only hold one of each type, and this keeps it that way.
-      hand[at] = 'mimic';
+      // only hold one of each type, and this keeps it that way. The card they
+      // gave up goes to the discard, so nothing is lost.
+      state.discard.push(hand[at]);
+      hand[at] = card;
     } else {
-      hand.push('mimic');
+      hand.push(card);
       while (hand.length > HAND_LIMIT) {
         state.discard.push(hand.shift());
       }
@@ -1503,6 +1522,8 @@
     // are paid 5,000 for each of them as the round ends.
     state.president = { id: actor.id, untilRound: state.round + 4 };
     actor.points += 5000;
+    // And they are FIRST in the play order from now on.
+    state.firstSeat = actor.seat;
     return 'President - ' + actor.name + ' is President for 5 rounds.';
   }
 
@@ -1975,10 +1996,12 @@
     }
     state.seatsPlayed = 0;
     state.roundVisited = [];
-    if (state.rotateStart) {
+    // A President opens every round. The rotation does not apply while
+    // somebody holds that place, because it is theirs now.
+    if (state.rotateStart && state.firstSeat === null) {
       state.roundStartSeat = (state.roundStartSeat + 1) % SEAT_COUNT;
     }
-    state.turnInRound = state.roundStartSeat;
+    state.turnInRound = state.firstSeat === null ? state.roundStartSeat : state.firstSeat;
 
     // Everybody whose elimination ended with the previous round is back in play
     // as of this one, so drop their badge now rather than on their next turn.

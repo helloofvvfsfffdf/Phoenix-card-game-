@@ -107,8 +107,12 @@
   /** Load the official IFrame Player API, once. */
   function withApi(callback) {
     if (root.YT && root.YT.Player) { callback(); return; }
-    root.__phoenixYouTubeReady = function () {
-      root.__phoenixYouTubeReady = null;
+    // The official API announces itself by calling this global. Any other
+    // name and the player is never created: the script loads, and nothing
+    // happens.
+    var previous = root.onYouTubeIframeAPIReady;
+    root.onYouTubeIframeAPIReady = function () {
+      root.onYouTubeIframeAPIReady = previous || null;
       callback();
     };
     if (!document.getElementById('phoenix-youtube-api')) {
@@ -116,7 +120,7 @@
       tag.id = 'phoenix-youtube-api';
       tag.src = 'https://www.youtube.com/iframe_api';
       tag.onerror = function () {
-        if (root.__phoenixYouTubeReady) { root.__phoenixYouTubeReady = null; }
+        if (root.onYouTubeIframeAPIReady) { root.onYouTubeIframeAPIReady = null; }
         offerWayOn('blocked');
       };
       document.head.appendChild(tag);

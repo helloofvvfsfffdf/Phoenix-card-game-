@@ -45,6 +45,93 @@
   line-height: 1.45;
 }
 
+/* --- The President's menu -------------------------------------------------
+ * A quiet bar that opens into the whole of the card list. The President is
+ * the only person who sees it, and it is shut while it is their own turn. */
+.online-president {
+  margin: 14px 0;
+  border: 1px solid #ffd16b;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 209, 107, .10), rgba(21, 27, 45, .92));
+  overflow: hidden;
+}
+.online-president-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #ffe6a0;
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+}
+.online-president-toggle:hover { background: rgba(255, 209, 107, .08); }
+.online-president-crown { font-size: 18px; line-height: 1; }
+.online-president-hint {
+  margin-left: auto;
+  color: #b9a37a;
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: none;
+}
+.online-president-body { padding: 4px 14px 16px; }
+.online-president-note {
+  margin: 4px 0 12px;
+  color: #e4d2ad;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.online-president-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 8px;
+}
+.online-president-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #2c3a5c;
+  border-radius: 10px;
+  background: #0c1426;
+}
+.online-president-card-name {
+  flex: 1;
+  min-width: 0;
+  color: #f7e5c0;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.online-president-toggle-button {
+  flex: none;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #6b7fb5;
+  border-radius: 8px;
+  background: #1b2740;
+  color: #cfd8f0;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.online-president-toggle-button:hover:not(:disabled) { border-color: #ffd16b; color: #ffe6a0; }
+.online-president-toggle-button.is-illegal {
+  border-color: #e05555;
+  background: #3a1414;
+  color: #ffb4b4;
+}
+.online-president-toggle-button:disabled { opacity: .45; cursor: not-allowed; }
+
 /* --- The Hostage Situation's roles --- */
 .online-role {
   display: block;

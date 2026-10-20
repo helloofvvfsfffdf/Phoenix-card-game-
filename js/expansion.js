@@ -667,14 +667,27 @@ function mimicDisguise(room, playerId, disguiseId) {
 
   // The card physically in their hand is the Mimic; the disguise is a
   // PRESENTATION of it, and only the server knows which is which.
+  //
+  // The Mimic card is HANDED OVER, not copied: the caster's card was just
+  // played, so it is in the discard, and the target takes it. Nothing is
+  // created and nothing is lost.
+  let card = 'mimic';
+  for (let i = s.discard.length - 1; i >= 0; i--) {
+    if (s.discard[i] === 'mimic') {
+      card = s.discard.splice(i, 1)[0];
+      break;
+    }
+  }
   const hand = Rules.handOf(s, target.id);
   const at = hand.indexOf(disguiseId);
   if (at !== -1) {
     // They already hold that card, so the Mimic takes its place. A hand may
-    // only hold one of each type, and this keeps it that way.
-    hand[at] = 'mimic';
+    // only hold one of each type, and this keeps it that way. The card they
+    // gave up goes to the discard, so nothing is lost.
+    s.discard.push(hand[at]);
+    hand[at] = card;
   } else {
-    hand.push('mimic');
+    hand.push(card);
     // A hand is never allowed past the limit, so the Mimic takes the place of
     // the oldest card if the target is already holding a full hand.
     while (hand.length > Rules.HAND_LIMIT) {

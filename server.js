@@ -2413,6 +2413,11 @@ function snapshot(room, member) {
 
     // The expansion's live state, so every client can show the same thing.
     president: s && s.president ? s.president : null,
+    // Whether the President has already changed the law this round.
+    presidentChanged: !!(s && s.presidentChangedRound === s.round),
+    // Whether it is the President's own turn, which is when their menu is
+    // locked and they have to play.
+    presidentTurn: !!(s && s.president && s.turnInRound === (s.players || []).findIndex(function (p) { return p.id === s.president.id; })),
     bannedCards: s && s.bannedCards ? s.bannedCards.slice() : [],
     // The rotation is only sent while it is actually on, so the client
     // never has to work out whether the rounds are up.
@@ -3459,25 +3464,30 @@ async function handle(ws, data) {
     if (!s.president || s.president.id !== playerIdOf(m)) {
       return error(ws, 'Only the President can pass policy.');
     }
-    const banId = String(data.cardId || '').slice(0, 40);
-    if (!s.bannedCards) s.bannedCards = [];
-    const removing = data.remove === true;
-    if (removing) {
-      if (s.turnInRound === m.seat) {
-        return error(ws, 'You may only lift a ban on somebody else\'s turn.');
-      }
-      const at = s.bannedCards.indexOf(banId);
-      if (at !== -1) s.bannedCards.splice(at, 1);
-    } else {
-      if (s.turnInRound !== m.seat) {
-        return error(ws, 'You may only pass a ban on your own turn.');
-      }
-      if (!Cards.byId(banId)) return error(ws, 'That is not a card.');
-      if (Rules.isOwnerOnlyCard(banId)) {
-        return error(ws, 'That card cannot be banned.');
-      }
-      if (s.bannedCards.indexOf(banId) === -1) s.bannedCards.push(banId);
+    // The President changes the menu on somebody else's turn, and then takes
+    // their own turn with it. A card they have made illegal stops them dead,
+    // like it stops everybody else.
+    if (s.turnInRound === m.seat) {
+      return error(ws, 'Take your turn first. You cannot change the law on your own turn.');
     }
+    // One change a round: they have to live with it.
+    if (s.presidentChangedRound === s.round) {
+      return error(ws, 'You have already changed the law this round. Wait a full round.');
+    }
+    const banId = String(data.cardId || '').slice(0, 40);
+    if (!Cards.byId(banId)) return error(ws, 'That is not a card.');
+    if (Rules.isOwnerOnlyCard(banId)) {
+      return error(ws, 'That card cannot be banned.');
+    }
+    if (!s.bannedCards) s.bannedCards = [];
+    // The menu is a toggle: illegal becomes legal again.
+    const at = s.bannedCards.indexOf(banId);
+    if (at !== -1) {
+      s.bannedCards.splice(at, 1);
+    } else {
+      s.bannedCards.push(banId);
+    }
+    s.presidentChangedRound = s.round;
     broadcast(room);
     return;
   }
@@ -3878,7 +3888,7 @@ async function handle(ws, data) {
 
     // A PRESIDENTIAL BAN applies to everybody, the president included.
     if (s.bannedCards && s.bannedCards.indexOf(cardId) !== -1) {
-      return error(ws, 'That card type has been banned by the President.');
+      return error(ws, 'That card is against the law - the President banned it.');
     }
 
     const targetId = data.targetId === null

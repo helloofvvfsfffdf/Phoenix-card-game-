@@ -227,7 +227,7 @@
   /* Memory Mayhem                                                       */
   /* ------------------------------------------------------------------ */
 
-  var memory = { overlay: null, clock: null, revealed: false, sequence: [] };
+  var memory = { overlay: null, clock: null, revealed: false, revealedFor: -1, sequence: [] };
 
   function memoryBuild() {
     if (memory.overlay && document.body.contains(memory.overlay)) {
@@ -311,7 +311,11 @@
 
     // The sequence is shown for a server-decided time, then the player writes it
     // back. Everyone gets the same sequence and the same amount of time.
-    if (!memory.revealed) {
+    //
+    // ONCE per sequence: every answer from the table arrives as a new state,
+    // and the reveal must not start again for the same one.
+    if (memory.revealedFor !== index) {
+      memory.revealedFor = index;
       memory.revealed = true;
       status.textContent = 'Sequence ' + (index + 1) + ' of 3 - watch it.';
       display.replaceChildren();
@@ -337,6 +341,7 @@
   function memoryClose() {
     if (memory.clock) { clearTimeout(memory.clock); memory.clock = null; }
     memory.revealed = false;
+    memory.revealedFor = -1;
     memory.overlay = teardown(memory.overlay);
   }
 

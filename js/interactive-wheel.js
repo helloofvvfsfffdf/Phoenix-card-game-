@@ -50,7 +50,11 @@
       '<div class="wheel-graphic' + (misfortune ? ' wheel-graphic-misfortune' : '') + '" id="wheel-graphic" role="img" aria-label="Wheel with ' +
       list.length + ' numbered outcomes, listed below">' +
       list.map(function (outcome, index) {
-        return '<div class="wheel-segment s' + (index + 1) + '" data-outcome="' + outcome[0] + '" aria-hidden="true">' +
+        // The angle of this segment, measured clockwise from the top. The
+        // spin uses the same number, so the wheel lands on the outcome.
+        var angle = (360 / list.length) * index;
+        return '<div class="wheel-segment s' + (index + 1) + '" data-outcome="' + outcome[0] +
+          '" style="--angle:' + angle + 'deg" aria-hidden="true">' +
           '<span class="wheel-segment-number">' + (index + 1) + '</span><span>' + outcome[1] + '</span>' +
           (misfortune ? '<span class="wheel-segment-odds">' + outcome[3] + '%</span>' : '') + '</div>';
       }).join('') + '</div></div>';
@@ -135,9 +139,11 @@
         if (resultEvent.outcome && graphic) {
           var index = list.findIndex(function (o) { return o[0] === resultEvent.outcome; });
           if (index >= 0) {
-            // A full turn and a bit, so the wheel always lands on a segment.
+            // The segment sits at this angle, so turning the wheel by the
+            // opposite brings it to the pointer - which is where the outcome
+            // says it landed.
             var step = 360 / list.length;
-            var rotation = 1080 + 360 - (index * step + step / 2);
+            var rotation = 1080 - index * step;
             if (window.gsap) window.gsap.to(graphic, {rotation: rotation, duration: misfortune ? 2.6 : 1.4, ease: 'power3.out'});
             else graphic.style.transform = 'rotate(' + rotation + 'deg)';
             var segments = graphic.querySelectorAll('.wheel-segment');
