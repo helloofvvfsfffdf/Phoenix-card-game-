@@ -76,6 +76,7 @@
     joshuasurvey: 'PhoenixJoshuaSurveyInteractive',
     trailer: 'PhoenixTrailerInteractive'
   };
+  let serverLobby = null;
   let activeInteractionModule = null;
   let interactionKey = null;
   let resultTimer = null;
@@ -510,6 +511,7 @@
       }
 
       if (message.type === 'lobby') {
+        serverLobby = message;
         renderLobbyList(message.rooms);
         return;
       } else if (message.type === 'banned') {
@@ -1760,5 +1762,10 @@ const roundsSelect = $('online-rounds');
     }
   });
 
-  window.PhoenixOnline = { enter, leave, join, openAdmin, getState: () => state };
+  window.PhoenixOnline = {
+    enter, leave, join, openAdmin, getState: () => state,
+    // Whether the server currently has the multiplayer open. Null means the
+    // server has not said yet.
+    multiplayerOpen: () => (serverLobby ? serverLobby.multiplayerOpen !== false : null)
+  };
 })();
