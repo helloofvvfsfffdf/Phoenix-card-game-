@@ -15,10 +15,14 @@ async function main(){try{
   await call('Page.navigate',{url:(process.env.PHOENIX_GALLERY_URL||'http://localhost:3000')+'/card-effects.html'});
   await evaluate("new Promise((r,j)=>{let n=0;const t=setInterval(()=>{if(window.PhoenixCardGallery&&PhoenixCardGallery.inspect().ready){clearInterval(t);r(true);}else if(n++>200){clearInterval(t);j(Error('gallery not ready'));}},50);})");
   const measurements=[];
-  for(const id of require('../js/cards').ids()){
+  // The two owner-only cards are in the Gallery, but they have no particle
+  // artwork of their own - they are never in the Card Cinematics.
+  const ownerIds=require('../js/cards').CARDS.filter(card=>card.ownerOnly).map(card=>card.id);
+  for(const id of require('../js/cards').ids().filter(id=>!ownerIds.includes(id))){
     await evaluate(`PhoenixCardGallery.select(${JSON.stringify(id)})`);if(id==='alvin')await evaluate("document.getElementById('variant').selectedIndex=1;PhoenixCardGallery.replay()");await wait(1450);const first=await evaluate('PhoenixCardGallery.inspect()');assert(first.ready);assert(first.bright>20,id+' must render actual Effekseer particles');assert(first.cache<=2);assert(first.width<=1440);await screenshot('phoenix-card-'+id+'.png');await wait(250);const second=await evaluate('PhoenixCardGallery.inspect()');assert.notStrictEqual(second.hash,first.hash,id+' particles must animate');assert.strictEqual(second.errors.length,0);measurements.push({id,bright:first.bright,width:first.width,height:first.height,frames:second.frames-first.frames});console.log('PASS '+id+': '+first.bright+' visible particle pixels');
   }
-  await wait(3000);assert.strictEqual((await evaluate('PhoenixCardGallery.inspect()')).ticking,false,'completion must remove the renderer ticker');
+  for(const id of ownerIds){await evaluate(`PhoenixCardGallery.select(${JSON.stringify(id)})`);await wait(600);const listed=await evaluate("!!document.querySelector('#card-list button[data-card="+JSON.stringify(id)+"]')");assert(listed,id+' is listed in the Gallery');assert.strictEqual((await evaluate('PhoenixCardGallery.inspect()')).bright,0,id+' has no particle artwork of its own');console.log('PASS '+id+': listed in the Gallery with no particle artwork');}
+  await wait(7000);assert.strictEqual((await evaluate('PhoenixCardGallery.inspect()')).ticking,false,'completion must remove the renderer ticker');
   await evaluate("PhoenixCardGallery.select('bonus')");await evaluate("document.getElementById('tour').click()");await wait(5000);assert.strictEqual((await evaluate('PhoenixCardGallery.inspect()')).card,'knife');await evaluate("document.getElementById('tour').click()");assert.strictEqual((await evaluate('PhoenixCardGallery.inspect()')).touring,false);
   await evaluate("PhoenixCardGallery.select('zombie')");await evaluate("document.getElementById('variant').selectedIndex=1;PhoenixCardGallery.replay()");await wait(2450);
   assert.strictEqual(await evaluate("document.getElementById('actor-score').textContent"),'20,000');assert.strictEqual(await evaluate("document.getElementById('target-score').textContent"),'30,000');assert((await evaluate("document.getElementById('actor-status').textContent")).includes('OUT'));
