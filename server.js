@@ -3117,7 +3117,7 @@ async function handle(ws, data) {
     if (!serverState.multiplayerOpen) {
       return error(
         ws,
-        'Multiplayer is closed at the moment. The owner opens it from the Owner Dashboard - a restart or a deploy closes it again, so it may need reopening.'
+        'Multiplayer is currently closed by the owner. Try again later.'
       );
     }
 
@@ -3339,7 +3339,7 @@ async function handle(ws, data) {
     }
 
     if (!serverState.multiplayerOpen) {
-      return error(ws, 'Multiplayer is closed at the moment. The owner opens it from the Owner Dashboard - a restart or a deploy closes it again, so it may need reopening.');
+      return error(ws, 'Multiplayer is currently closed by the owner. Try again later.');
     }
 
     const requestedCode = String(data.code || '')

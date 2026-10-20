@@ -112,16 +112,6 @@
     // into their match once the access code unlocks them.
     document.addEventListener('phoenix-mode-unlocked', function(event) { if(event.detail.mode==='single') enter('single'); else if(event.detail.mode==='test') enter('test'); });
     $('menu-multi').addEventListener('click', function () {
-      // The server may have the multiplayer closed - the owner opens it from
-      // the dashboard, and a restart (or a deploy) closes it again. Say so,
-      // rather than letting the player find out by being refused.
-      const open = window.PhoenixOnline.multiplayerOpen && window.PhoenixOnline.multiplayerOpen();
-      if (open === false) {
-        const feedback = $('menu-feedback');
-        if (feedback) {
-          feedback.textContent = 'Multiplayer is closed at the moment. The owner opens it from the Owner Dashboard.';
-        }
-      }
       window.PhoenixOnline.enter();
     });
 
