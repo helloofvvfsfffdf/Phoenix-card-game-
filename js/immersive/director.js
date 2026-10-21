@@ -38,6 +38,10 @@ export function createDirector(options) {
       // The places the room says the seats are. A getter, because the room
       // arrives after the director is made.
       seatAt: settings.seatAt || function () { return null; },
+      // The sights a card can have: sparks, rings, beams, numbers flying.
+      effects: settings.effects || null,
+      // Whether the player has asked for less movement.
+      reducedMotion: !!settings.reducedMotion,
       tableRadius: settings.tableRadius,
       tableHeight: settings.tableHeight,
       scene: settings.scene,
@@ -57,10 +61,12 @@ export function createDirector(options) {
     /** The caption at the top of the screen. */
     announce: function (text, ms) {
       const node = settings.caption;
-      if (!node) return wait(ms || 1200);
+      // With the motion turned down, the words do not linger.
+      const time = settings.reducedMotion ? Math.min(ms || 1200, 900) : (ms || 1600);
+      if (!node) return wait(time);
       node.textContent = text || '';
       node.classList.add('is-on');
-      return wait(ms || 1600).then(function () {
+      return wait(time).then(function () {
         node.classList.remove('is-on');
       });
     },

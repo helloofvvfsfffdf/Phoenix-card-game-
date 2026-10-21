@@ -25,7 +25,8 @@ import { loadMixamoGLB, playAnimation, settleAnimation } from './mixamo.js';
 import { loadMap, playAreaPoint } from './maps.js';
 import { seatCharacter, lockToSeat, eyePoint, findBone } from './seating.js';
 import { createDirector } from './director.js';
-import { playCinematic, cardIdFor } from './cinematics.js';
+import { createEffects } from './effects3d.js';
+import { playCinematic, cardIdFor, cinematicCards } from './cinematics.js';
 import { createMultiplayer } from './multiplayer.js';
 import { createTableUI } from './table-ui.js';
 import { createInteractionBridge } from './interactions.js';
@@ -84,6 +85,12 @@ export function startPrototype(root) {
   const look = CHARACTERS[0];
   const hands = createHand(camera, { skin: look.skin, sleeve: look.shirt });
   const fan = createFan(camera, {});
+
+  /* ---- the sights a card can have ---- */
+
+  // The sparks, the rings, the beams, the numbers that fly through the
+  // air: the things every cinematic is built out of.
+  const effects = createEffects(scene, { camera: camera });
 
   /* ---- what is on the table ---- */
 
@@ -180,7 +187,13 @@ export function startPrototype(root) {
    */
   function applyState(next) {
     const previousSeat = snapshot ? snapshot.seat : -1;
+    const previousRound = snapshot ? snapshot.round : null;
     snapshot = next;
+
+    // A new round: anything that lasts a round wears off.
+    if (previousRound !== null && next.round !== previousRound) {
+      restoreGhosts();
+    }
 
     // The hand is the server's, always.
     fan.set(handCards());
@@ -208,6 +221,22 @@ export function startPrototype(root) {
     playJournal(next);
 
     updateHud();
+  }
+
+  /** Put back anybody who was made transparent by the Ghost card. */
+  function restoreGhosts() {
+    state.characters.forEach(function (character) {
+      if (!character) return;
+      character.group.traverse(function (object) {
+        if (!object.isMesh || !object.material) return;
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        materials.forEach(function (material) {
+          if (material.userData.__ghostOriginal === undefined) return;
+          material.opacity = material.userData.__ghostOriginal;
+          material.transparent = material.userData.__ghostTransparent;
+        });
+      });
+    });
   }
 
   /** The cards that have been played since the last snapshot, and their show. */
@@ -273,10 +302,13 @@ export function startPrototype(root) {
     seats: 5,
     // Where the room says each seat is.
     seatAt: function (seat) { return seatPlace(seat); },
+    // The sights a card can have.
+    effects: effects,
     tableRadius: 1.9,
     tableHeight: 1.0,
     lights: { lamp: view.lamp, hemi: view.hemi, hemiBase: view.hemi.intensity },
     caption: caption,
+    reducedMotion: !!settings.reducedMotion,
     localSeat: 0
   });
 
@@ -659,6 +691,7 @@ export function startPrototype(root) {
     hudReduced.checked = !!settings.reducedMotion;
     hudReduced.addEventListener('change', function () {
       settings.reducedMotion = hudReduced.checked;
+      director.context.reducedMotion = settings.reducedMotion;
       saveSettings(settings);
     });
   }
@@ -679,29 +712,28 @@ export function startPrototype(root) {
   /**
    * Play the cinematics one after another, with the events the server would
    * send. It is how the cinematics are looked at without a table of real
-   * players.
+   * players - every card in the game, in turn.
    */
   function rehearse() {
-    const script = [
-      { cardId: 'steal', seat: 1, targetSeat: 3 },
-      { cardId: 'judge', seat: 0, targetSeat: 4 },
-      { cardId: 'hostage', seat: 2, targetSeat: 3 },
-      { cardId: 'mimic', seat: 1, targetSeat: 1 },
-      { cardId: 'nothing', seat: 5, targetSeat: -1 }
-    ];
+    const cards = cinematicCards();
     let chain = Promise.resolve();
-    script.forEach(function (step) {
+    cards.forEach(function (cardId, index) {
       chain = chain.then(function () {
         const events = [
-          { type: 'card', cardId: step.cardId, seat: step.seat, targetSeat: step.targetSeat },
-          { type: 'result', cardId: step.cardId, text: '' }
+          { type: 'card', cardId: cardId, seat: 1, targetSeat: 3 },
+          { type: 'result', cardId: cardId, text: '' }
         ];
-        return playCinematic(step.cardId, director.context, events);
+        return playCinematic(cardId, director.context, events, {
+          reducedMotion: settings.reducedMotion
+        }).then(function () {
+          setStatus(cardId + ' (' + (index + 1) + ' of ' + cards.length + ')');
+        });
       });
     });
     chain.then(function () {
-      setStatus('That was the whole lot of them.');
+      setStatus('That was every card in the game.');
     });
+    return chain;
   }
 
   /* ---- the loop ---- */
