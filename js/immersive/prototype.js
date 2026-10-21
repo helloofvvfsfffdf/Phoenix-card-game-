@@ -17,11 +17,13 @@ import * as THREE from '../../vendor/three/three.module.js';
 import { createScene, buildRoom, webglAvailable, QUALITY, PALETTE, ROOM } from './scene.js';
 import { createCharacter, animateCharacter, animateDraw, animatePlay, CHARACTERS } from './characters.js';
 import { createHand, createFan, MAX_HAND } from './hand.js';
-import { createPhone, createFirstPersonPhone } from './phone.js';
+import { createLaptop, createTableLaptops } from './laptop.js';
 import { buildPoster, buildNotepad, buildJailCell } from './props.js';
-import { loadMixamoCharacter, playAnimation } from './mixamo.js';
+import { loadMixamoCharacter, loadMixamoGLB, playAnimation } from './mixamo.js';
 
 const SEATS = 6;
+/** The height of the seat of a chair, which is where a seated person's hips are. */
+const SEAT_HEIGHT = 0.52;
 const SETTINGS_KEY = 'phoenix.immersive.settings.v1';
 
 const DEFAULTS = {
@@ -110,91 +112,97 @@ export function startPrototype(root) {
   const hands = createHand(camera, { skin: look.skin, sleeve: look.shirt });
   const fan = createFan(camera, {});
 
-  /* ---- the phones ---- */
+  /* ---- the laptops ---- */
 
-  // One in front of every player, and one in the player's own hands.
-  const phones = [];
-  for (let i = 0; i < SEATS - 1; i++) {
-    const phone = createPhone({});
-    const angle = ((i + 1) / SEATS) * Math.PI * 2;
-    const radius = room.tableRadius - 0.42;
-    phone.group.position.set(Math.sin(angle) * radius, room.tableHeight, Math.cos(angle) * radius);
-    // The screen tips towards the player who owns it, so it can be read.
-    phone.group.rotation.y = angle;
-    phone.group.scale.setScalar(0.92);
-    scene.add(phone.group);
-    phones.push(phone);
-  }
-  const ownPhone = createFirstPersonPhone(camera, {});
+  // One open laptop on the table in front of every player, turned to face
+  // them and low enough that it hides neither the table nor their cards. The
+  // screen is a live canvas: your PHOENIX points balance, a green or red band
+  // when it moves, and a LEAVE MATCH button.
+  const laptops = createTableLaptops(scene, {
+    seats: SEATS,
+    radius: room.tableRadius - 0.42,
+    tableHeight: room.tableHeight
+  });
+  const laptopBySeat = {};
+  laptops.forEach(function (entry) { laptopBySeat[entry.seat] = entry.laptop; });
 
-  // The balances on the phones. In a real match these come from the server;
+  // The balances on the screens. In a real match these come from the server;
   // here they are the mock table's, and they move so the notifications can
   // be seen working.
-  const balances = phones.map(function () { return 0; });
-  let ownBalance = 0;
+  const balances = {};
+  Object.keys(laptopBySeat).forEach(function (seat) { balances[seat] = 0; });
   let nextSwing = 4;
 
   /* ---- the Mixamo character ---- */
 
-  // One seat is taken by a real person: a Mixamo model, with its skeleton, its
-  // clothes, its hair and its textures, straight out of the file the owner
-  // downloaded. It arrives after the room is already standing, so the table is
+  // Every seat is taken by a real person: a Mixamo model with its skeleton,
+  // its clothes, its hair and its textures. The files are the downloads the
+  // owner made, converted into small glTF files with the pictures made a
+  // sensible size, so a character arrives in a moment rather than a coffee
+  // break. They arrive after the room is already standing, so the table is
   // never waiting for a download.
-  const mixamo = { loading: true, character: null, error: null, clipNames: [], seat: -1 };
-  loadMixamoCharacter('assets/mixamo/character.fbx', { name: 'Mixamo' })
-    .then(function (loaded) {
-      // The seat opposite the player: the one they look at most.
-      const index = 2;
-      const placeholder = characters[index];
-      const angle = ((index + 1) / SEATS) * Math.PI * 2;
-      const radius = room.tableRadius + 0.72;
+  const CHARACTER_FILES = ['ash', 'brook', 'cass', 'dara', 'emery'];
+  const mixamo = {
+    loading: true,
+    characters: [],
+    errors: [],
+    clipNames: [],
+    seat: -1
+  };
 
-      loaded.group.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
-      loaded.group.rotation.y = angle + Math.PI;
-      // The feet on the floor, whatever height the model was authored at.
-      const box = new THREE.Box3().setFromObject(loaded.group);
-      loaded.group.position.y -= box.min.y;
-      scene.add(loaded.group);
+  CHARACTER_FILES.forEach(function (name, index) {
+    const seat = index + 1;
+    const placeholder = characters[index];
+    const angle = (seat / SEATS) * Math.PI * 2;
+    const radius = room.tableRadius + 0.72;
 
-      // The placeholder steps aside, and the phone on that table belongs to
-      // the new character.
-      if (placeholder) placeholder.root.visible = false;
-      if (phones[index]) phones[index].group.userData.owner = loaded.group;
+    loadMixamoGLB('assets/mixamo/characters/' + name + '.glb', { name: name })
+      .then(function (loaded) {
+        loaded.group.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
+        loaded.group.rotation.y = angle + Math.PI;
+        scene.add(loaded.group);
 
-      mixamo.character = loaded;
-      mixamo.clipNames = loaded.clipNames;
-      mixamo.seat = index;
-      mixamo.loading = false;
-      mixamo.sitting = false;
+        // The placeholder steps aside.
+        if (placeholder) placeholder.root.visible = false;
 
-      // The character sits down. The sitting animation is the one Mixamo
-      // calls "Sitting Idle", extracted into a small file of keyframes; the
-      // skeleton is never bent by hand into a shape nobody would sit like.
-      playAnimation(loaded, 'sittingIdle', { loop: true })
-        .then(function (played) {
-          mixamo.sitting = !!played;
-          const line = document.getElementById('immersive-status');
-          if (line) {
-            line.textContent = played
-              ? 'The Mixamo character is sitting at the table.'
-              : 'The Mixamo character could not be seated: the sitting animation is missing.';
-          }
-        })
-        .catch(function (error) {
-          mixamo.sitting = false;
-          const line = document.getElementById('immersive-status');
-          if (line) {
-            line.textContent = 'The Mixamo character could not be seated: ' +
-              (error && error.message ? error.message : 'the animation is missing');
+        mixamo.characters.push({ seat: seat, character: loaded, name: name });
+        mixamo.clipNames = loaded.clipNames;
+
+        // The character sits down. The sitting animation is the one Mixamo
+        // calls "Sitting Idle", extracted into a small file of keyframes; the
+        // skeleton is never bent by hand into a shape nobody would sit like.
+        return playAnimation(loaded, 'sittingIdle', { loop: true }).then(function (played) {
+          loaded.sitting = !!played;
+          // The character is placed by its hips, which have to be on the seat
+          // of the chair: the models do not all start from the same place, and
+          // the seat is a known height.
+          const hips = loaded.bones.filter(function (bone) {
+            return /Hips/.test(bone.name) && bone.name.indexOf('_') === -1;
+          })[0];
+          if (hips) {
+            const where = new THREE.Vector3();
+            hips.getWorldPosition(where);
+            loaded.group.position.y += SEAT_HEIGHT - where.y;
           }
         });
-    })
-    .catch(function (error) {
-      mixamo.loading = false;
-      mixamo.error = error && error.message ? error.message : String(error);
-      const line = document.getElementById('immersive-status');
-      if (line) line.textContent = 'The Mixamo character could not be loaded: ' + mixamo.error;
-    });
+      })
+      .catch(function (error) {
+        mixamo.errors.push((name || 'a character') + ': ' +
+          (error && error.message ? error.message : String(error)));
+      })
+      .then(function () {
+        if (mixamo.characters.length + mixamo.errors.length >= CHARACTER_FILES.length) {
+          mixamo.loading = false;
+          mixamo.seat = mixamo.characters.length ? mixamo.characters[0].seat : -1;
+          const line = document.getElementById('immersive-status');
+          if (line) {
+            line.textContent = mixamo.errors.length
+              ? mixamo.errors.length + ' character(s) could not be loaded: ' + mixamo.errors[0]
+              : mixamo.characters.length + ' Mixamo characters are sitting at the table.';
+          }
+        }
+      });
+  });
 
   /* ---- the things in the room ---- */
 
@@ -428,24 +436,22 @@ export function startPrototype(root) {
       animateCharacter(character, time, delta, settings.reducedMotion);
     });
 
-    // The Mixamo character's own animations.
-    if (mixamo.character) mixamo.character.mixer.update(delta);
+    // The Mixamo characters' own animations.
+    mixamo.characters.forEach(function (entry) {
+      entry.character.mixer.update(delta);
+    });
 
-    // The phones: their screens are redrawn when the balance moves, so the
+    // The laptops: their screens are redrawn when the balance moves, so the
     // positive and negative notifications really happen.
     if (!settings.reducedMotion && time > nextSwing) {
       nextSwing = time + 5 + Math.random() * 6;
-      phones.forEach(function (phone, index) {
+      laptops.forEach(function (entry) {
         const change = Math.round((Math.random() - 0.45) * 20000);
-        balances[index] += change;
-        phone.bank.set(balances[index], change >= 0 ? 'Round won' : 'Round lost');
+        balances[entry.seat] += change;
+        entry.laptop.bank.set(balances[entry.seat], change >= 0 ? 'Round won' : 'Round lost');
       });
-      const mine = Math.round((Math.random() - 0.45) * 20000);
-      ownBalance += mine;
-      ownPhone.bank.set(ownBalance, mine >= 0 ? 'Round won' : 'Round lost');
     }
-    phones.forEach(function (phone) { phone.bank.tick(); });
-    ownPhone.bank.tick();
+    laptops.forEach(function (entry) { entry.laptop.bank.tick(); });
 
     // The fire in the grate: a slow flicker, and the light it throws moves with
     // it. Reduced motion keeps the light steady.
@@ -522,14 +528,18 @@ export function startPrototype(root) {
         pitch: cameraState.pitch,
         mixamo: {
           loading: mixamo.loading,
-          loaded: !!mixamo.character,
-          error: mixamo.error,
-          sitting: mixamo.sitting,
+          loaded: mixamo.characters.length > 0,
+          count: mixamo.characters.length,
+          errors: mixamo.errors,
+          sitting: mixamo.characters.every(function (entry) { return entry.character.sitting; }),
           seat: mixamo.seat,
           clips: mixamo.clipNames,
-          bones: mixamo.character ? mixamo.character.bones.length : 0,
-          meshes: mixamo.character ? mixamo.character.meshes.length : 0,
-          scale: mixamo.character ? mixamo.character.scale : 0
+          bones: mixamo.characters.reduce(function (n, entry) {
+            return n + entry.character.bones.length;
+          }, 0),
+          meshes: mixamo.characters.reduce(function (n, entry) {
+            return n + entry.character.meshes.length;
+          }, 0)
         }
       };
     },

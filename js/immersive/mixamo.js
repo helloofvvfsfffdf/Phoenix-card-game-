@@ -18,6 +18,7 @@
 
 import * as THREE from '../../vendor/three/three.module.js';
 import { FBXLoader } from '../../vendor/three/loaders/FBXLoader.js';
+import { GLTFLoader } from '../../vendor/three/loaders/GLTFLoader.js';
 
 /** How tall a person should be, in metres. */
 const TARGET_HEIGHT = 1.72;
@@ -35,6 +36,35 @@ export function loadMixamoCharacter(url, options) {
     loader.load(url, function (group) {
       try {
         resolve(prepareMixamoCharacter(group, settings));
+      } catch (error) {
+        reject(error);
+      }
+    }, undefined, function (error) {
+      reject(new Error('The character could not be loaded: ' +
+        (error && error.message ? error.message : 'the file could not be read')));
+    });
+  });
+}
+
+/**
+ * Load one of the converted characters.
+ *
+ * The converted files are the same models as the FBX downloads, with the
+ * pictures made a sensible size, so they load in a moment instead of a
+ * coffee break. The rig is the same rig.
+ */
+export function loadMixamoGLB(url, options) {
+  const settings = Object.assign({ targetHeight: TARGET_HEIGHT, name: '' }, options || {});
+  return new Promise(function (resolve, reject) {
+    const loader = new GLTFLoader();
+    loader.load(url, function (gltf) {
+      try {
+        const character = prepareMixamoCharacter(gltf.scene, settings);
+        character.animations = (gltf.animations || []).map(function (clip) {
+          character.mixer.clipAction(clip);
+          return clip;
+        });
+        resolve(character);
       } catch (error) {
         reject(error);
       }

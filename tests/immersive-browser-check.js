@@ -165,9 +165,10 @@ async function main() {
     // 6. The Mixamo character is there, rigged, clothed and sitting.
     const mixamo = await evaluate('window.PhoenixImmersive.state().mixamo');
     assert.strictEqual(mixamo.loaded, true, 'the Mixamo character loaded');
-    assert.strictEqual(mixamo.error, null, 'without an error');
-    assert(mixamo.bones > 100, 'with a real skeleton (' + mixamo.bones + ' bones)');
-    assert(mixamo.meshes >= 5, 'and their body, clothes and hair (' + mixamo.meshes + ' meshes)');
+    assert.deepStrictEqual(mixamo.errors, [], 'without an error');
+    assert.strictEqual(mixamo.count, 5, 'all five characters are there');
+    assert(mixamo.bones > 400, 'with a real skeleton (' + mixamo.bones + ' bones)');
+    assert(mixamo.meshes >= 30, 'and their body, clothes and hair (' + mixamo.meshes + ' meshes)');
     assert(mixamo.sitting, 'and they are sitting in the chair');
 
     // 7. Nothing threw on the way.
