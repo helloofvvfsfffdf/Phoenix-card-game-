@@ -50,7 +50,7 @@ export function buildPoster(scene, options) {
     group.add(pin);
   });
 
-  group.position.set(settings.x, 1.62, settings.z);
+  group.position.set(settings.x, 1.95, settings.z);
   group.rotation.y = settings.ry;
   scene.add(group);
   return group;

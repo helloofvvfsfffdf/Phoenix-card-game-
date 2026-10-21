@@ -186,7 +186,7 @@ async function main() {
     await evaluate('window.PhoenixImmersive.look(0, -0.05)');
 
     // The poster on the back wall, and the cell in the corner.
-    await evaluate('window.PhoenixImmersive.look(0.28, 0.1)');
+    await evaluate('window.PhoenixImmersive.look(-0.07, 0.2)');
     await wait(500);
     shots.push(await screenshot('phoenix-immersive-poster.png'));
     await evaluate('window.PhoenixImmersive.look(1.25, 0.02)');

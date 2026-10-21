@@ -135,7 +135,7 @@ export function startPrototype(root) {
 
   /* ---- the things in the room ---- */
 
-  buildPoster(scene, { x: 2.7, z: -ROOM.depth / 2 + 0.06, ry: 0 });
+  buildPoster(scene, { x: -0.4, z: -ROOM.depth / 2 + 0.06, ry: 0 });
   buildNotepad(scene, {});
   buildJailCell(scene, {});
 
