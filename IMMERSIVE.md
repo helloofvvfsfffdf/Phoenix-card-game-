@@ -1,11 +1,10 @@
 # PHOENIX — the immersive (3D) table
 
-The first-person 3D card table: a room, a table, five seated people, and
-your own hands holding a fan of cards you can pick up and play.
+The first-person 3D card table: a room, a table, people sitting round it,
+and your own hands holding a fan of cards you can pick up and play.
 
-It runs on its own page and uses **mock data**. Nothing in it talks to the
-game server, and nothing in it can affect a real match. The 2D game is
-untouched.
+It runs on its own page. The gameplay is still mock data, so nothing here can
+affect a real match — and the 2D game is untouched.
 
 ## Running it
 
@@ -14,72 +13,61 @@ npm start
 # then open http://localhost:3000/immersive.html
 ```
 
-Any static server works too (`npx serve .`).
+## The room
 
-## What you can do in it
+The room is a **map**: somebody made it in Blender, it is loaded as it was
+made, and the places the game needs are read out of it by the names of the
+objects — the cushions are the seats, the laptop bases say where the laptops
+stand, the felt is the table, the deck is the deck and the cell's door is the
+cell.
 
-| | |
-|---|---|
-| **Look around** | Drag with the mouse, or with one finger. You are seated: you cannot stand up, walk, or look behind yourself. |
-| **Pick a card** | Click or tap a card in your hand. It lifts out of the fan. |
-| **Play a card** | Click or tap it again, or press **PLAY CARD**. It flies to the middle of the table. |
-| **Draw a card** | **DRAW** takes the next card from the mock deck into your hand, up to seven. |
-| **The phone** | Bottom left: your own PHOENIX Bank phone, with your balance and a LEAVE MATCH button. Every other player has one on the table in front of them. |
-| **Quality** | Low, Medium or High — the pixel ratio and the shadows. |
-| **Look speed** | How fast the camera turns. |
-| **Reduced motion** | Turns off the breathing, the swaying, the blinking, the card flights and the balance swings. |
+The map says where things are. The card system says what they do. The two
+never talk, so the next rooms can be dropped in without a card being
+touched.
 
-## The files
+**Map 01: Modern Gaming Lounge** — `assets/maps/modern-gaming-lounge.glb`,
+made in Blender as `PHOENIX Neon Lounge`. It is the neon room: the strip
+lights, the wall display, the snack machines, the oval table and the cell in
+the corner.
 
-| File | What it is |
-|---|---|
-| `immersive.html` | The page: the stage, the HUD, the loading line and the no-WebGL message. |
-| `css/immersive.css` | The page around the 3D stage. |
-| `js/immersive/scene.js` | The renderer, the camera and the lights. |
-| `js/immersive/room.js` | The room: the floor, the walls, the ceiling, the door, the windows, the fireplace, the table, the chairs, the deck and the furniture. |
-| `js/immersive/characters.js` | The five stylised people, their rig, and their idle movement. |
-| `js/immersive/hand.js` | Your own arms and hands, the fan of cards, the card faces and the picking. |
-| `js/immersive/mixamo.js` | The Mixamo characters: the FBX loader, the rig, and the animation library. |
-| `js/immersive/phone.js` | The PHOENIX Bank phone and its stand. |
-| `js/immersive/props.js` | The Mimic poster, the developer's notepad and the jail cell. |
-| `js/immersive/textures.js` | Every surface, painted on a canvas: the floorboards, the wallpaper, the wood, the leather, the rug, the poster, the notepad and the bank screen. |
-| `js/immersive/geometry.js` | The shapes: rounded boxes, turned parts, frames, panelled doors and a merge for the parts that never move. |
-| `js/immersive/prototype.js` | The wiring: the mock match, the camera controls, the HUD and the frame loop. |
-| `assets/mixamo/character.fbx` | The Mixamo character: the skeleton, the body, the clothes, the hair and the textures, exactly as it was downloaded. |
-| `assets/mixamo/animations/` | The thirteen animations, taken out of their downloads as keyframes. |
-| `vendor/three/` | Three.js r186 (MIT) and the FBX loader, vendored so the page has no external dependency. |
-| `tools/extract-mixamo-animation.js` | Takes the animation out of a Mixamo download and leaves a small file of keyframes. |
-| `tests/immersive-browser-check.js` | A headless-browser check that proves the page renders, holds seven cards, and picks and plays one. |
+To add a room: put the file in `assets/maps/`, add it to `MAPS` in
+`js/immersive/maps.js`, and set `data-map` on the body in `immersive.html`.
 
-## The Mixamo characters
+## The people
 
-The character is a real Mixamo model, loaded with Three.js's own FBX loader:
-the skeleton, the body, the clothes, the hair and the textures all come
-straight out of the file, and the rig is left exactly as it was, so the
-characters can be posed, stood up or walked later.
+Four Mixamo characters, one for each seat the player is not in, with their
+skeletons, clothes, hair and textures, sitting in the map's own chairs with
+the real sitting animation. The first seat is the local player's: they are
+the camera.
 
-A Mixamo download is about fifty megabytes, almost all of it the model and
-its textures, which the game already has. The animations are therefore taken
-out separately, as small files of keyframes:
+The characters are converted from the original fifty-megabyte downloads into
+glTF files of a tenth the size, with the pictures made a sensible size:
 
 ```bash
-node tools/extract-mixamo-animation.js "C:/path/Sitting Idle.fbx" \
-     assets/mixamo/animations/sitting-idle.json
+node tools/convert-character.js "C:/path/character.fbx" \
+     assets/mixamo/characters/ash.glb 1024
 ```
 
-The thirteen animations that came with the models are already in
-`assets/mixamo/animations/`: sitting idle, sitting clap, sitting laughing,
-reaction, angry, taunt, defeated, dying, hit to head, kick to the groin,
-shoved with spin, jumping down and running.
+The raw downloads are not in the repository, and the originals in Downloads
+are never touched.
 
-Two things are worth knowing if you add another model:
+## The laptops
 
-- The character and the animation files disagree about the digit the binary
-  FBX format uses for the ":" in `mixamorig:Spine`, so the tracks are
-  re-aimed at the bones that are really there before they are played.
-- A model with no sitting animation is not bent into a sitting shape by
-  hand. It stands beside its chair, and says so.
+Every seat has an open laptop on the table in front of it, turned to face its
+owner and low enough to hide neither the table nor the cards. The screen is
+the PHOENIX Bank: the player's own balance, a green or red band when it
+moves, a LEAVE MATCH button, and the place the game's objective and the
+Mimic's video appear.
 
+## The cinematics
+
+The **CINEMATICS** button in the corner plays the card cinematics in turn,
+so they can be watched without a table of real players. The framework is in
+`js/immersive/cinematics.js` and the stage directions in
+`js/immersive/director.js`.
+
+A cinematic never decides anything. The server has already decided what a
+card did; the cinematic only shows it.
 
 ## The check
 
@@ -87,21 +75,32 @@ Two things are worth knowing if you add another model:
 npm run test:immersive
 ```
 
-It needs the server running on port 3000 (`npm start`), and it writes
-screenshots to your temp folder.
+It needs the server running on port 3000, and it writes screenshots to your
+temp folder.
 
-## How it is drawn
+## The files
 
-Everything is drawn in code. There is no model file, no texture file and
-nothing to download, so the art is one style all the way through and there
-is no licence to chase. The surfaces are painted on 2D canvases at run time
-(floorboards with a grain and a knot, a damask wallpaper, worn leather, a
-patterned rug, the poster, the notepad and the bank screen), and the
-furniture is built from lathed profiles and rounded boxes rather than from
-cubes and cylinders.
+| File | What it is |
+|---|---|
+| `immersive.html` | The page: the stage, the HUD, the caption and the no-WebGL message. |
+| `css/immersive.css` | The page around the 3D stage. |
+| `js/immersive/maps.js` | The rooms, and the anchors read out of them. |
+| `js/immersive/scene.js` | The renderer, the camera and the lights. |
+| `js/immersive/characters.js` | The five stylised people and their rig. |
+| `js/immersive/hand.js` | Your own arms and hands, the fan of cards and the picking. |
+| `js/immersive/laptop.js` | The laptop and its live screen. |
+| `js/immersive/cinematics.js` | The shared animation framework and the card cinematics. |
+| `js/immersive/director.js` | The stage: who is where, the lights, the caption, the video. |
+| `js/immersive/textures.js` | Every surface, painted on a canvas at run time. |
+| `js/immersive/geometry.js` | The shapes: rounded boxes, turned parts, frames. |
+| `js/immersive/prototype.js` | The wiring: the map, the people, the cards, the camera. |
+| `tools/convert-character.js` | Turns a Mixamo download into a small glTF file. |
+| `tools/inspect-fbx.js` | Shows what is inside a Mixamo file. |
+| `vendor/three/` | Three.js r186 (MIT), the FBX and glTF loaders, the exporter. |
+| `tests/immersive-browser-check.js` | The headless-browser check. |
 
 ## What is NOT here yet
 
-The multiplayer, the character picker, the animal allies, the Mimic's phone
-cinematic and the victory and defeat effects in 3D are later milestones, and
-none of them are started.
+The 3D table is not yet connected to the live game: it plays a mock match.
+The multiplayer connection, the standing and walking animations, the jail
+arrest and the rest of the card cinematics are the next pieces of work.
