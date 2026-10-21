@@ -14,9 +14,11 @@
 'use strict';
 
 import * as THREE from '../../vendor/three/three.module.js';
-import { createScene, buildRoom, webglAvailable, QUALITY, PALETTE } from './scene.js';
+import { createScene, buildRoom, webglAvailable, QUALITY, PALETTE, ROOM } from './scene.js';
 import { createCharacter, animateCharacter, animateDraw, animatePlay, CHARACTERS } from './characters.js';
 import { createHand, createFan, MAX_HAND } from './hand.js';
+import { createPhone, createFirstPersonPhone } from './phone.js';
+import { buildPoster, buildNotepad, buildJailCell } from './props.js';
 
 const SEATS = 6;
 const SETTINGS_KEY = 'phoenix.immersive.settings.v1';
@@ -74,7 +76,7 @@ export function startPrototype(root) {
   const view = createScene(stage, { quality: settings.quality });
   const { renderer, scene, camera } = view;
 
-  const room = buildRoom(scene, { seats: SEATS, radius: 1.55, quality: settings.quality });
+  const room = buildRoom(scene, { seats: SEATS, quality: settings.quality });
 
   /* ---- the people round the table ---- */
 
@@ -83,7 +85,7 @@ export function startPrototype(root) {
     const look = CHARACTERS[i % CHARACTERS.length];
     const character = createCharacter({ look: look });
     const angle = ((i + 1) / SEATS) * Math.PI * 2;
-    const radius = room.radius + 0.78;
+    const radius = room.tableRadius + 0.72;
     character.root.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
     character.root.rotation.y = angle + Math.PI;
     character.eyes = [];
@@ -95,7 +97,7 @@ export function startPrototype(root) {
 
   // The seat the camera sits in, and the height of a seated person's eyes.
   const seatAngle = 0;
-  const seatRadius = room.radius + 0.78;
+  const seatRadius = room.tableRadius + 0.72;
   const head = new THREE.Group();
   head.position.set(Math.sin(seatAngle) * seatRadius, 1.16, Math.cos(seatAngle) * seatRadius);
   head.rotation.y = seatAngle + Math.PI;
@@ -106,6 +108,36 @@ export function startPrototype(root) {
   const look = CHARACTERS[0];
   const hands = createHand(camera, { skin: look.skin, sleeve: look.shirt });
   const fan = createFan(camera, {});
+
+  /* ---- the phones ---- */
+
+  // One in front of every player, and one in the player's own hands.
+  const phones = [];
+  for (let i = 0; i < SEATS - 1; i++) {
+    const phone = createPhone({});
+    const angle = ((i + 1) / SEATS) * Math.PI * 2;
+    const radius = room.tableRadius - 0.42;
+    phone.group.position.set(Math.sin(angle) * radius, room.tableHeight, Math.cos(angle) * radius);
+    // The screen tips towards the player who owns it, so it can be read.
+    phone.group.rotation.y = angle;
+    phone.group.scale.setScalar(0.92);
+    scene.add(phone.group);
+    phones.push(phone);
+  }
+  const ownPhone = createFirstPersonPhone(camera, {});
+
+  // The balances on the phones. In a real match these come from the server;
+  // here they are the mock table's, and they move so the notifications can
+  // be seen working.
+  const balances = phones.map(function () { return 0; });
+  let ownBalance = 0;
+  let nextSwing = 4;
+
+  /* ---- the things in the room ---- */
+
+  buildPoster(scene, { x: 2.7, z: -ROOM.depth / 2 + 0.06, ry: 0 });
+  buildNotepad(scene, {});
+  buildJailCell(scene, {});
 
   /* ---- the mock game ---- */
 
@@ -217,7 +249,7 @@ export function startPrototype(root) {
       group: cardGroup,
       mesh: mesh,
       from: cardGroup.position.clone(),
-      to: new THREE.Vector3(0, 0.82, 0),
+      to: new THREE.Vector3(0, room.tableHeight - 0.02, 0),
       start: performance.now(),
       duration: settings.reducedMotion ? 120 : 520,
       onDone: function () {
@@ -332,6 +364,32 @@ export function startPrototype(root) {
     characters.forEach(function (character) {
       animateCharacter(character, time, delta, settings.reducedMotion);
     });
+
+    // The phones: their screens are redrawn when the balance moves, so the
+    // positive and negative notifications really happen.
+    if (!settings.reducedMotion && time > nextSwing) {
+      nextSwing = time + 5 + Math.random() * 6;
+      phones.forEach(function (phone, index) {
+        const change = Math.round((Math.random() - 0.45) * 20000);
+        balances[index] += change;
+        phone.bank.set(balances[index], change >= 0 ? 'Round won' : 'Round lost');
+      });
+      const mine = Math.round((Math.random() - 0.45) * 20000);
+      ownBalance += mine;
+      ownPhone.bank.set(ownBalance, mine >= 0 ? 'Round won' : 'Round lost');
+    }
+    phones.forEach(function (phone) { phone.bank.tick(); });
+    ownPhone.bank.tick();
+
+    // The fire in the grate: a slow flicker, and the light it throws moves with
+    // it. Reduced motion keeps the light steady.
+    if (room.fireplace) {
+      const flicker = settings.reducedMotion
+        ? 1
+        : 0.82 + Math.sin(time * 7.3) * 0.1 + Math.sin(time * 11.7) * 0.06;
+      room.fireplace.light.intensity = 9 * flicker;
+      room.fireplace.mesh.scale.set(1, 1.5 * (0.9 + flicker * 0.12), 0.6);
+    }
 
     // The player's own hands breathe a little, and the fan settles.
     if (!settings.reducedMotion) {

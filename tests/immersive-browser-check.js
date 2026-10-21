@@ -179,6 +179,20 @@ async function main() {
     await wait(400);
     shots.push(await screenshot('phoenix-immersive-selected.png'));
 
+    // The player's own phone, at the bottom left of the view.
+    await evaluate('window.PhoenixImmersive.look(-0.28, -0.22)');
+    await wait(500);
+    shots.push(await screenshot('phoenix-immersive-phone.png'));
+    await evaluate('window.PhoenixImmersive.look(0, -0.05)');
+
+    // The poster on the back wall, and the cell in the corner.
+    await evaluate('window.PhoenixImmersive.look(0.28, 0.1)');
+    await wait(500);
+    shots.push(await screenshot('phoenix-immersive-poster.png'));
+    await evaluate('window.PhoenixImmersive.look(1.25, 0.02)');
+    await wait(500);
+    shots.push(await screenshot('phoenix-immersive-cell.png'));
+
     // 8. The phone-sized layout still works.
     await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
     await wait(700);

@@ -1,24 +1,35 @@
-/* PHOENIX - the stylised characters.
+/* PHOENIX - the people at the table.
  *
- * Five distinct placeholder people, built out of primitives: a body, a head,
- * arms, legs, and a fan of card backs they are holding. There is no model to
- * download and no licence to chase - and when finished character assets
- * arrive, this file is the only thing that has to change.
+ * Five stylised human characters, built from lathed limbs and rounded
+ * bodies: a head with a face, a neck, shoulders, a shirt, arms that bend at
+ * the elbow, hands with fingers, legs that bend at the knee, and shoes.
  *
- * Every character is a GROUP, so the same rig serves the seated players round
- * the table and the first-person arms in front of the camera.
+ * The rig is a proper one - hips, spine, chest, neck, head, and the arms and
+ * legs hanging off them - so the same model can be posed, walked or stood up
+ * later without being rebuilt. Every character is a group of that rig, and
+ * the animations move the joints, never the whole body.
+ *
+ * There is no model file to download: everything here is drawn in code, so
+ * the art is one style all the way through and there is no licence to chase.
  */
 'use strict';
 
 import * as THREE from '../../vendor/three/three.module.js';
+import { roundedBox, turned } from './geometry.js';
 
-/** The five places at the table, with the colour and the build of each. */
+/**
+ * The five appearances.
+ *
+ * Different builds, different skin, different hair and different clothes -
+ * close enough in style to look like the same game, far enough apart to tell
+ * the players apart at a glance.
+ */
 export const CHARACTERS = [
-  { id: 'ash', name: 'Ash', skin: 0xd9a173, hair: 0x2b2119, shirt: 0x35506e, accent: 0xe0b64a, build: 1.0 },
-  { id: 'brook', name: 'Brook', skin: 0x8d5a3b, hair: 0x1a1512, shirt: 0x6b3f5a, accent: 0x8fd6c0, build: 0.94 },
-  { id: 'cass', name: 'Cass', skin: 0xf0c9a4, hair: 0xc2762f, shirt: 0x3f6b52, accent: 0xffd166, build: 1.04 },
-  { id: 'dara', name: 'Dara', skin: 0x6f452e, hair: 0x120e0b, shirt: 0x7a4a2f, accent: 0x9ad2ff, build: 0.98 },
-  { id: 'emery', name: 'Emery', skin: 0xc98d63, hair: 0x4a3b6b, shirt: 0x2f3a4d, accent: 0xff9f7a, build: 1.0 }
+  { id: 'ash', name: 'Ash', skin: 0xd9a173, hair: 0x2b2119, shirt: 0x35506e, accent: 0xe0b64a, build: 1.0, hairStyle: 'crop' },
+  { id: 'brook', name: 'Brook', skin: 0x8d5a3b, hair: 0x1a1512, shirt: 0x6b3f5a, accent: 0x8fd6c0, build: 0.94, hairStyle: 'bun' },
+  { id: 'cass', name: 'Cass', skin: 0xf0c9a4, hair: 0xc2762f, shirt: 0x3f6b52, accent: 0xffd166, build: 1.04, hairStyle: 'long' },
+  { id: 'dara', name: 'Dara', skin: 0x6f452e, hair: 0x120e0b, shirt: 0x7a4a2f, accent: 0x9ad2ff, build: 0.98, hairStyle: 'curls' },
+  { id: 'emery', name: 'Emery', skin: 0xc98d63, hair: 0x4a3b6b, shirt: 0x2f3a4d, accent: 0xff9f7a, build: 1.0, hairStyle: 'swept' }
 ];
 
 export function characterById(id) {
@@ -28,25 +39,73 @@ export function characterById(id) {
 function standard(color, roughness, metalness) {
   return new THREE.MeshStandardMaterial({
     color: color,
-    roughness: roughness === undefined ? 0.85 : roughness,
+    roughness: roughness === undefined ? 0.82 : roughness,
     metalness: metalness === undefined ? 0.04 : metalness
   });
 }
 
+/** A limb: a tapered, slightly rounded length of arm or leg. */
+function limb(length, topRadius, bottomRadius, material) {
+  const mesh = new THREE.Mesh(
+    turned([
+      [0, 0], [topRadius, 0], [topRadius * 0.96, length * 0.18],
+      [(topRadius + bottomRadius) / 2, length * 0.55], [bottomRadius, length * 0.9],
+      [bottomRadius * 0.8, length], [0, length]
+    ], 12),
+    material
+  );
+  mesh.castShadow = true;
+  return mesh;
+}
+
+/** A hand: a palm and five fingers, curled a little. */
+function buildHand(skinMaterial) {
+  const hand = new THREE.Group();
+  const palm = new THREE.Mesh(roundedBox(0.075, 0.026, 0.085, 0.02, 0.006), skinMaterial);
+  palm.castShadow = true;
+  hand.add(palm);
+  // Four fingers, curled towards the palm.
+  for (let f = 0; f < 4; f++) {
+    const finger = new THREE.Mesh(
+      turned([[0, 0], [0.009, 0], [0.009, 0.035], [0.007, 0.055], [0, 0.06]], 8),
+      skinMaterial
+    );
+    finger.position.set(-0.026 + f * 0.017, -0.004, 0.036);
+    finger.rotation.x = 1.15;
+    hand.add(finger);
+  }
+  // The thumb, along the side.
+  const thumb = new THREE.Mesh(
+    turned([[0, 0], [0.011, 0], [0.01, 0.03], [0, 0.04]], 8),
+    skinMaterial
+  );
+  thumb.position.set(-0.036, 0, 0.006);
+  thumb.rotation.set(0.4, 0, 0.7);
+  hand.add(thumb);
+  return hand;
+}
+
+/** A shoe. */
+function buildShoe(trouserMaterial) {
+  const shoe = new THREE.Mesh(roundedBox(0.085, 0.055, 0.2, 0.025, 0.008), standard(0x241a12, 0.7));
+  shoe.position.z = 0.045;
+  shoe.castShadow = true;
+  return shoe;
+}
+
 /**
- * A placeholder person, seated.
+ * A person, seated.
  *
- * The rig is:
+ * The rig:
  *   root
  *     hips
- *       torso
- *         head
- *         armLeft / armRight   (the forearms reach forward to hold cards)
- *       legLeft / legRight     (thighs forward, shins down)
- *     cards                   (the fan of card backs)
- *
- * The animation functions move the LIMBS, never the root, so a character can
- * be placed anywhere in the room and still breathe in place.
+ *       spine
+ *         chest
+ *           neck
+ *             head
+ *           shoulderL / shoulderR -> upperArm -> foreArm -> hand
+ *       thighL / thighR -> shin -> foot
+ *     (the fan of card backs, held in front of the chest)
  */
 export function createCharacter(options) {
   const settings = Object.assign({
@@ -55,142 +114,226 @@ export function createCharacter(options) {
     cardEdge: 0xd6b45a
   }, options || {});
   const look = settings.look;
+  const build = look.build || 1;
 
-  const skin = standard(look.skin, 0.78);
-  const shirt = standard(look.shirt, 0.92);
-  const accent = standard(look.accent, 0.55, 0.25);
-  const hair = standard(look.hair, 0.95);
-  const trouser = standard(0x2b3040, 0.95);
+  const skin = standard(look.skin, 0.74);
+  const shirt = standard(look.shirt, 0.9);
+  const accent = standard(look.accent, 0.5, 0.2);
+  const hair = standard(look.hair, 0.92);
+  const trouser = standard(0x2b3040, 0.94);
+  const shoeMaterial = standard(0x241a12, 0.7);
 
   const root = new THREE.Group();
   const hips = new THREE.Group();
   root.add(hips);
-  // The eyes are kept so the blink can squash them.
-  const characterEyes = [];
+  hips.scale.setScalar(build);
 
-  const scale = look.build || 1;
-  hips.scale.setScalar(scale);
+  /* ---- the spine ---- */
 
-  // The seat of the body: the hips sit on the chair.
-  const pelvis = new THREE.Mesh(new THREE.CapsuleGeometry(0.19, 0.1, 4, 10), trouser);
-  pelvis.rotation.z = Math.PI / 2;
-  pelvis.scale.set(1, 1, 0.85);
-  pelvis.position.y = 0.53;
+  const spine = new THREE.Group();
+  spine.position.y = 0.52;
+  hips.add(spine);
+
+  const pelvis = new THREE.Mesh(roundedBox(0.26, 0.16, 0.19, 0.07, 0.02), trouser);
   pelvis.castShadow = true;
   hips.add(pelvis);
 
-  // The torso, leaning very slightly forward: somebody playing cards.
-  const torso = new THREE.Group();
-  torso.position.y = 0.55;
-  hips.add(torso);
-  const chest = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.3, 4, 12), shirt);
-  chest.position.y = 0.24;
-  chest.scale.set(1.05, 1, 0.82);
-  chest.castShadow = true;
-  torso.add(chest);
-  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.025, 6, 14), accent);
-  collar.rotation.x = Math.PI / 2;
-  collar.position.y = 0.42;
-  torso.add(collar);
+  const chest = new THREE.Group();
+  chest.position.y = 0.08;
+  spine.add(chest);
 
-  // The head, with a nose so the facing direction reads at a glance.
+  // The torso: a rounded chest, and the shirt over it.
+  const torso = new THREE.Mesh(roundedBox(0.34, 0.4, 0.21, 0.09, 0.03), shirt);
+  torso.position.y = 0.17;
+  torso.castShadow = true;
+  chest.add(torso);
+  // The shoulders, a little wider than the chest.
+  const yoke = new THREE.Mesh(roundedBox(0.42, 0.13, 0.2, 0.06, 0.025), shirt);
+  yoke.position.y = 0.33;
+  yoke.castShadow = true;
+  chest.add(yoke);
+  // A collar, and a placket down the front.
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.018, 6, 14), accent);
+  collar.rotation.x = Math.PI / 2;
+  collar.position.y = 0.395;
+  chest.add(collar);
+  const placket = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.34, 0.01), accent);
+  placket.position.set(0, 0.18, 0.106);
+  chest.add(placket);
+
+  /* ---- the head ---- */
+
+  const neck = new THREE.Group();
+  neck.position.y = 0.4;
+  chest.add(neck);
+  const neckMesh = new THREE.Mesh(
+    turned([[0, 0], [0.048, 0], [0.045, 0.05], [0.05, 0.08], [0, 0.08]], 10),
+    skin
+  );
+  neck.add(neckMesh);
+
   const head = new THREE.Group();
-  head.position.y = 0.52;
-  torso.add(head);
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.112, 14, 12), skin);
-  skull.scale.set(1, 1.1, 0.94);
+  head.position.y = 0.09;
+  neck.add(head);
+  // The skull, and a jaw, so the head is not a ball.
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.098, 16, 14), skin);
+  skull.scale.set(1, 1.12, 1.02);
   skull.castShadow = true;
   head.add(skull);
-  // The hair is a cap that sits on the back of the head, so the face reads.
-  const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.118, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.48), hair);
-  hairCap.position.set(0, 0.014, -0.012);
-  hairCap.scale.set(1, 1.04, 1);
-  head.add(hairCap);
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.024, 0.062, 6), skin);
+  const jaw = new THREE.Mesh(roundedBox(0.13, 0.09, 0.12, 0.045, 0.02), skin);
+  jaw.position.set(0, -0.06, 0.012);
+  head.add(jaw);
+  // The nose.
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.019, 0.05, 6), skin);
   nose.rotation.x = Math.PI / 2;
-  nose.position.set(0, -0.008, 0.108);
+  nose.position.set(0, -0.012, 0.096);
   head.add(nose);
-  const eyeLeft = new THREE.Mesh(new THREE.SphereGeometry(0.019, 8, 6), standard(0x14100c, 0.4));
-  eyeLeft.position.set(-0.042, 0.022, 0.094);
-  head.add(eyeLeft);
-  const eyeRight = eyeLeft.clone();
-  eyeRight.position.x = 0.042;
-  head.add(eyeRight);
-  // A mouth, so the face has a front.
-  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.006, 5, 10, Math.PI),
-    standard(0x8a5a4a, 0.7));
+  // The ears.
+  [-1, 1].forEach(function (side) {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), skin);
+    ear.scale.set(0.5, 1, 0.8);
+    ear.position.set(side * 0.095, -0.005, 0);
+    head.add(ear);
+  });
+  // The eyes: white, a pupil, and a brow.
+  const eyes = [];
+  [-1, 1].forEach(function (side) {
+    const white = new THREE.Mesh(new THREE.SphereGeometry(0.019, 10, 8), standard(0xf2ece2, 0.5));
+    white.position.set(side * 0.036, 0.018, 0.083);
+    white.scale.set(1, 0.78, 0.7);
+    head.add(white);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.009, 8, 6), standard(0x1a1512, 0.35));
+    pupil.position.set(side * 0.036, 0.018, 0.095);
+    head.add(pupil);
+    eyes.push(white, pupil);
+    const brow = new THREE.Mesh(roundedBox(0.045, 0.009, 0.012, 0.004, 0.002), hair);
+    brow.position.set(side * 0.038, 0.048, 0.09);
+    brow.rotation.z = side * 0.12;
+    head.add(brow);
+  });
+  // The mouth.
+  const mouth = new THREE.Mesh(
+    new THREE.TorusGeometry(0.021, 0.005, 5, 10, Math.PI),
+    standard(0x8a4f46, 0.65)
+  );
   mouth.rotation.set(Math.PI, 0, 0);
-  mouth.position.set(0, -0.048, 0.094);
+  mouth.position.set(0, -0.05, 0.082);
   head.add(mouth);
-  characterEyes.push(eyeLeft, eyeRight);
 
-  // The arms: shoulders, upper arms down and forward, forearms out to the
-  // cards. A simple elbow is enough for a placeholder.
+  // The hair, in five styles.
+  if (look.hairStyle === 'long') {
+    const back = new THREE.Mesh(new THREE.SphereGeometry(0.115, 14, 12), hair);
+    back.scale.set(1, 1.15, 0.95);
+    back.position.set(0, -0.03, -0.018);
+    head.add(back);
+  } else if (look.hairStyle === 'bun') {
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.104, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hair);
+    cap.position.y = 0.012;
+    head.add(cap);
+    const bun = new THREE.Mesh(new THREE.SphereGeometry(0.048, 10, 8), hair);
+    bun.position.set(0, 0.05, -0.105);
+    head.add(bun);
+  } else if (look.hairStyle === 'curls') {
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      const curl = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 6), hair);
+      curl.position.set(Math.cos(a) * 0.07, 0.055 + Math.sin(a * 2) * 0.02, Math.sin(a) * 0.07 - 0.01);
+      head.add(curl);
+    }
+  } else {
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.104, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hair);
+    cap.position.y = 0.012;
+    cap.scale.set(1, 1.04, 1.02);
+    head.add(cap);
+    if (look.hairStyle === 'swept') {
+      const sweep = new THREE.Mesh(roundedBox(0.14, 0.03, 0.09, 0.02, 0.008), hair);
+      sweep.position.set(0.02, 0.055, 0.05);
+      sweep.rotation.set(-0.5, 0, 0.25);
+      head.add(sweep);
+    } else {
+      const fringe = new THREE.Mesh(roundedBox(0.15, 0.035, 0.05, 0.015, 0.006), hair);
+      fringe.position.set(0, 0.055, 0.075);
+      fringe.rotation.x = 0.25;
+      head.add(fringe);
+    }
+  }
+
+  /* ---- the arms ---- */
+
   const arms = [];
   [-1, 1].forEach(function (side) {
     const shoulder = new THREE.Group();
-    shoulder.position.set(side * 0.21, 0.36, 0);
-    torso.add(shoulder);
-    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.2, 4, 8), shirt);
-    upper.position.set(0, -0.12, 0.02);
-    upper.rotation.x = -0.55;
-    upper.castShadow = true;
+    shoulder.position.set(side * 0.19, 0.3, 0);
+    chest.add(shoulder);
+
+    const upper = limb(0.24, 0.048, 0.04, shirt);
+    upper.rotation.x = Math.PI;
     shoulder.add(upper);
+
     const elbow = new THREE.Group();
-    elbow.position.set(0, -0.23, 0.11);
+    elbow.position.set(0, -0.24, 0);
     shoulder.add(elbow);
-    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.048, 0.2, 4, 8), skin);
-    fore.position.set(0, -0.09, 0.02);
-    fore.rotation.x = -1.15;
-    fore.castShadow = true;
+
+    const fore = limb(0.22, 0.04, 0.032, skin);
+    fore.rotation.x = Math.PI;
     elbow.add(fore);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.052, 8, 6), skin);
-    hand.position.set(0, -0.19, 0.08);
+
+    const hand = buildHand(skin);
+    hand.position.set(0, -0.22, 0);
+    hand.rotation.x = 0.2;
     elbow.add(hand);
+
     arms.push({ shoulder: shoulder, elbow: elbow, hand: hand, side: side });
   });
 
-  // The legs: thighs forward, shins down to the floor.
+  /* ---- the legs ---- */
+
   const legs = [];
   [-1, 1].forEach(function (side) {
     const hip = new THREE.Group();
-    hip.position.set(side * 0.11, 0.5, 0.02);
+    hip.position.set(side * 0.1, 0.46, 0.02);
     hips.add(hip);
-    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.24, 4, 8), trouser);
-    thigh.rotation.x = Math.PI / 2 - 0.12;
-    thigh.position.set(0, -0.03, 0.14);
-    thigh.castShadow = true;
+
+    const thigh = limb(0.34, 0.075, 0.06, trouser);
+    thigh.rotation.x = Math.PI / 2;
+    thigh.position.z = 0.02;
     hip.add(thigh);
+
     const knee = new THREE.Group();
-    knee.position.set(0, -0.07, 0.26);
+    knee.position.set(0, 0, 0.34);
     hip.add(knee);
-    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.28, 4, 8), trouser);
-    shin.position.set(0, -0.17, 0.02);
-    shin.castShadow = true;
+
+    const shin = limb(0.34, 0.058, 0.045, trouser);
+    shin.rotation.x = Math.PI;
     knee.add(shin);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.2), standard(0x241a12, 0.8));
-    foot.position.set(0, -0.33, 0.05);
+
+    const foot = new THREE.Group();
+    foot.position.set(0, -0.34, 0);
     knee.add(foot);
-    legs.push({ hip: hip, knee: knee });
+    const shoe = buildShoe(shoeMaterial);
+    foot.add(shoe);
+
+    legs.push({ hip: hip, knee: knee, foot: foot });
   });
 
-  // The fan of card backs they are holding. Opponents never see a face.
+  /* ---- the fan of card backs they are holding ---- */
+
   const cards = new THREE.Group();
-  cards.position.set(0, 0.66, 0.3);
-  torso.add(cards);
+  cards.position.set(0, 0.2, 0.24);
+  chest.add(cards);
   const backMaterial = standard(settings.cardBack, 0.72);
   const edgeMaterial = standard(settings.cardEdge, 0.45, 0.35);
   const fan = [];
   for (let i = 0; i < 7; i++) {
     const card = new THREE.Group();
-    const face = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.008, 0.185), backMaterial);
+    const face = new THREE.Mesh(roundedBox(0.115, 0.008, 0.16, 0.006, 0.002), backMaterial);
     face.castShadow = true;
     card.add(face);
-    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.134, 0.004, 0.189), edgeMaterial);
-    edge.position.y = -0.006;
+    const edge = new THREE.Mesh(roundedBox(0.118, 0.004, 0.163, 0.005, 0.002), edgeMaterial);
+    edge.position.y = -0.005;
     card.add(edge);
-    card.position.set((i - 3) * 0.012, 0.01 + i * 0.004, -i * 0.006);
-    card.rotation.z = (i - 3) * 0.035;
+    card.position.set((i - 3) * 0.011, 0.008 + i * 0.004, -i * 0.005);
+    card.rotation.z = (i - 3) * 0.03;
     cards.add(card);
     fan.push(card);
   }
@@ -198,13 +341,15 @@ export function createCharacter(options) {
   return {
     root: root,
     hips: hips,
-    torso: torso,
+    spine: spine,
+    chest: chest,
+    neck: neck,
     head: head,
     arms: arms,
     legs: legs,
     cards: cards,
     fan: fan,
-    eyes: characterEyes,
+    eyes: eyes,
     look: look,
     // The animation clock. Reduced motion simply never advances it.
     phase: Math.random() * Math.PI * 2,
@@ -224,34 +369,32 @@ export function animateCharacter(character, time, delta, reduced) {
   if (!character) return;
   const phase = character.phase;
   if (reduced) {
-    character.torso.rotation.x = 0.06;
+    character.spine.rotation.x = 0.06;
+    character.chest.rotation.set(0, 0, 0);
     character.head.rotation.set(0, 0, 0);
     character.arms.forEach(function (arm) {
       arm.shoulder.rotation.set(0, 0, 0);
+      arm.elbow.rotation.set(0, 0, 0);
     });
     return;
   }
 
   // Breathing: a small rise and fall of the chest.
-  const breathe = Math.sin(time * 1.1 + phase) * 0.012;
-  character.torso.position.y = 0.55 + breathe;
-  character.torso.rotation.x = 0.06 + Math.sin(time * 0.7 + phase) * 0.012;
-  character.torso.rotation.z = Math.sin(time * 0.43 + phase * 1.7) * 0.02;
-
-  // The head: mostly still, with a slow look to one side now and then.
-  const look = Math.sin(time * 0.31 + phase * 2.3);
-  character.head.rotation.y = Math.abs(look) > 0.86 ? look * 0.5 : look * 0.12;
-  character.head.rotation.x = Math.sin(time * 0.53 + phase) * 0.05;
+  const breathe = Math.sin(time * 1.05 + phase) * 0.011;
+  character.spine.position.y = 0.52 + breathe;
+  character.spine.rotation.x = 0.06 + Math.sin(time * 0.7 + phase) * 0.01;
+  character.chest.rotation.z = Math.sin(time * 0.43 + phase * 1.7) * 0.018;
+  character.head.rotation.y = Math.sin(time * 0.31 + phase * 2.3) * 0.14;
 
   // A blink: the eyes are squashed for a moment.
   character.blinkTimer -= delta;
   if (character.blinkTimer <= 0) {
     character.blinkTimer = 2.4 + Math.random() * 4.5;
-    character.blinking = 0.12;
+    character.blinking = 0.13;
   }
   if (character.blinking > 0) {
     character.blinking -= delta;
-    const squash = 0.25;
+    const squash = 0.12;
     (character.eyes || []).forEach(function (eye) {
       eye.scale.y = squash;
     });
@@ -271,8 +414,8 @@ export function animateDraw(character, progress) {
   const arm = character.arms[1];
   const t = Math.max(0, Math.min(1, progress));
   const reach = Math.sin(t * Math.PI);
-  arm.shoulder.rotation.x = -reach * 0.5;
-  arm.elbow.rotation.x = reach * 0.4;
+  arm.shoulder.rotation.x = -reach * 0.45;
+  arm.elbow.rotation.x = reach * 0.35;
 }
 
 /**
@@ -284,6 +427,6 @@ export function animatePlay(character, progress) {
   const arm = character.arms[0];
   const t = Math.max(0, Math.min(1, progress));
   const reach = Math.sin(t * Math.PI);
-  arm.shoulder.rotation.x = -reach * 0.85;
-  arm.elbow.rotation.x = reach * 0.5;
+  arm.shoulder.rotation.x = -reach * 0.75;
+  arm.elbow.rotation.x = reach * 0.45;
 }

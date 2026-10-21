@@ -37,6 +37,12 @@
         <p class="immersive-hud-label">YOU ARE</p>
         <p class="immersive-hud-value">Ash · seat 1</p>
       </div>
+      <div class="immersive-hud-block immersive-hud-hand-block">
+        <p class="immersive-hud-label">IN HAND</p>
+        <p id="immersive-hand" class="immersive-hud-value">0 of 7 cards in hand</p>
+        <p id="immersive-selected" class="immersive-hud-selected">Nothing selected</p>
+        <p id="immersive-status" class="immersive-hud-status"></p>
+      </div>
       <div class="immersive-hud-block immersive-hud-block-right">
         <label class="immersive-hud-label" for="immersive-quality">QUALITY</label>
         <select id="immersive-quality">
@@ -56,12 +62,6 @@
     </div>
 
     <div class="immersive-hud-bottom">
-      <div class="immersive-hud-hand">
-        <p class="immersive-hud-label">IN HAND</p>
-        <p id="immersive-hand" class="immersive-hud-value">0 of 7 cards in hand</p>
-        <p id="immersive-selected" class="immersive-hud-selected">Nothing selected</p>
-        <p id="immersive-status" class="immersive-hud-status"></p>
-      </div>
       <div class="immersive-hud-actions">
         <button id="immersive-draw" type="button">DRAW</button>
         <button id="immersive-play" type="button">PLAY CARD</button>

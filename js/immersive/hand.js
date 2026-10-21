@@ -12,6 +12,7 @@
 'use strict';
 
 import * as THREE from '../../vendor/three/three.module.js';
+import { roundedBox, turned } from './geometry.js';
 
 export const MAX_HAND = 7;
 
@@ -168,31 +169,61 @@ export function cardBackTexture() {
  */
 export function createHand(camera, options) {
   const settings = Object.assign({ skin: 0xd9a173, sleeve: 0x35506e }, options || {});
-  const skin = new THREE.MeshStandardMaterial({ color: settings.skin, roughness: 0.78 });
+  const skin = new THREE.MeshStandardMaterial({ color: settings.skin, roughness: 0.74 });
   const sleeve = new THREE.MeshStandardMaterial({ color: settings.sleeve, roughness: 0.92 });
 
   const group = new THREE.Group();
   // The hands live in the camera's space, so they follow the view exactly.
   camera.add(group);
 
+  // An arm: a sleeve to the elbow, a bare forearm, and a hand with fingers.
   const arm = function (side) {
     const pivot = new THREE.Group();
-    pivot.position.set(side * 0.34, -0.44, -0.52);
-    pivot.rotation.set(-0.5, side * 0.22, side * 0.12);
+    pivot.position.set(side * 0.33, -0.42, -0.5);
+    pivot.rotation.set(-0.52, side * 0.2, side * 0.14);
     group.add(pivot);
-    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.26, 4, 10), sleeve);
-    upper.position.set(0, -0.16, 0.1);
-    upper.rotation.x = 1.1;
+
+    const upper = new THREE.Mesh(
+      turned([[0, 0], [0.075, 0], [0.08, 0.06], [0.07, 0.2], [0.058, 0.28], [0, 0.29]], 10),
+      sleeve
+    );
+    upper.rotation.x = Math.PI;
+    upper.position.set(0, 0, 0.06);
     pivot.add(upper);
-    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.062, 0.24, 4, 10), skin);
-    fore.position.set(0, -0.1, -0.16);
-    fore.rotation.x = 1.35;
+
+    const fore = new THREE.Mesh(
+      turned([[0, 0], [0.055, 0], [0.058, 0.05], [0.045, 0.18], [0.038, 0.24], [0, 0.25]], 10),
+      skin
+    );
+    fore.rotation.x = Math.PI;
+    fore.position.set(0, -0.28, 0.14);
     pivot.add(fore);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), skin);
-    hand.position.set(0, -0.03, -0.32);
-    hand.scale.set(1, 0.7, 1.25);
+
+    // The hand: a palm and five fingers, curled round the cards.
+    const hand = new THREE.Group();
+    hand.position.set(0, -0.52, 0.2);
+    hand.rotation.set(0.2, 0, side * 0.16);
     pivot.add(hand);
-    return { pivot: pivot, hand: hand };
+    const palm = new THREE.Mesh(roundedBox(0.075, 0.026, 0.085, 0.02, 0.006), skin);
+    hand.add(palm);
+    for (let f = 0; f < 4; f++) {
+      const finger = new THREE.Mesh(
+        turned([[0, 0], [0.009, 0], [0.009, 0.035], [0.007, 0.055], [0, 0.06]], 8),
+        skin
+      );
+      finger.position.set(-0.026 + f * 0.017, -0.004, 0.036);
+      finger.rotation.x = 1.15;
+      hand.add(finger);
+    }
+    const thumb = new THREE.Mesh(
+      turned([[0, 0], [0.011, 0], [0.01, 0.03], [0, 0.04]], 8),
+      skin
+    );
+    thumb.position.set(-side * 0.036, 0, 0.006);
+    thumb.rotation.set(0.4, 0, side * 0.7);
+    hand.add(thumb);
+
+    return { pivot: pivot, hand: hand, fingers: hand.children };
   };
 
   const left = arm(-1);
