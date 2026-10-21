@@ -41,7 +41,9 @@ export function createDirector(options) {
       cameraState: settings.cameraState,
       cameraPosition: settings.cameraPosition,
       headYaw: settings.headYaw,
-      cellPoint: new THREE.Vector3(2.2, 0, -4.7),
+      // Where the cell is. The room says, so the Judge card takes its prisoner
+      // to the cell this room actually has.
+      cellPoint: settings.cellPoint || new THREE.Vector3(2.2, 0, -4.7),
       announce: function (text, ms) { return director.announce(text, ms); },
       dim: function (level, ms) { return director.dim(level, ms); },
       showObjective: function (text, ms) { return director.showObjective(text, ms); },

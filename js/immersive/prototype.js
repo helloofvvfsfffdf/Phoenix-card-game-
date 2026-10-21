@@ -168,6 +168,11 @@ export function startPrototype(root) {
         });
       }
 
+      // The cell, where the room says it is, for the Judge card.
+      if (map.anchors.cell) {
+        director.context.cellPoint = map.anchors.cell.clone();
+      }
+
       // The people: one at each seat, once their model has arrived.
       placeCharacters();
     })
