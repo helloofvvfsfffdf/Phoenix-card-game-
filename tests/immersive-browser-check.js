@@ -162,11 +162,19 @@ async function main() {
     assert(Math.abs(look.wild.pitch) <= 0.63, 'nor look straight up or down');
     assert(Math.abs(look.gentle.yaw - 0.4) < 0.001, 'but it can be turned');
 
-    // 6. Nothing threw on the way.
+    // 6. The Mixamo character is there, rigged, clothed and sitting.
+    const mixamo = await evaluate('window.PhoenixImmersive.state().mixamo');
+    assert.strictEqual(mixamo.loaded, true, 'the Mixamo character loaded');
+    assert.strictEqual(mixamo.error, null, 'without an error');
+    assert(mixamo.bones > 100, 'with a real skeleton (' + mixamo.bones + ' bones)');
+    assert(mixamo.meshes >= 5, 'and their body, clothes and hair (' + mixamo.meshes + ' meshes)');
+    assert(mixamo.sitting, 'and they are sitting in the chair');
+
+    // 7. Nothing threw on the way.
     const errors = await evaluate('window.immersiveErrors || []');
     assert.deepStrictEqual(errors, [], 'the page raised no errors');
 
-    // 7. Pictures, so the result can be looked at.
+    // 8. Pictures, so the result can be looked at.
     shots.push(await screenshot('phoenix-immersive-table.png'));
     await evaluate('window.PhoenixImmersive.look(-0.75, -0.12)');
     await wait(500);
@@ -193,7 +201,7 @@ async function main() {
     await wait(500);
     shots.push(await screenshot('phoenix-immersive-cell.png'));
 
-    // 8. The phone-sized layout still works.
+    // 9. The phone-sized layout still works.
     await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
     await wait(700);
     const mobile = await evaluate(BRIGHTNESS);

@@ -39,13 +39,47 @@ Any static server works too (`npx serve .`).
 | `js/immersive/room.js` | The room: the floor, the walls, the ceiling, the door, the windows, the fireplace, the table, the chairs, the deck and the furniture. |
 | `js/immersive/characters.js` | The five stylised people, their rig, and their idle movement. |
 | `js/immersive/hand.js` | Your own arms and hands, the fan of cards, the card faces and the picking. |
+| `js/immersive/mixamo.js` | The Mixamo characters: the FBX loader, the rig, and the animation library. |
 | `js/immersive/phone.js` | The PHOENIX Bank phone and its stand. |
 | `js/immersive/props.js` | The Mimic poster, the developer's notepad and the jail cell. |
 | `js/immersive/textures.js` | Every surface, painted on a canvas: the floorboards, the wallpaper, the wood, the leather, the rug, the poster, the notepad and the bank screen. |
 | `js/immersive/geometry.js` | The shapes: rounded boxes, turned parts, frames, panelled doors and a merge for the parts that never move. |
 | `js/immersive/prototype.js` | The wiring: the mock match, the camera controls, the HUD and the frame loop. |
-| `vendor/three/` | Three.js r186 (MIT), vendored so the page has no external dependency. |
+| `assets/mixamo/character.fbx` | The Mixamo character: the skeleton, the body, the clothes, the hair and the textures, exactly as it was downloaded. |
+| `assets/mixamo/animations/` | The thirteen animations, taken out of their downloads as keyframes. |
+| `vendor/three/` | Three.js r186 (MIT) and the FBX loader, vendored so the page has no external dependency. |
+| `tools/extract-mixamo-animation.js` | Takes the animation out of a Mixamo download and leaves a small file of keyframes. |
 | `tests/immersive-browser-check.js` | A headless-browser check that proves the page renders, holds seven cards, and picks and plays one. |
+
+## The Mixamo characters
+
+The character is a real Mixamo model, loaded with Three.js's own FBX loader:
+the skeleton, the body, the clothes, the hair and the textures all come
+straight out of the file, and the rig is left exactly as it was, so the
+characters can be posed, stood up or walked later.
+
+A Mixamo download is about fifty megabytes, almost all of it the model and
+its textures, which the game already has. The animations are therefore taken
+out separately, as small files of keyframes:
+
+```bash
+node tools/extract-mixamo-animation.js "C:/path/Sitting Idle.fbx" \
+     assets/mixamo/animations/sitting-idle.json
+```
+
+The thirteen animations that came with the models are already in
+`assets/mixamo/animations/`: sitting idle, sitting clap, sitting laughing,
+reaction, angry, taunt, defeated, dying, hit to head, kick to the groin,
+shoved with spin, jumping down and running.
+
+Two things are worth knowing if you add another model:
+
+- The character and the animation files disagree about the digit the binary
+  FBX format uses for the ":" in `mixamorig:Spine`, so the tracks are
+  re-aimed at the bones that are really there before they are played.
+- A model with no sitting animation is not bent into a sitting shape by
+  hand. It stands beside its chair, and says so.
+
 
 ## The check
 

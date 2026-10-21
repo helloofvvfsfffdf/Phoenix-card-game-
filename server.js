@@ -1674,6 +1674,10 @@ const mime = {
   '.mp4': 'video/mp4',
   '.wasm': 'application/wasm',
   '.efk': 'application/octet-stream',
+  // 3D models for the immersive table. A model file, not a script.
+  '.fbx': 'application/octet-stream',
+  '.glb': 'model/gltf-binary',
+  '.gltf': 'model/gltf+json',
   '.efkefc': 'application/octet-stream'
 };
 

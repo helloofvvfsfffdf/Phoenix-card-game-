@@ -19,6 +19,7 @@ import { createCharacter, animateCharacter, animateDraw, animatePlay, CHARACTERS
 import { createHand, createFan, MAX_HAND } from './hand.js';
 import { createPhone, createFirstPersonPhone } from './phone.js';
 import { buildPoster, buildNotepad, buildJailCell } from './props.js';
+import { loadMixamoCharacter, playAnimation } from './mixamo.js';
 
 const SEATS = 6;
 const SETTINGS_KEY = 'phoenix.immersive.settings.v1';
@@ -132,6 +133,68 @@ export function startPrototype(root) {
   const balances = phones.map(function () { return 0; });
   let ownBalance = 0;
   let nextSwing = 4;
+
+  /* ---- the Mixamo character ---- */
+
+  // One seat is taken by a real person: a Mixamo model, with its skeleton, its
+  // clothes, its hair and its textures, straight out of the file the owner
+  // downloaded. It arrives after the room is already standing, so the table is
+  // never waiting for a download.
+  const mixamo = { loading: true, character: null, error: null, clipNames: [], seat: -1 };
+  loadMixamoCharacter('assets/mixamo/character.fbx', { name: 'Mixamo' })
+    .then(function (loaded) {
+      // The seat opposite the player: the one they look at most.
+      const index = 2;
+      const placeholder = characters[index];
+      const angle = ((index + 1) / SEATS) * Math.PI * 2;
+      const radius = room.tableRadius + 0.72;
+
+      loaded.group.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
+      loaded.group.rotation.y = angle + Math.PI;
+      // The feet on the floor, whatever height the model was authored at.
+      const box = new THREE.Box3().setFromObject(loaded.group);
+      loaded.group.position.y -= box.min.y;
+      scene.add(loaded.group);
+
+      // The placeholder steps aside, and the phone on that table belongs to
+      // the new character.
+      if (placeholder) placeholder.root.visible = false;
+      if (phones[index]) phones[index].group.userData.owner = loaded.group;
+
+      mixamo.character = loaded;
+      mixamo.clipNames = loaded.clipNames;
+      mixamo.seat = index;
+      mixamo.loading = false;
+      mixamo.sitting = false;
+
+      // The character sits down. The sitting animation is the one Mixamo
+      // calls "Sitting Idle", extracted into a small file of keyframes; the
+      // skeleton is never bent by hand into a shape nobody would sit like.
+      playAnimation(loaded, 'sittingIdle', { loop: true })
+        .then(function (played) {
+          mixamo.sitting = !!played;
+          const line = document.getElementById('immersive-status');
+          if (line) {
+            line.textContent = played
+              ? 'The Mixamo character is sitting at the table.'
+              : 'The Mixamo character could not be seated: the sitting animation is missing.';
+          }
+        })
+        .catch(function (error) {
+          mixamo.sitting = false;
+          const line = document.getElementById('immersive-status');
+          if (line) {
+            line.textContent = 'The Mixamo character could not be seated: ' +
+              (error && error.message ? error.message : 'the animation is missing');
+          }
+        });
+    })
+    .catch(function (error) {
+      mixamo.loading = false;
+      mixamo.error = error && error.message ? error.message : String(error);
+      const line = document.getElementById('immersive-status');
+      if (line) line.textContent = 'The Mixamo character could not be loaded: ' + mixamo.error;
+    });
 
   /* ---- the things in the room ---- */
 
@@ -365,6 +428,9 @@ export function startPrototype(root) {
       animateCharacter(character, time, delta, settings.reducedMotion);
     });
 
+    // The Mixamo character's own animations.
+    if (mixamo.character) mixamo.character.mixer.update(delta);
+
     // The phones: their screens are redrawn when the balance moves, so the
     // positive and negative notifications really happen.
     if (!settings.reducedMotion && time > nextSwing) {
@@ -445,6 +511,7 @@ export function startPrototype(root) {
       cameraState.yaw = Math.max(-LIMITS.yaw, Math.min(LIMITS.yaw, yaw || 0));
       cameraState.pitch = Math.max(-LIMITS.pitch, Math.min(LIMITS.pitch, pitch || 0));
     },
+    mixamo: mixamo,
     state: function () {
       return {
         hand: mock.hand.length,
@@ -452,7 +519,18 @@ export function startPrototype(root) {
         played: mock.played.length,
         characters: characters.length,
         yaw: cameraState.yaw,
-        pitch: cameraState.pitch
+        pitch: cameraState.pitch,
+        mixamo: {
+          loading: mixamo.loading,
+          loaded: !!mixamo.character,
+          error: mixamo.error,
+          sitting: mixamo.sitting,
+          seat: mixamo.seat,
+          clips: mixamo.clipNames,
+          bones: mixamo.character ? mixamo.character.bones.length : 0,
+          meshes: mixamo.character ? mixamo.character.meshes.length : 0,
+          scale: mixamo.character ? mixamo.character.scale : 0
+        }
       };
     },
     dispose: function () {
