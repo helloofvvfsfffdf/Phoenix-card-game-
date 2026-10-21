@@ -86,7 +86,7 @@ function readAnchors(root) {
     const position = cushion.getWorldPosition(new THREE.Vector3());
     // The top of the cushion is where a seated person's hips are.
     cushion.geometry.computeBoundingBox();
-    const seatTop = cushion.position.y + cushion.geometry.boundingBox.max.y;
+    const seatTop = new THREE.Box3().setFromObject(cushion).max.y;
     // The back of the chair is pushed away from the table, so the direction
     // from the table to the seat is where the person is looking.
     const direction = new THREE.Vector3(position.x, 0, position.z);

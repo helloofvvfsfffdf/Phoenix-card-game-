@@ -1,3 +1,4 @@
+﻿import { receiveState, getState } from './multiplayer.js';
 /* PHOENIX - the immersive (3D) table.
  *
  * The scene, the room, the people and the cards.
@@ -613,3 +614,4 @@ if (document.readyState === 'loading') {
 } else {
   boot();
 }
+
