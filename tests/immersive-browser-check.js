@@ -132,32 +132,136 @@ async function main() {
     const brightness = await evaluate(BRIGHTNESS);
     assert(brightness > 6, 'the 3D page draws something (brightness ' + brightness + ')');
 
-    // 2. The people are there, and the hand is held.
+    // 2. The people are there, and the table is connected.
     const state = await evaluate('window.PhoenixImmersive.stateSnapshot()');
     assert.strictEqual(state.characters, 5, 'five people sit round the table');
-    assert.strictEqual(state.hand, 7, 'and the player holds seven cards');
+
+    // 2b. The 3D table is on the same server as the 2D game: it connects,
+    //     and the server publishes the list of open rooms to it.
+    const net = await evaluate(`new Promise((resolve, reject) => {
+      const p = window.PhoenixImmersive;
+      let n = 0;
+      const timer = setInterval(() => {
+        const state = p.online.getState();
+        if (p.online.isConnected()) { clearInterval(timer); resolve({ connected: true, state: !!state }); }
+        else if (n++ > 120) { clearInterval(timer); reject(Error('the table never connected to the server')); }
+      }, 100);
+    })`);
+    assert.strictEqual(net.connected, true, 'the 3D table connects to the game server');
+
+    // 2c. A snapshot from the server fills the hand, the table and the
+    //     cameras - exactly as it does in a real match.
+    const SNAPSHOT = `(() => {
+      const players = [
+        { id: 'human', name: 'Ash', ally: 'phoenix', badges: [], connected: true, points: 30000, handCount: 7, hunter: false, eliminated: false, noEvilPermanent: false },
+        { id: 'chatgpt', name: 'Brook', ally: null, badges: [], connected: true, points: 10000, handCount: 6, hunter: false, eliminated: false, noEvilPermanent: false },
+        { id: 'claude', name: 'Cass', ally: null, badges: [], connected: true, points: 0, handCount: 6, hunter: false, eliminated: false, noEvilPermanent: false },
+        { id: 'gemini', name: 'Dara', ally: null, badges: [], connected: true, points: -5000, handCount: 6, hunter: false, eliminated: false, noEvilPermanent: false },
+        { id: 'copilot', name: 'Emery', ally: null, badges: [], connected: true, points: 0, handCount: 6, hunter: false, eliminated: false, noEvilPermanent: false }
+      ];
+      const snapshot = {
+        type: 'state', phase: 'playing', started: true, seat: 0, code: 'TEST1',
+        host: true, players: players, round: 1, rounds: 10, over: false, winner: null,
+        current: 'human', hand: ['bonus', 'knife', 'steal', 'trick', 'wheel', 'hostage', 'support'],
+        acting: true,
+        moves: [
+          { cardId: 'bonus', targetId: null },
+          { cardId: 'steal', targetId: 'chatgpt' },
+          { cardId: 'steal', targetId: 'claude' },
+          { cardId: 'knife', targetId: 'gemini' },
+          { cardId: 'trick', targetId: 'copilot' },
+          { cardId: 'wheel', targetId: null },
+          { cardId: 'hostage', targetId: 'chatgpt' },
+          { cardId: 'support', targetId: 'chatgpt' }
+        ],
+        pending: null, pendingInteraction: null, lastInteractionResult: null,
+        deckCount: 120, discardCount: 3, destroyedCount: 0, lastDiscard: null,
+        bannedCards: [], dehydrated: null, hasTrap: false, hostage: null, hostageHand: null,
+        trailer: null, watchingVideo: false, tedObscured: false, mapleBlocked: [],
+        president: null, presidentChanged: false, presidentTurn: false, noEvilPermanent: false,
+        effects: { stream: 'check', sequence: 0, events: [] }, log: [],
+        publicAllies: {}, availableAllies: [], dice: null, draftTurn: null,
+        resumeToken: 'check', paused: false, resumeUntil: null,
+        visibility: 'public', mode: 'public'
+      };
+      window.__sent = [];
+      const socket = window.ws;
+      if (socket && !socket.__wrapped) {
+        socket.__wrapped = true;
+        const send = socket.send.bind(socket);
+        socket.send = function (data) { window.__sent.push(data); return send(data); };
+      }
+      window.PhoenixImmersive.applyState(snapshot);
+      window.__lastSnapshot = snapshot;
+      const s = window.PhoenixImmersive.stateSnapshot();
+      return {
+        hand: s.hand, seats: s.seats, localSeat: s.localSeat,
+        playersShown: document.querySelectorAll('#immersive-players .immersive-player').length,
+        turn: (document.getElementById('immersive-turn') || {}).textContent,
+        code: (document.getElementById('immersive-room-code') || {}).textContent
+      };
+    })()`;
+    const filled = await evaluate(SNAPSHOT);
+    assert.strictEqual(filled.hand, 7, 'the hand is the server\'s seven cards');
+    assert.strictEqual(filled.playersShown, 5, 'and the table shows the five players');
+    assert(/Ash/.test(filled.turn || ''), 'and says whose turn it is (' + filled.turn + ')');
+    assert(/TEST1/.test(filled.code || ''), 'and the room code (' + filled.code + ')');
 
     // 3. A card can be picked, and it lifts out of the fan.
     const lifted = await evaluate(`(() => {
       const p = window.PhoenixImmersive;
-      p.selectCard(2);
-      const entry = p.fan.cards[2];
+      p.selectCard(0);
+      const entry = p.fan.cards[0];
       const before = entry.holder.position.y;
       p.fan.layout(0);
-      return { selected: p.stateSnapshot().selected, lifted: entry.holder.position.y - before };
+      const result = { selected: p.stateSnapshot().selected, lifted: entry.holder.position.y - before };
+      // Put it back down again, so the next test starts from a clean fan.
+      p.selectCard(0);
+      return result;
     })()`);
-    assert.strictEqual(lifted.selected, 2, 'a card is selected');
+    assert.strictEqual(lifted.selected, 0, 'a card is selected');
     assert(lifted.lifted > 0.03, 'and the selected card lifts (' + lifted.lifted + ')');
 
-    // 4. A card can be played, and it leaves the hand.
-    const played = await evaluate(`new Promise((resolve) => {
+    // 4. A card with no target is played straight away.
+    const plain = await evaluate(`new Promise((resolve) => {
       const p = window.PhoenixImmersive;
-      const before = p.stateSnapshot().hand;
+      window.__sent = [];
+      p.selectCard(0);
       p.playSelected();
-      setTimeout(() => resolve({ before, after: p.stateSnapshot().hand, played: p.stateSnapshot().played }), 900);
+      setTimeout(() => resolve({ sent: window.__sent, hand: p.stateSnapshot().hand }), 400);
     })`);
-    assert.strictEqual(played.before - played.after, 1, 'the card leaves the hand');
-    assert.strictEqual(played.played, 1, 'and it lands on the table');
+    const plainMove = (plain.sent || []).map((d) => JSON.parse(d)).find((m) => m.type === 'move');
+    assert(plainMove, 'the move was sent to the server');
+    assert.strictEqual(plainMove.cardId, 'bonus', 'and it was the right card');
+    assert.strictEqual(plainMove.targetId, null, 'with no target');
+
+    // 5. A card that needs a target asks who it is aimed at, and only sends
+    //    once the player has chosen.
+    const aimed = await evaluate(`new Promise((resolve) => {
+      const p = window.PhoenixImmersive;
+      window.__sent = [];
+      p.applyState(window.__lastSnapshot);
+      p.selectCard(2);
+      p.playSelected();
+      setTimeout(() => {
+        const buttons = Array.from(document.querySelectorAll('#immersive-targets .immersive-target'));
+        const before = window.__sent.length;
+        const target = buttons.find((b) => b.textContent.indexOf('Brook') !== -1);
+        if (target) target.click();
+        setTimeout(() => resolve({
+          pickerOpen: !document.getElementById('immersive-targets').hidden,
+          choices: buttons.map((b) => b.textContent),
+          sentBefore: before,
+          sent: window.__sent
+        }), 300);
+      }, 300);
+    })`);
+    assert.strictEqual(aimed.pickerOpen, false, 'the picker closes once a target is chosen');
+    assert(aimed.choices.some((t) => /Brook/.test(t)), 'the picker offered the players the server allowed (' + aimed.choices.join(', ') + ')');
+    const aimedMove = (aimed.sent || []).map((d) => JSON.parse(d)).find((m) => m.type === 'move');
+    assert(aimedMove, 'the aimed move was sent');
+    assert.strictEqual(aimedMove.cardId, 'steal', 'and it was the right card');
+    assert.strictEqual(aimedMove.targetId, 'chatgpt', 'and it was aimed at the right player');
 
     // 5. The camera can look around, and cannot look anywhere silly.
     const look = await evaluate(`(() => {

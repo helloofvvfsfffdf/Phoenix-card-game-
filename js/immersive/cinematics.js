@@ -418,6 +418,25 @@ function nothing(context, event, result) {
 /* The registry                                                         */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The card an effect belongs to.
+ *
+ * The server publishes what happened under a name of its own: 'alvin-burn'
+ * is Alvin choosing a card, 'curse-trigger' is a curse firing, and the ally
+ * effects are the allies. This turns any of those into the card it belongs
+ * to, so the right show is played.
+ */
+export function cardIdFor(key) {
+  const name = String(key || '');
+  if (name === 'alvin-burn') return 'alvin';
+  if (name === 'curse-trigger') return 'curse';
+  if (name === 'hunter-block') return 'hunter';
+  if (name === 'maple-restriction') return null;
+  // The allies and the blocks are their own thing, not a card.
+  if (name.indexOf('ally-') === 0 || name.indexOf('block-') === 0) return null;
+  return name;
+}
+
 /** Every cinematic, by the card it belongs to. */
 export const CINEMATICS = {
   steal: steal,
@@ -433,8 +452,13 @@ export const CINEMATICS = {
  * The events are the server's own: the card that was played, who played it,
  * who it was aimed at, and what the engine said about it. The cinematic only
  * shows that; it never decides anything.
+ *
+ * `options`:
+ *   outcome       'active' or 'inert' - some cards do nothing at all
+ *   reducedMotion true to keep it short and calm
  */
-export function playCinematic(cardId, context, events) {
+export function playCinematic(cardId, context, events, options) {
+  const settings = Object.assign({ outcome: 'active', reducedMotion: false }, options || {});
   const cinematic = CINEMATICS[cardId];
   if (!cinematic || !context) return Promise.resolve(null);
   const event = (events || []).find(function (e) { return e.type === 'card' && e.cardId === cardId; })
@@ -442,7 +466,7 @@ export function playCinematic(cardId, context, events) {
     || { seat: 0, targetSeat: -1 };
   const result = (events || []).find(function (e) { return e.type === 'result' && e.cardId === cardId; });
   return Promise.resolve()
-    .then(function () { return cinematic(context, event, result); })
+    .then(function () { return cinematic(context, event, result, settings); })
     .then(function () { return true; })
     .catch(function () { return false; });
 }

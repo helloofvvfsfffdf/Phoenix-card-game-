@@ -159,6 +159,278 @@ body {
   text-align: center;
 }
 
+/* ---- the connection, the lobby and the table ---- */
+
+.immersive-net {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(340px, 46vw);
+  z-index: 11;
+  pointer-events: none;
+}
+
+.immersive-net button,
+.immersive-net input {
+  pointer-events: auto;
+}
+
+.immersive-net-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border: 1px solid var(--immersive-edge);
+  border-radius: 10px;
+  background: var(--immersive-panel);
+  backdrop-filter: blur(6px);
+}
+
+.immersive-net-status {
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  color: var(--immersive-dim);
+}
+
+.immersive-net-status[data-kind='connected'] {
+  color: #8ce8a6;
+}
+
+.immersive-net-status[data-kind='lost'] {
+  color: #ff9d7a;
+}
+
+.immersive-net-code {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--immersive-gold);
+}
+
+.immersive-lobby,
+.immersive-table {
+  padding: 10px 12px;
+  border: 1px solid var(--immersive-edge);
+  border-radius: 12px;
+  background: var(--immersive-panel);
+  backdrop-filter: blur(6px);
+}
+
+.immersive-lobby[hidden],
+.immersive-table[hidden],
+.immersive-targets[hidden],
+.immersive-allies[hidden] {
+  display: none;
+}
+
+.immersive-lobby {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.immersive-lobby-label {
+  font-size: 9.5px;
+  letter-spacing: 2px;
+  color: var(--immersive-dim);
+}
+
+.immersive-code {
+  width: 84px;
+  padding: 6px 8px;
+  border: 1px solid var(--immersive-edge);
+  border-radius: 8px;
+  background: rgba(12, 20, 34, .9);
+  color: var(--immersive-ink);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.immersive-small {
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid var(--immersive-gold);
+  border-radius: 8px;
+  background: rgba(212, 155, 54, .16);
+  color: var(--immersive-gold);
+  font-weight: 800;
+  font-size: 10.5px;
+  letter-spacing: 1.4px;
+  cursor: pointer;
+}
+
+.immersive-small:active {
+  transform: translateY(1px);
+}
+
+.immersive-rooms {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.immersive-rooms-empty {
+  margin: 0;
+  font-size: 11px;
+  color: var(--immersive-dim);
+}
+
+.immersive-room {
+  padding: 4px 8px;
+  border: 1px solid var(--immersive-edge);
+  border-radius: 7px;
+  background: rgba(20, 30, 48, .8);
+  color: var(--immersive-ink);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.immersive-allies {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.immersive-ally {
+  padding: 5px 9px;
+  border: 1px solid var(--immersive-edge);
+  border-radius: 7px;
+  background: rgba(20, 30, 48, .8);
+  color: var(--immersive-ink);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.immersive-turn {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  color: var(--immersive-gold);
+}
+
+.immersive-players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.immersive-player {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--immersive-ink);
+}
+
+.immersive-player.is-turn {
+  background: rgba(255, 209, 107, .12);
+  outline: 1px solid rgba(255, 209, 107, .35);
+}
+
+.immersive-player.is-me .immersive-player-name {
+  color: var(--immersive-gold);
+}
+
+.immersive-player.is-out {
+  opacity: .45;
+}
+
+.immersive-player.is-away .immersive-player-name::after {
+  content: ' (away)';
+  color: var(--immersive-dim);
+}
+
+.immersive-player-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.immersive-player-score {
+  font-weight: 800;
+  color: var(--immersive-gold);
+}
+
+.immersive-player-cards,
+.immersive-player-ally {
+  font-size: 10.5px;
+  color: var(--immersive-dim);
+}
+
+/* ---- the picker: who a card is aimed at ---- */
+
+.immersive-targets {
+  position: fixed;
+  left: 50%;
+  bottom: 92px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--immersive-edge);
+  border-radius: 12px;
+  background: var(--immersive-panel);
+  backdrop-filter: blur(6px);
+  z-index: 13;
+  max-width: min(520px, 92vw);
+}
+
+.immersive-targets-heading {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 1.6px;
+  color: var(--immersive-gold);
+}
+
+.immersive-targets-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.immersive-target {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid var(--immersive-gold);
+  border-radius: 9px;
+  background: #d49b36;
+  color: #16110b;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.immersive-target.is-back {
+  background: transparent;
+  color: var(--immersive-dim);
+  border-color: var(--immersive-edge);
+}
+
 /* ---- the HUD ---- */
 
 .immersive-hud {

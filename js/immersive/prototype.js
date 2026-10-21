@@ -1,4 +1,3 @@
-﻿import { receiveState, getState } from './multiplayer.js';
 /* PHOENIX - the immersive (3D) table.
  *
  * The scene, the room, the people and the cards.
@@ -26,7 +25,10 @@ import { loadMixamoGLB, playAnimation, settleAnimation } from './mixamo.js';
 import { loadMap, playAreaPoint } from './maps.js';
 import { seatCharacter, lockToSeat, eyePoint, findBone } from './seating.js';
 import { createDirector } from './director.js';
-import { playCinematic } from './cinematics.js';
+import { playCinematic, cardIdFor } from './cinematics.js';
+import { createMultiplayer } from './multiplayer.js';
+import { createTableUI } from './table-ui.js';
+import { createInteractionBridge } from './interactions.js';
 
 const CHARACTER_FILES = ['ash', 'brook', 'cass', 'dara', 'emery'];
 /** The height of the seat of a chair, which is where a seated person's hips are. */
@@ -104,13 +106,160 @@ export function startPrototype(root) {
    */
   let localSeat = 0;
 
-  const mock = {
-    hand: mockHand(),
-    deck: mockHand(),
-    played: [],
-    selected: -1
+  /**
+   * The server's own snapshot.
+   *
+   * This is the SAME shape the 2D game keeps: one object, replaced every
+   * time the server says something. Nothing in this file works out what is
+   * legal, or what a card does - the server has already done all of that.
+   */
+  let snapshot = null;
+  /** The card the player has picked up out of the fan. */
+  let selected = -1;
+  /** The cards that have been played to the table, in order. */
+  const played = [];
+
+  /* ---- the connection to the real game ---- */
+
+  /**
+   * The effect journal.
+   *
+   * The server publishes what happened in a safe form: which card, who
+   * played it, who it was aimed at, and whether it did anything at all. The
+   * cursor hands over only what is new, so a player who reconnects does not
+   * see the whole match again - and everybody sees the same thing, because
+   * it all comes from the server.
+   */
+  const effectCursor = window.PhoenixEffects ? window.PhoenixEffects.cursor() : null;
+  let cinematicChain = Promise.resolve();
+
+  const online = createMultiplayer({
+    onState: function (next) {
+      applyState(next);
+    },
+    onMessage: function (message) {
+      handleMessage(message);
+    },
+    onRooms: function (rooms) {
+      ui.setRooms(rooms);
+    },
+    onStatus: function (line, kind) {
+      ui.setStatus(line, kind);
+    }
+  });
+
+  const interactions = createInteractionBridge({
+    root: root,
+    onNotice: function (message) { setStatus(message); }
+  });
+
+  const ui = createTableUI({
+    root: root,
+    client: online,
+    onPlay: function (cardId, targetId) {
+      playCard(cardId, targetId);
+    },
+    onNotice: function (message) {
+      setStatus(message);
+    }
+  });
+
+  // The overlays in the 2D game ask the client for the state. This is the
+  // same thing, so they work here unchanged.
+  window.PhoenixOnline = {
+    getState: function () { return online.getState(); },
+    leave: function () { online.leave(); },
+    join: function (code) { online.joinRoom(code); }
   };
-  fan.set(mock.hand);
+
+  /**
+   * A new snapshot from the server.
+   *
+   * Everything the room shows comes from here: the hand, the seat, the
+   * scores, the names, and the cards that have just been played.
+   */
+  function applyState(next) {
+    const previousSeat = snapshot ? snapshot.seat : -1;
+    snapshot = next;
+
+    // The hand is the server's, always.
+    fan.set(handCards());
+    if (selected >= handCards().length) selected = -1;
+
+    // The camera moves to the seat the server says is ours.
+    if (typeof next.seat === 'number' && next.seat !== previousSeat) {
+      setLocalSeat(next.seat);
+    }
+
+    // The bank screens show their own owner's balance. The scores are
+    // public, so every screen is showing the truth.
+    state.laptops.forEach(function (entry) {
+      const owner = next.players && next.players[entry.seat] ? next.players[entry.seat] : null;
+      if (owner) entry.laptop.bank.set(owner.points || 0);
+    });
+
+    // The overlays that ask a question.
+    interactions.onState(next);
+
+    // The table: the lobby, the players, the turn.
+    ui.setState(next);
+
+    // What has just been played, and the show that goes with it.
+    playJournal(next);
+
+    updateHud();
+  }
+
+  /** The cards that have been played since the last snapshot, and their show. */
+  function playJournal(next) {
+    if (!effectCursor || !next.effects) return;
+    const events = effectCursor.consume(next.effects);
+    events.forEach(function (event) {
+      const cardId = cardIdFor(event.key);
+      if (!cardId) return;
+      const seatEvent = {
+        type: 'card',
+        cardId: cardId,
+        seat: event.actor,
+        targetSeat: event.target
+      };
+      cinematicChain = cinematicChain
+        .then(function () {
+          return playCinematic(cardId, director.context, [seatEvent], {
+            outcome: event.outcome,
+            reducedMotion: settings.reducedMotion
+          });
+        })
+        .catch(function () { return null; });
+    });
+  }
+
+  /** Anything the server said that is not a snapshot. */
+  function handleMessage(message) {
+    if (!message || !message.type) return;
+    if (message.type === 'error') {
+      setStatus(message.message || 'That was not allowed.');
+      // The hand is put back exactly as the server sees it.
+      fan.set(handCards());
+      updateHud();
+      return;
+    }
+    if (message.type === 'roomClosed') {
+      setStatus(message.message || 'The room has closed.');
+      return;
+    }
+    if (message.type === 'kicked') {
+      setStatus(message.message || 'You have been removed from the room.');
+      return;
+    }
+    if (message.type === 'rickroll') {
+      setStatus('Somebody has been Rickrolled.');
+      return;
+    }
+    if (message.type === 'interact-ack') {
+      setStatus('Your answer has been recorded.');
+    }
+  }
 
   /* ---- the director and the cinematics ---- */
 
@@ -300,6 +449,26 @@ export function startPrototype(root) {
 
   const LIMITS = { yaw: 1.75, pitch: 0.62 };
 
+  /**
+   * Move the local player to a different seat.
+   *
+   * The server decides which seat a player has; this only tells the room
+   * where to put the camera and which body belongs to the player.
+   */
+  function setLocalSeat(seat) {
+    const next = Number(seat);
+    if (!isFinite(next) || next < 0 || next >= state.seats.length) return false;
+    if (next === localSeat) return true;
+    // The old body is seen again; the new one is where the camera goes.
+    const old = state.characters[localSeat];
+    if (old) old.group.visible = true;
+    localSeat = next;
+    const character = state.characters[localSeat];
+    if (character) character.group.visible = false;
+    putCameraAtSeat(localSeat);
+    return true;
+  }
+
   function lookBy(dx, dy) {
     const speed = 0.0032 * settings.sensitivity;
     cameraState.yaw = Math.max(-LIMITS.yaw, Math.min(LIMITS.yaw, cameraState.yaw - dx * speed));
@@ -356,21 +525,58 @@ export function startPrototype(root) {
 
   const flying = [];
 
+  /** The cards in your hand, as card records. */
+  function handCards() {
+    const Cards = window.PhoenixCards;
+    if (!Cards || !snapshot || !Array.isArray(snapshot.hand)) return [];
+    return snapshot.hand.map(function (id) { return Cards.byId(id); }).filter(Boolean);
+  }
+
   function selectCard(index) {
-    mock.selected = fan.toggle(index);
+    selected = fan.toggle(index);
     updateHud();
   }
 
+  /**
+   * Play the card that is picked up.
+   *
+   * If the server says the card may be aimed at somebody, the picker opens
+   * with exactly those people on it and nothing is sent until the player
+   * has chosen. If it may not, it is sent straight away.
+   */
   function playSelected() {
-    if (mock.selected < 0) return;
-    const index = mock.selected;
-    const entry = fan.take(index);
-    if (!entry) return;
-    mock.hand.splice(index, 1);
-    fan.set(mock.hand);
-    mock.selected = -1;
+    if (selected < 0) return;
+    const card = handCards()[selected];
+    if (!card) {
+      setStatus('That card is not in your hand any more.');
+      return;
+    }
+    ui.chooseCard(card);
+  }
 
-    // The card is put into the room, so it can travel to the table.
+  /**
+   * The card is played.
+   *
+   * The card is taken out of the hand and sent to the server, and it flies
+   * to the table on its way. The hand itself is always the server's: the
+   * next snapshot puts it back exactly as the server sees it, so a move
+   * that is refused simply comes back.
+   */
+  function playCard(cardId, targetId) {
+    const hand = handCards();
+    const index = hand.findIndex(function (card) { return card.id === cardId; });
+    if (index < 0) return;
+
+    const entry = fan.take(index);
+    if (entry) flyToTable(entry);
+    selected = -1;
+    online.play(cardId, targetId);
+    setStatus('Played ' + (hand[index] ? hand[index].name : cardId) + '.');
+    updateHud();
+  }
+
+  /** A card travelling from the player's hands to the table. */
+  function flyToTable(entry) {
     const mesh = entry.mesh;
     const cardGroup = new THREE.Group();
     cardGroup.add(mesh);
@@ -380,9 +586,17 @@ export function startPrototype(root) {
     cardGroup.position.copy(camera.getWorldPosition(new THREE.Vector3()));
     cardGroup.quaternion.copy(camera.getWorldQuaternion(new THREE.Quaternion()));
 
-    const table = state.map && state.map.anchors.table;
-    const to = new THREE.Vector3(0, playAreaPoint(state.map ? state.map.anchors : {}, mock.played.length),
-      table ? table.centre.z : 0);
+    const anchors = state.map ? state.map.anchors : {};
+    const area = playAreaPoint(anchors, played.length);
+    const to = new THREE.Vector3(
+      anchors.playAreas && anchors.playAreas.length
+        ? anchors.playAreas[played.length % anchors.playAreas.length].x
+        : 0,
+      area,
+      anchors.playAreas && anchors.playAreas.length
+        ? anchors.playAreas[played.length % anchors.playAreas.length].z
+        : (anchors.table ? anchors.table.centre.z : 0)
+    );
     flying.push({
       group: cardGroup,
       from: cardGroup.position.clone(),
@@ -396,27 +610,10 @@ export function startPrototype(root) {
           entry.faceMaterial.map.dispose();
         }
         entry.faceMaterial.dispose();
-        mock.played.push(entry.card);
+        played.push(entry.card);
         updateHud();
       }
     });
-    updateHud();
-  }
-
-  function drawCard() {
-    if (mock.hand.length >= MAX_HAND) {
-      setStatus('Your hand is full - play a card first.');
-      return;
-    }
-    const card = mock.deck.shift();
-    if (!card) {
-      setStatus('The mock deck is empty.');
-      return;
-    }
-    mock.hand.push(card);
-    fan.set(mock.hand);
-    setStatus('Drew ' + card.name + '.');
-    updateHud();
   }
 
   /* ---- the HUD ---- */
@@ -430,12 +627,13 @@ export function startPrototype(root) {
   }
 
   function updateHud() {
+    const hand = handCards();
     if (hudSelected) {
-      hudSelected.textContent = mock.selected >= 0 && mock.hand[mock.selected]
-        ? mock.hand[mock.selected].name
+      hudSelected.textContent = selected >= 0 && hand[selected]
+        ? hand[selected].name
         : 'Nothing selected';
     }
-    if (hudHand) hudHand.textContent = mock.hand.length + ' of ' + MAX_HAND + ' cards in hand';
+    if (hudHand) hudHand.textContent = hand.length + ' of ' + MAX_HAND + ' cards in hand';
   }
 
   const hudQuality = hud.querySelector('#immersive-quality');
@@ -467,22 +665,14 @@ export function startPrototype(root) {
 
   const playButton = hud.querySelector('#immersive-play');
   if (playButton) playButton.addEventListener('click', playSelected);
-  const drawButton = hud.querySelector('#immersive-draw');
-  if (drawButton) drawButton.addEventListener('click', drawCard);
-  const resetButton = hud.querySelector('#immersive-reset');
-  if (resetButton) {
-    resetButton.addEventListener('click', function () {
-      mock.hand = mockHand();
-      mock.deck = mockHand();
-      mock.played = [];
-      mock.selected = -1;
-      fan.set(mock.hand);
-      setStatus('The hand is back to the start.');
-      updateHud();
-    });
-  }
   const rehearseButton = hud.querySelector('#immersive-rehearse');
   if (rehearseButton) rehearseButton.addEventListener('click', rehearse);
+
+  /* ---- the connection ---- */
+
+  // The table is opened as soon as the page is ready: the room is a real
+  // room, on the real server, and the player joins it from there.
+  online.connect();
 
   /* ---- the rehearsal: the card cinematics, on demand ---- */
 
@@ -586,33 +776,25 @@ export function startPrototype(root) {
   return {
     view: view,
     state: state,
-    mock: mock,
     fan: fan,
     settings: settings,
     director: director,
+    online: online,
+    ui: ui,
+    interactions: interactions,
     selectCard: selectCard,
     playSelected: playSelected,
-    drawCard: drawCard,
+    playCard: playCard,
     rehearse: rehearse,
+    /** Feed a snapshot in, exactly as the server would. */
+    applyState: applyState,
     /**
      * Move the local player to a different seat.
      *
      * The server decides which seat a player has; this only tells the room
      * where to put the camera and which body belongs to the player.
      */
-    setLocalSeat: function (seat) {
-      const next = Number(seat);
-      if (!isFinite(next) || next < 0 || next >= state.seats.length) return false;
-      if (next === localSeat) return true;
-      // The old body is seen again; the new one is where the camera goes.
-      const old = state.characters[localSeat];
-      if (old) old.group.visible = true;
-      localSeat = next;
-      const character = state.characters[localSeat];
-      if (character) character.group.visible = false;
-      putCameraAtSeat(localSeat);
-      return true;
-    },
+    setLocalSeat: setLocalSeat,
     localSeat: function () { return localSeat; },
     // Look around, for the check and for the cinematics.
     look: function (yaw, pitch) {
@@ -639,9 +821,9 @@ export function startPrototype(root) {
         };
       });
       return {
-        hand: mock.hand.length,
-        selected: mock.selected,
-        played: mock.played.length,
+        hand: handCards().length,
+        selected: selected,
+        played: played.length,
         seats: state.seats.length,
         laptops: state.laptops.length,
         characters: state.mixamo.characters.length,
@@ -675,20 +857,13 @@ export function startPrototype(root) {
   };
 }
 
-/** The mock hand: real card records, so the faces are the real faces. */
-function mockHand() {
-  const Cards = window.PhoenixCards;
-  const ids = ['bonus', 'knife', 'steal', 'trick', 'wheel', 'hostage', 'support'];
-  return ids
-    .map(function (id) { return Cards ? Cards.byId(id) : null; })
-    .filter(Boolean);
-}
-
 /**
- * Start the prototype as soon as the page is ready.
+ * Start the table as soon as the page is ready.
  *
- * The prototype is a page of its own: nothing here is wired to the game
- * server, and nothing here can break a real match.
+ * The 3D table is another way of looking at the same multiplayer game: it
+ * joins the same server, plays by the same rules, and the server decides
+ * everything. Nothing on this page can change a match that the 2D game
+ * could not change.
  */
 function boot() {
   window.PhoenixImmersive = startPrototype(document.body);
