@@ -24,6 +24,7 @@
 
 import * as THREE from '../../vendor/three/three.module.js';
 import { playAnimation } from './mixamo.js';
+import { standCharacter, sitCharacter } from './seating.js';
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -31,19 +32,35 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /* The shared pieces                                                    */
 /* ------------------------------------------------------------------ */
 
-/** A character at their seat, or standing beside it. */
+/**
+ * A character at their seat, or standing beside it.
+ *
+ * The place comes from the room: the chair is where the room says it is,
+ * and the person stands just behind it, the way somebody stands up from a
+ * chair.
+ */
 function seatOf(context, seat) {
   const character = context.characters[seat];
   if (!character) return null;
-  const angle = (seat / context.seats) * Math.PI * 2;
-  const radius = context.tableRadius + 0.72;
+  const anchor = typeof context.seatAt === 'function' ? context.seatAt(seat) : null;
+  const angle = anchor ? anchor.angle : (seat / context.seats) * Math.PI * 2;
+  const radius = anchor ? Math.hypot(anchor.position.x, anchor.position.z) : context.tableRadius + 0.72;
+  const seated = anchor
+    ? anchor.position.clone()
+    : new THREE.Vector3(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
+  const standing = anchor
+    ? seated.clone().add(new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle)).multiplyScalar(0.55))
+    : new THREE.Vector3(Math.sin(angle) * (radius + 0.55), 0, Math.cos(angle) * (radius + 0.55));
   return {
     character: character,
     seat: seat,
     angle: angle,
     radius: radius,
-    seated: new THREE.Vector3(Math.sin(angle) * radius, 0, Math.cos(angle) * radius),
-    standing: new THREE.Vector3(Math.sin(angle) * (radius + 0.55), 0, Math.cos(angle) * (radius + 0.55))
+    seated: seated,
+    standing: standing,
+    // The height of the seat, so a person who stands up is standing on the
+    // floor and not in the air.
+    seatTop: anchor ? anchor.seatTop : 0.5
   };
 }
 
@@ -57,8 +74,7 @@ function seatOf(context, seat) {
 function stand(context, seat) {
   const at = seatOf(context, seat);
   if (!at) return Promise.resolve();
-  at.character.group.position.copy(at.standing);
-  at.character.group.rotation.y = at.angle + Math.PI;
+  standCharacter(at.character, at);
   return playAnimation(at.character, 'running', { loop: true, speed: 0.35 })
     .catch(function () { return null; });
 }
@@ -67,8 +83,7 @@ function stand(context, seat) {
 function sit(context, seat) {
   const at = seatOf(context, seat);
   if (!at) return Promise.resolve();
-  at.character.group.position.copy(at.seated);
-  at.character.group.rotation.y = at.angle + Math.PI;
+  sitCharacter(at.character, at);
   return playAnimation(at.character, 'sittingIdle', { loop: true })
     .catch(function () { return null; });
 }
@@ -84,16 +99,20 @@ function walkTo(context, seat, place, seconds) {
   const at = seatOf(context, seat);
   if (!at) return Promise.resolve();
   const from = at.character.group.position.clone();
-  const distance = from.distanceTo(place);
+  // People walk on the floor.
+  const target = place.clone();
+  target.y = 0;
+  const distance = Math.hypot(target.x - from.x, target.z - from.z);
   const duration = seconds || Math.max(0.6, Math.min(4, distance / 0.9));
-  at.character.group.rotation.y = Math.atan2(place.x - from.x, place.z - from.z);
+  at.character.group.rotation.y = Math.atan2(target.x - from.x, target.z - from.z);
   const action = playAnimation(at.character, 'running', { loop: true, speed: 1 })
     .catch(function () { return null; });
   const started = performance.now();
   return new Promise(function (resolve) {
     const step = function () {
       const t = Math.min(1, (performance.now() - started) / (duration * 1000));
-      at.character.group.position.lerpVectors(from, place, t);
+      at.character.group.position.lerpVectors(from, target, t);
+      at.character.group.position.y = 0;
       if (t < 1) requestAnimationFrame(step);
       else resolve(action);
     };

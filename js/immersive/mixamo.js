@@ -298,11 +298,39 @@ export function playAnimation(character, key, options) {
     // The last pose is held, and the fade out is left until the clip has
     // actually finished: a fade out asked for now would fade it out at once.
     action.clampWhenFinished = settings.clampWhenFinished;
-    action.fadeIn(settings.fade);
+    if (settings.fade > 0) {
+      action.fadeIn(settings.fade);
+    } else {
+      // No fade at all: the pose is the real one from the very first frame.
+      // A fade in would mean the character is measured and placed while it
+      // is still mostly in its old pose, and it would then jump.
+      action.stopFading();
+      action.setEffectiveWeight(1);
+    }
     action.timeScale = settings.speed;
     action.play();
     return { action: action, clip: clip };
   });
+}
+
+/**
+ * Settle a character into a pose and hold it there.
+ *
+ * The clip is played with no fade, and the mixer is stepped by hand so the
+ * pose that is on screen is the pose that is measured. The clip is then
+ * paused, so the character stays exactly where they were put.
+ */
+export function settleAnimation(character, key, options) {
+  const settings = Object.assign({ at: 0.6, loop: true }, options || {});
+  return playAnimation(character, key, { loop: settings.loop, fade: 0, clampWhenFinished: true })
+    .then(function (played) {
+      if (!played) return null;
+      character.mixer.update(1 / 60);
+      character.mixer.update(settings.at);
+      played.action.paused = true;
+      played.action.setEffectiveWeight(1);
+      return played;
+    });
 }
 
 /**

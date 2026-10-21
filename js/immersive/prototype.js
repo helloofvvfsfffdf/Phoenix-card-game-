@@ -22,8 +22,9 @@ import { createCharacter, animateCharacter, animateDraw, animatePlay, CHARACTERS
 import { createHand, createFan, MAX_HAND } from './hand.js';
 import { createLaptop } from './laptop.js';
 import { buildPoster, buildNotepad } from './props.js';
-import { loadMixamoGLB, playAnimation } from './mixamo.js';
+import { loadMixamoGLB, playAnimation, settleAnimation } from './mixamo.js';
 import { loadMap, playAreaPoint } from './maps.js';
+import { seatCharacter, lockToSeat, eyePoint, findBone } from './seating.js';
 import { createDirector } from './director.js';
 import { playCinematic } from './cinematics.js';
 
@@ -72,7 +73,7 @@ export function startPrototype(root) {
 
   /* ---- the player: seated, in the first person ---- */
 
-  const cameraState = { yaw: 0, pitch: 0, dragging: false, lastX: 0, lastY: 0, pointerId: null, moved: 0 };
+  const cameraState = { yaw: 0, baseYaw: 0, pitch: 0, dragging: false, lastX: 0, lastY: 0, pointerId: null, moved: 0 };
   const head = new THREE.Group();
   scene.add(head);
   camera.position.set(0, 0, 0);
@@ -95,6 +96,14 @@ export function startPrototype(root) {
     played: []
   };
 
+  /**
+   * Which seat the local player is in.
+   *
+   * The server says, once the match starts. Until then it is the first
+   * seat, and the player is the camera there.
+   */
+  let localSeat = 0;
+
   const mock = {
     hand: mockHand(),
     deck: mockHand(),
@@ -113,6 +122,8 @@ export function startPrototype(root) {
     characters: state.characters,
     laptops: state.laptops,
     seats: 5,
+    // Where the room says each seat is.
+    seatAt: function (seat) { return seatPlace(seat); },
     tableRadius: 1.9,
     tableHeight: 1.0,
     lights: { lamp: view.lamp, hemi: view.hemi, hemiBase: view.hemi.intensity },
@@ -133,18 +144,23 @@ export function startPrototype(root) {
 
       state.seats = map.anchors.seats.slice(0, 5);
 
-      // The local player sits in the first seat, and the camera is their eyes.
-      const mine = state.seats[0];
+      // The table's own height, so the cinematics put things on the table
+      // and not in the air above it.
+      if (map.anchors.table) {
+        director.context.tableHeight = map.anchors.table.surface;
+        director.context.tableRadius = Math.max(map.anchors.table.radiusX, map.anchors.table.radiusZ);
+      }
+
+      // The local player sits in their own seat, and the camera is their
+      // eyes. The characters are put on the chairs as they arrive; until
+      // then the camera is at the height the seat says.
+      const mine = state.seats[localSeat];
       if (mine) {
-        head.position.set(mine.position.x, mine.eye, mine.position.z);
-        cameraState.yaw = 0;
-        head.rotation.y = 0;
-        // The camera looks at the middle of the table from where they sit.
+        head.position.set(mine.position.x, mine.eye || 1.2, mine.position.z);
         const table = map.anchors.table;
         if (table) {
           const toTable = Math.atan2(table.centre.x - mine.position.x, table.centre.z - mine.position.z);
-          head.rotation.y = toTable + Math.PI;
-          cameraState.yaw = 0;
+          cameraState.baseYaw = toTable + Math.PI;
         }
       }
 
@@ -191,6 +207,9 @@ export function startPrototype(root) {
     return {
       position: entry.position.clone(),
       angle: entry.angle,
+      // The top of the cushion: where the hips go.
+      seatTop: entry.seatTop,
+      eye: entry.eye,
       // Just behind the chair, where somebody stands up from it.
       standing: entry.position.clone().add(
         new THREE.Vector3(Math.sin(entry.angle), 0, Math.cos(entry.angle)).multiplyScalar(0.55))
@@ -198,41 +217,29 @@ export function startPrototype(root) {
   }
 
   function placeCharacters() {
-    // The first seat is the local player's - they are the camera. The rest
-    // are the people round the table.
-    CHARACTER_FILES.slice(0, Math.max(0, state.seats.length - 1)).forEach(function (name, index) {
-      const seat = index + 1;
+    // Every seat gets a person. The local player's own body is in the room
+    // like everybody else's - the other players can see it - but the player
+    // cannot see it themselves, because they are looking out of its eyes.
+    CHARACTER_FILES.slice(0, state.seats.length).forEach(function (name, index) {
+      const seat = index;
       const place = seatPlace(seat);
       if (!place) return;
       loadMixamoGLB('assets/mixamo/characters/' + name + '.glb', { name: name })
         .then(function (loaded) {
-          loaded.group.position.set(place.position.x, 0, place.position.z);
-          loaded.group.rotation.y = place.angle + Math.PI;
           scene.add(loaded.group);
           state.characters[seat] = loaded;
           state.mixamo.characters.push({ seat: seat, character: loaded, name: name });
           state.mixamo.clipNames = loaded.clipNames;
-          return playAnimation(loaded, 'sittingIdle', { loop: true }).then(function (played) {
+
+          // The sitting pose is settled with no fade and the mixer stepped
+          // by hand, so the pose that is measured is the pose the character
+          // is actually going to be in.
+          return settleAnimation(loaded, 'sittingIdle', { at: 0.6 }).then(function (played) {
             loaded.sitting = !!played;
-            // The character is placed by its hips, which have to be on the
-            // seat of the chair: the models do not all start from the same
-            // place, and the seat is a known height.
-            //
-            // The mixer is stepped FIRST, so the pose that is measured is the
-            // sitting pose and not the rest pose - otherwise the character
-            // starts standing and then jumps up into the chair.
-            loaded.mixer.update(0.016);
-            const hips = loaded.bones.filter(function (bone) {
-              return /Hips/.test(bone.name) && bone.name.indexOf('_') === -1;
-            })[0];
-            const where = hips ? hips.getWorldPosition(new THREE.Vector3()) : null;
-            const seatInfo = state.seats[seat];
-            const top = seatInfo ? seatInfo.seatTop : SEAT_HEIGHT;
-            if (where && isFinite(where.y)) {
-              loaded.group.position.y += top - where.y;
-            } else {
-              loaded.group.position.y = top;
-            }
+            // Then the person is measured, and put on the chair.
+            seatCharacter(loaded, place);
+            // The camera is the local player's eyes.
+            if (seat === localSeat) putCameraAtSeat(seat);
           });
         })
         .catch(function (error) {
@@ -241,17 +248,52 @@ export function startPrototype(root) {
         })
         .then(function () {
           if (state.mixamo.characters.length + state.mixamo.errors.length >=
-              Math.max(0, state.seats.length - 1)) {
+              state.seats.length) {
             state.mixamo.loading = false;
             const line = root.querySelector('#immersive-status');
             if (line) {
               line.textContent = state.mixamo.errors.length
                 ? state.mixamo.errors.length + ' character(s) could not be loaded: ' + state.mixamo.errors[0]
-                : state.mixamo.characters.length + ' characters are sitting at the table.';
+                : state.mixamo.characters.length + ' people are sitting at the table.';
             }
           }
         });
     });
+  }
+
+  /**
+   * The camera is the local player's eyes.
+   *
+   * It is put where their character's head is - which is the real height of
+   * a seated person's eyes, measured from the model rather than guessed -
+   * and it looks at the middle of the table.
+   */
+  function putCameraAtSeat(seat) {
+    const mine = state.seats[seat];
+    const character = state.characters[seat];
+    if (!mine) return;
+
+    // The body of the player is in the room, but the player is inside it.
+    if (character) character.group.visible = false;
+
+    const table = state.map && state.map.anchors.table;
+    if (table) {
+      const toTable = Math.atan2(table.centre.x - mine.position.x, table.centre.z - mine.position.z);
+      // The camera looks along its own -Z, so the base turn is the angle of
+      // the table, turned back on itself.
+      cameraState.baseYaw = toTable + Math.PI;
+    } else {
+      cameraState.baseYaw = 0;
+    }
+
+    const point = character ? eyePoint(character) : null;
+    if (point) {
+      head.position.copy(point);
+    } else {
+      head.position.set(mine.position.x, mine.eye || 1.2, mine.position.z);
+    }
+    cameraState.yaw = 0;
+    cameraState.pitch = 0;
   }
 
   /* ---- the camera: seated, looking around, and nothing more ---- */
@@ -483,14 +525,17 @@ export function startPrototype(root) {
     const delta = Math.min(0.05, clock.getDelta());
     const time = clock.elapsedTime;
 
-    head.rotation.y = cameraState.yaw;
+    head.rotation.y = cameraState.baseYaw + cameraState.yaw;
     head.rotation.x = cameraState.pitch;
 
     // The people are Mixamo models, so their own animations are what move
-    // them: the mixer, and nothing else.
-    state.characters.forEach(function (character) {
+    // them: the mixer, and nothing else. And then they are put back on
+    // their chairs, exactly, whatever the animation did.
+    state.characters.forEach(function (character, seat) {
       if (!character) return;
       character.mixer.update(delta);
+      const place = seatPlace(seat);
+      if (place) lockToSeat(character, place);
     });
 
     if (!settings.reducedMotion) {
@@ -549,12 +594,50 @@ export function startPrototype(root) {
     playSelected: playSelected,
     drawCard: drawCard,
     rehearse: rehearse,
+    /**
+     * Move the local player to a different seat.
+     *
+     * The server decides which seat a player has; this only tells the room
+     * where to put the camera and which body belongs to the player.
+     */
+    setLocalSeat: function (seat) {
+      const next = Number(seat);
+      if (!isFinite(next) || next < 0 || next >= state.seats.length) return false;
+      if (next === localSeat) return true;
+      // The old body is seen again; the new one is where the camera goes.
+      const old = state.characters[localSeat];
+      if (old) old.group.visible = true;
+      localSeat = next;
+      const character = state.characters[localSeat];
+      if (character) character.group.visible = false;
+      putCameraAtSeat(localSeat);
+      return true;
+    },
+    localSeat: function () { return localSeat; },
     // Look around, for the check and for the cinematics.
     look: function (yaw, pitch) {
       cameraState.yaw = Math.max(-LIMITS.yaw, Math.min(LIMITS.yaw, yaw || 0));
       cameraState.pitch = Math.max(-LIMITS.pitch, Math.min(LIMITS.pitch, pitch || 0));
     },
     stateSnapshot: function () {
+      // Where each character actually is, so the check can prove that they
+      // are on their chairs and not in them.
+      const seatings = state.characters.map(function (character, seat) {
+        if (!character) return null;
+        const point = function (name) {
+          const bone = findBone(character, name);
+          if (!bone) return null;
+          return bone.getWorldPosition(new THREE.Vector3()).y;
+        };
+        return {
+          seat: seat,
+          hips: point('Hips'),
+          head: point('Head'),
+          toe: point('LeftToeBase'),
+          seatTop: state.seats[seat] ? state.seats[seat].seatTop : null,
+          visible: character.group.visible
+        };
+      });
       return {
         hand: mock.hand.length,
         selected: mock.selected,
@@ -562,8 +645,11 @@ export function startPrototype(root) {
         seats: state.seats.length,
         laptops: state.laptops.length,
         characters: state.mixamo.characters.length,
+        localSeat: localSeat,
         yaw: cameraState.yaw,
         pitch: cameraState.pitch,
+        seatings: seatings,
+        camera: camera.getWorldPosition(new THREE.Vector3()).toArray(),
         mixamo: {
           loading: state.mixamo.loading,
           loaded: state.mixamo.characters.length > 0,

@@ -35,6 +35,9 @@ export function createDirector(options) {
       characters: settings.characters,
       laptops: settings.laptops,
       seats: settings.seats,
+      // The places the room says the seats are. A getter, because the room
+      // arrives after the director is made.
+      seatAt: settings.seatAt || function () { return null; },
       tableRadius: settings.tableRadius,
       tableHeight: settings.tableHeight,
       scene: settings.scene,

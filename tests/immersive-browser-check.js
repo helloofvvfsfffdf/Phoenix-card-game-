@@ -134,7 +134,7 @@ async function main() {
 
     // 2. The people are there, and the hand is held.
     const state = await evaluate('window.PhoenixImmersive.stateSnapshot()');
-    assert.strictEqual(state.characters, 4, 'four people sit round the table');
+    assert.strictEqual(state.characters, 5, 'five people sit round the table');
     assert.strictEqual(state.hand, 7, 'and the player holds seven cards');
 
     // 3. A card can be picked, and it lifts out of the fan.
@@ -176,12 +176,44 @@ async function main() {
     const mixamo = snapshot.mixamo;
     assert.strictEqual(mixamo.loaded, true, 'the Mixamo characters loaded');
     assert.deepStrictEqual(mixamo.errors, [], 'without an error');
-    assert.strictEqual(mixamo.count, 4, 'the four people round the table are there');
+    assert.strictEqual(mixamo.count, 5, 'all five people are there');
     assert(mixamo.bones > 300, 'with a real skeleton (' + mixamo.bones + ' bones)');
     assert(mixamo.meshes >= 24, 'and their body, clothes and hair (' + mixamo.meshes + ' meshes)');
     assert(mixamo.sitting, 'and they are sitting in the chairs');
     assert.strictEqual(snapshot.seats, 5, 'the room has five seats');
     assert.strictEqual(snapshot.laptops, 5, 'and a laptop for each of them');
+
+    // 6b. And they are ON the chairs: the hips are on the cushion, the head
+    //     is above the table, and nothing has fallen through the floor.
+    const tableTop = 1.012;
+    snapshot.seatings.forEach(function (seating) {
+      assert(seating, 'every seat has somebody in it');
+      assert(Math.abs(seating.hips - seating.seatTop) < 0.01,
+        'seat ' + seating.seat + ': the hips are on the cushion (' +
+        seating.hips.toFixed(3) + ' vs ' + seating.seatTop.toFixed(3) + ')');
+      assert(seating.head > tableTop,
+        'seat ' + seating.seat + ': the head is above the table (' +
+        seating.head.toFixed(3) + ')');
+      assert(seating.toe > -0.01,
+        'seat ' + seating.seat + ': nothing is through the floor (' +
+        seating.toe.toFixed(3) + ')');
+    });
+    assert.strictEqual(snapshot.seatings[snapshot.localSeat].visible, false,
+      'the player cannot see the inside of their own head');
+    assert(snapshot.camera[1] > 1.0 && snapshot.camera[1] < 1.6,
+      'and the camera is at a seated eye height (' + snapshot.camera[1].toFixed(3) + ')');
+
+    // 6c. And they stay there: the seat is locked, so nothing drifts.
+    const drift = await evaluate(`new Promise((resolve) => {
+      const p = window.PhoenixImmersive;
+      const before = p.stateSnapshot().seatings.map((s) => s && s.hips);
+      setTimeout(() => resolve({ before, after: p.stateSnapshot().seatings.map((s) => s && s.hips) }), 1200);
+    })`);
+    drift.before.forEach(function (hips, index) {
+      assert(Math.abs(hips - drift.after[index]) < 0.005,
+        'seat ' + index + ' does not drift (' + hips.toFixed(4) + ' -> ' +
+        drift.after[index].toFixed(4) + ')');
+    });
 
     // 7. Nothing threw on the way.
     const errors = await evaluate('window.immersiveErrors || []');
