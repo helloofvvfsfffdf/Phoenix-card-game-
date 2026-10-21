@@ -216,6 +216,11 @@ export function startPrototype(root) {
             // The character is placed by its hips, which have to be on the
             // seat of the chair: the models do not all start from the same
             // place, and the seat is a known height.
+            //
+            // The mixer is stepped FIRST, so the pose that is measured is the
+            // sitting pose and not the rest pose - otherwise the character
+            // starts standing and then jumps up into the chair.
+            loaded.mixer.update(0.016);
             const hips = loaded.bones.filter(function (bone) {
               return /Hips/.test(bone.name) && bone.name.indexOf('_') === -1;
             })[0];
