@@ -29,8 +29,8 @@ export function roundedBox(width, height, depth, radius, bevel) {
     bevelEnabled: bevel !== 0,
     bevelThickness: bevel || 0.006,
     bevelSize: bevel || 0.006,
-    bevelSegments: 2,
-    curveSegments: 6
+    bevelSegments: 1,
+    curveSegments: 4
   });
   geometry.translate(0, 0, -depth / 2 + (bevel || 0));
   geometry.computeVertexNormals();
@@ -46,7 +46,7 @@ export function roundedBox(width, height, depth, radius, bevel) {
  */
 export function turned(profile, segments) {
   const points = profile.map(function (p) { return new THREE.Vector2(p[0], p[1]); });
-  const geometry = new THREE.LatheGeometry(points, segments || 20);
+  const geometry = new THREE.LatheGeometry(points, segments || 12);
   geometry.computeVertexNormals();
   return geometry;
 }
@@ -131,6 +131,73 @@ export function moulding(points, length, depth) {
   geometry.translate(0, 0, -length / 2);
   geometry.computeVertexNormals();
   return geometry;
+}
+
+/**
+ * Merge a list of meshes into one geometry.
+ *
+ * The parts that never move - a chair's four legs, the bars of a cell - are
+ * all the same material, so they can be one mesh and one draw call instead
+ * of six. Their transforms are baked in.
+ */
+export function mergeMeshes(meshes) {
+  const positions = [];
+  const normals = [];
+  const uvs = [];
+  const indices = [];
+  let offset = 0;
+  meshes.forEach(function (mesh) {
+    const geometry = mesh.geometry.clone();
+    mesh.updateMatrix();
+    geometry.applyMatrix4(mesh.matrix);
+    const position = geometry.attributes.position;
+    const normal = geometry.attributes.normal;
+    const uv = geometry.attributes.uv;
+    for (let i = 0; i < position.count; i++) {
+      positions.push(position.getX(i), position.getY(i), position.getZ(i));
+      if (normal) normals.push(normal.getX(i), normal.getY(i), normal.getZ(i));
+      else normals.push(0, 1, 0);
+      if (uv) uvs.push(uv.getX(i), uv.getY(i));
+      else uvs.push(0, 0);
+    }
+    if (geometry.index) {
+      const index = geometry.index;
+      for (let i = 0; i < index.count; i++) indices.push(index.getX(i) + offset);
+    } else {
+      for (let i = 0; i < position.count; i++) indices.push(i + offset);
+    }
+    offset += position.count;
+    geometry.dispose();
+  });
+  const merged = new THREE.BufferGeometry();
+  merged.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  merged.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  merged.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  merged.setIndex(indices);
+  merged.computeBoundingSphere();
+  return merged;
+}
+
+/**
+ * One mesh made of several parts, all in the same material.
+ */
+export function combined(parts, material) {
+  const meshes = parts.map(function (part) {
+    const mesh = new THREE.Mesh(part.geometry, material);
+    mesh.position.copy(part.position || new THREE.Vector3());
+    mesh.rotation.set(
+      (part.rotation && part.rotation.x) || 0,
+      (part.rotation && part.rotation.y) || 0,
+      (part.rotation && part.rotation.z) || 0
+    );
+    if (part.scale) mesh.scale.copy(part.scale);
+    return mesh;
+  });
+  const geometry = mergeMeshes(meshes);
+  meshes.forEach(function (mesh) { mesh.geometry.dispose(); });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = true;
+  return mesh;
 }
 
 /** A soft shadow-catching blob, for contact under the furniture. */

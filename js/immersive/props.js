@@ -10,7 +10,7 @@
 'use strict';
 
 import * as THREE from '../../vendor/three/three.module.js';
-import { roundedBox, turned } from './geometry.js';
+import { roundedBox, turned, combined } from './geometry.js';
 import { mimicPosterTexture, notepadTexture } from './textures.js';
 import { ROOM } from './room.js';
 
@@ -150,16 +150,18 @@ export function buildJailCell(scene, options) {
   group.add(front);
   const bars = new THREE.Group();
   const barCount = 7;
+  const barParts = [];
   for (let i = 0; i < barCount; i++) {
-    const bar = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.022, 0.022, settings.h - 0.2, 8),
-      ironMaterial
-    );
-    bar.position.set(-gateWidth / 2 + 0.12 + (i * (gateWidth - 0.24)) / (barCount - 1),
-      (settings.h - 0.2) / 2 + 0.1, halfD);
-    bar.castShadow = true;
-    bars.add(bar);
+    barParts.push({
+      geometry: new THREE.CylinderGeometry(0.022, 0.022, settings.h - 0.2, 8),
+      position: new THREE.Vector3(
+        -gateWidth / 2 + 0.12 + (i * (gateWidth - 0.24)) / (barCount - 1),
+        (settings.h - 0.2) / 2 + 0.1,
+        halfD
+      )
+    });
   }
+  bars.add(combined(barParts, ironMaterial));
   // The cross bars, and the frame.
   [0.42, settings.h - 0.42].forEach(function (y) {
     const rail = new THREE.Mesh(

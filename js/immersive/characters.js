@@ -176,7 +176,7 @@ export function createCharacter(options) {
   head.position.y = 0.09;
   neck.add(head);
   // The skull, and a jaw, so the head is not a ball.
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.098, 16, 14), skin);
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.098, 12, 10), skin);
   skull.scale.set(1, 1.12, 1.02);
   skull.castShadow = true;
   head.add(skull);
@@ -190,7 +190,7 @@ export function createCharacter(options) {
   head.add(nose);
   // The ears.
   [-1, 1].forEach(function (side) {
-    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), skin);
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), skin);
     ear.scale.set(0.5, 1, 0.8);
     ear.position.set(side * 0.095, -0.005, 0);
     head.add(ear);
@@ -198,11 +198,11 @@ export function createCharacter(options) {
   // The eyes: white, a pupil, and a brow.
   const eyes = [];
   [-1, 1].forEach(function (side) {
-    const white = new THREE.Mesh(new THREE.SphereGeometry(0.019, 10, 8), standard(0xf2ece2, 0.5));
+    const white = new THREE.Mesh(new THREE.SphereGeometry(0.019, 8, 6), standard(0xf2ece2, 0.5));
     white.position.set(side * 0.036, 0.018, 0.083);
     white.scale.set(1, 0.78, 0.7);
     head.add(white);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.009, 8, 6), standard(0x1a1512, 0.35));
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.009, 6, 5), standard(0x1a1512, 0.35));
     pupil.position.set(side * 0.036, 0.018, 0.095);
     head.add(pupil);
     eyes.push(white, pupil);
@@ -222,12 +222,12 @@ export function createCharacter(options) {
 
   // The hair, in five styles.
   if (look.hairStyle === 'long') {
-    const back = new THREE.Mesh(new THREE.SphereGeometry(0.115, 14, 12), hair);
+    const back = new THREE.Mesh(new THREE.SphereGeometry(0.115, 10, 8), hair);
     back.scale.set(1, 1.15, 0.95);
     back.position.set(0, -0.03, -0.018);
     head.add(back);
   } else if (look.hairStyle === 'bun') {
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.104, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hair);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.104, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.55), hair);
     cap.position.y = 0.012;
     head.add(cap);
     const bun = new THREE.Mesh(new THREE.SphereGeometry(0.048, 10, 8), hair);
@@ -236,12 +236,12 @@ export function createCharacter(options) {
   } else if (look.hairStyle === 'curls') {
     for (let i = 0; i < 9; i++) {
       const a = (i / 9) * Math.PI * 2;
-      const curl = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 6), hair);
+      const curl = new THREE.Mesh(new THREE.SphereGeometry(0.032, 6, 5), hair);
       curl.position.set(Math.cos(a) * 0.07, 0.055 + Math.sin(a * 2) * 0.02, Math.sin(a) * 0.07 - 0.01);
       head.add(curl);
     }
   } else {
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.104, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hair);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.104, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.55), hair);
     cap.position.y = 0.012;
     cap.scale.set(1, 1.04, 1.02);
     head.add(cap);

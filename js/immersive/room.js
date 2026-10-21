@@ -12,7 +12,7 @@
 'use strict';
 
 import * as THREE from '../../vendor/three/three.module.js';
-import { roundedBox, turned, frameGeometry, panelledDoor, moulding, contactShadow } from './geometry.js';
+import { roundedBox, turned, frameGeometry, panelledDoor, moulding, contactShadow, combined } from './geometry.js';
 import {
   floorboardTexture, wallpaperTexture, woodTexture, leatherTexture,
   plasterTexture, rugTexture, pictureTexture, nightSkyTexture
@@ -307,7 +307,7 @@ export function buildRoom(scene, options) {
   /* ---- the rug ---- */
 
   const rug = new THREE.Mesh(
-    new THREE.CircleGeometry(3.5, 48),
+    new THREE.CircleGeometry(3.5, 32),
     textured(rugTexture(1024), 0.98, 0.0)
   );
   rug.rotation.x = -Math.PI / 2;
@@ -334,7 +334,7 @@ export function buildRoom(scene, options) {
       [0, 0], [ROOM.tableRadius, 0], [ROOM.tableRadius + 0.02, 0.015],
       [ROOM.tableRadius + 0.025, 0.045], [ROOM.tableRadius - 0.01, 0.07],
       [ROOM.tableRadius - 0.2, 0.075], [ROOM.tableRadius - 0.2, 0.05], [0, 0.05]
-    ], 56),
+    ], 40),
     tableTopMaterial
   );
   edge.position.y = ROOM.tableHeight - 0.075;
@@ -342,7 +342,7 @@ export function buildRoom(scene, options) {
   edge.receiveShadow = true;
   table.add(edge);
   const inlay = new THREE.Mesh(
-    new THREE.CircleGeometry(ROOM.tableRadius - 0.2, 48),
+    new THREE.CircleGeometry(ROOM.tableRadius - 0.2, 32),
     baize
   );
   inlay.rotation.x = -Math.PI / 2;
@@ -351,7 +351,7 @@ export function buildRoom(scene, options) {
   table.add(inlay);
   // The brass line round the baize.
   const brassRing = new THREE.Mesh(
-    new THREE.TorusGeometry(ROOM.tableRadius - 0.2, 0.007, 6, 48),
+    new THREE.TorusGeometry(ROOM.tableRadius - 0.2, 0.007, 5, 32),
     standard(0xc9963f, 0.3, 0.9)
   );
   brassRing.rotation.x = Math.PI / 2;
@@ -414,26 +414,23 @@ export function buildRoom(scene, options) {
     const crest = new THREE.Mesh(roundedBox(0.5, 0.11, 0.06, 0.025, 0.008), chairMaterial);
     crest.position.set(0, 0.99, -0.2);
     chair.add(crest);
-    [-0.1, 0, 0.1].forEach(function (x) {
-      const spindle = new THREE.Mesh(
-        turned([[0, 0], [0.016, 0], [0.02, 0.05], [0.013, 0.16], [0.018, 0.3],
+    chair.add(combined([-0.1, 0, 0.1].map(function (x) {
+      return {
+        geometry: turned([[0, 0], [0.016, 0], [0.02, 0.05], [0.013, 0.16], [0.018, 0.3],
           [0.014, 0.4], [0, 0.42]], 8),
-        chairMaterial
-      );
-      spindle.position.set(x, 0.56, -0.2);
-      chair.add(spindle);
-    });
-    // The legs, turned, with a stretcher between them.
-    [[-0.2, -0.18], [0.2, -0.18], [-0.2, 0.18], [0.2, 0.18]].forEach(function (pos) {
-      const leg = new THREE.Mesh(
-        turned([[0, 0], [0.03, 0], [0.035, 0.04], [0.024, 0.12], [0.028, 0.3],
+        position: new THREE.Vector3(x, 0.56, -0.2)
+      };
+    }), chairMaterial));
+    // The legs, turned, with a stretcher between them. All four legs are
+    // one mesh: they never move, so they need only one draw call.
+    const legParts = [[-0.2, -0.18], [0.2, -0.18], [-0.2, 0.18], [0.2, 0.18]].map(function (pos) {
+      return {
+        geometry: turned([[0, 0], [0.03, 0], [0.035, 0.04], [0.024, 0.12], [0.028, 0.3],
           [0.022, 0.4], [0.03, 0.44], [0, 0.45]], 10),
-        chairMaterial
-      );
-      leg.position.set(pos[0], 0, pos[1]);
-      leg.castShadow = true;
-      chair.add(leg);
+        position: new THREE.Vector3(pos[0], 0, pos[1])
+      };
     });
+    chair.add(combined(legParts, chairMaterial));
     [-0.2, 0.2].forEach(function (x) {
       const stretcher = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.36, 8), chairMaterial);
       stretcher.rotation.x = Math.PI / 2;

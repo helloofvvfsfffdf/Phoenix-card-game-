@@ -1,8 +1,7 @@
 # PHOENIX — the immersive (3D) table
 
-**Milestone 1: a standalone prototype.** It is a first-person 3D card table:
-a room, a table, five seated placeholder people, and your own hands holding a
-fan of cards you can pick up and play.
+The first-person 3D card table: a room, a table, five seated people, and
+your own hands holding a fan of cards you can pick up and play.
 
 It runs on its own page and uses **mock data**. Nothing in it talks to the
 game server, and nothing in it can affect a real match. The 2D game is
@@ -10,21 +9,12 @@ untouched.
 
 ## Running it
 
-The prototype is a static page, so any web server will do. The quickest way
-is the project's own server:
-
 ```bash
 npm start
 # then open http://localhost:3000/immersive.html
 ```
 
-The server needs its usual environment variables (`PHOENIX_OWNER_PASSWORD`,
-`PHOENIX_MODE_ACCESS_CODE`) even though the prototype itself never uses
-them. A bare static server works too:
-
-```bash
-npx serve .        # then open http://localhost:3000/immersive.html
-```
+Any static server works too (`npx serve .`).
 
 ## What you can do in it
 
@@ -34,9 +24,10 @@ npx serve .        # then open http://localhost:3000/immersive.html
 | **Pick a card** | Click or tap a card in your hand. It lifts out of the fan. |
 | **Play a card** | Click or tap it again, or press **PLAY CARD**. It flies to the middle of the table. |
 | **Draw a card** | **DRAW** takes the next card from the mock deck into your hand, up to seven. |
+| **The phone** | Bottom left: your own PHOENIX Bank phone, with your balance and a LEAVE MATCH button. Every other player has one on the table in front of them. |
 | **Quality** | Low, Medium or High — the pixel ratio and the shadows. |
 | **Look speed** | How fast the camera turns. |
-| **Reduced motion** | Turns off the breathing, the swaying, the blinking and the card flights. |
+| **Reduced motion** | Turns off the breathing, the swaying, the blinking, the card flights and the balance swings. |
 
 ## The files
 
@@ -44,9 +35,14 @@ npx serve .        # then open http://localhost:3000/immersive.html
 |---|---|
 | `immersive.html` | The page: the stage, the HUD, the loading line and the no-WebGL message. |
 | `css/immersive.css` | The page around the 3D stage. |
-| `js/immersive/scene.js` | The renderer, the camera, the lights, the room, the table, the chairs, the deck, and the quality presets. |
-| `js/immersive/characters.js` | The five placeholder people, built from primitives, with their idle movement, blink, draw and play animations. |
-| `js/immersive/hand.js` | Your own arms and hands, the fan of cards, the card faces drawn on a canvas, and the picking. |
+| `js/immersive/scene.js` | The renderer, the camera and the lights. |
+| `js/immersive/room.js` | The room: the floor, the walls, the ceiling, the door, the windows, the fireplace, the table, the chairs, the deck and the furniture. |
+| `js/immersive/characters.js` | The five stylised people, their rig, and their idle movement. |
+| `js/immersive/hand.js` | Your own arms and hands, the fan of cards, the card faces and the picking. |
+| `js/immersive/phone.js` | The PHOENIX Bank phone and its stand. |
+| `js/immersive/props.js` | The Mimic poster, the developer's notepad and the jail cell. |
+| `js/immersive/textures.js` | Every surface, painted on a canvas: the floorboards, the wallpaper, the wood, the leather, the rug, the poster, the notepad and the bank screen. |
+| `js/immersive/geometry.js` | The shapes: rounded boxes, turned parts, frames, panelled doors and a merge for the parts that never move. |
 | `js/immersive/prototype.js` | The wiring: the mock match, the camera controls, the HUD and the frame loop. |
 | `vendor/three/` | Three.js r186 (MIT), vendored so the page has no external dependency. |
 | `tests/immersive-browser-check.js` | A headless-browser check that proves the page renders, holds seven cards, and picks and plays one. |
@@ -54,14 +50,24 @@ npx serve .        # then open http://localhost:3000/immersive.html
 ## The check
 
 ```bash
-node tests/immersive-browser-check.js
+npm run test:immersive
 ```
 
 It needs the server running on port 3000 (`npm start`), and it writes
 screenshots to your temp folder.
 
+## How it is drawn
+
+Everything is drawn in code. There is no model file, no texture file and
+nothing to download, so the art is one style all the way through and there
+is no licence to chase. The surfaces are painted on 2D canvases at run time
+(floorboards with a grain and a knot, a damask wallpaper, worn leather, a
+patterned rug, the poster, the notepad and the bank screen), and the
+furniture is built from lathed profiles and rounded boxes rather than from
+cubes and cylinders.
+
 ## What is NOT here yet
 
-This is Milestone 1. The multiplayer, the character picker, the animal
-allies and the Mimic's phone cinematic are Milestones 2 to 5, and none of
-them are started.
+The multiplayer, the character picker, the animal allies, the Mimic's phone
+cinematic and the victory and defeat effects in 3D are later milestones, and
+none of them are started.
