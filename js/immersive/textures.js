@@ -605,6 +605,9 @@ export function createBankScreen() {
   let notice = null;
   let noticeUntil = 0;
   let last = 0;
+  // What the game wants the player to know, and the video that is playing.
+  let objective = null;
+  let playing = null;
 
   function draw(now) {
     if (now < noticeUntil && notice) {
@@ -651,6 +654,33 @@ export function createBankScreen() {
     ctx.fillStyle = 'rgba(215, 240, 228, 0.75)';
     ctx.font = '17px system-ui, sans-serif';
     ctx.fillText('PHOENIX POINTS', w - 26, 158);
+
+    // The objective, when the game has set one.
+    if (objective) {
+      ctx.fillStyle = 'rgba(201, 150, 63, 0.92)';
+      ctx.fillRect(0, 84, w, 34);
+      ctx.fillStyle = '#1a1206';
+      ctx.font = 'bold 20px system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(objective.slice(0, 40), 16, 107);
+    }
+
+    // The video that is playing, if there is one.
+    if (playing) {
+      ctx.fillStyle = 'rgba(6, 12, 16, 0.96)';
+      ctx.fillRect(0, 84, w, 92);
+      // The picture of the video, which is YouTube's own thumbnail.
+      if (playing.thumbnail) {
+        try { ctx.drawImage(playing.thumbnail, 10, 90, 120, 68); } catch (error) { /* not ready */ }
+      }
+      ctx.fillStyle = '#f6f0dc';
+      ctx.font = 'bold 18px system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('NOW PLAYING', 140, 122);
+      ctx.fillStyle = 'rgba(240, 234, 220, 0.75)';
+      ctx.font = '15px system-ui, sans-serif';
+      ctx.fillText('on this laptop', 140, 146);
+    }
 
     // The LEAVE MATCH button, always on the screen.
     ctx.textAlign = 'left';
@@ -702,6 +732,32 @@ export function createBankScreen() {
         last = now;
         draw(now);
       }
+    },
+    /** Put a line of the game's own across the screen. */
+    setObjective: function (text) {
+      objective = text || null;
+      draw(performance.now());
+    },
+    clearObjective: function () {
+      objective = null;
+      draw(performance.now());
+    },
+    /** Show that a video is playing on this screen. */
+    setPlaying: function (videoId) {
+      playing = { id: videoId, thumbnail: null };
+      // The picture of the video, which is YouTube's own.
+      const image = new Image();
+      image.crossOrigin = 'anonymous';
+      image.onload = function () {
+        playing.thumbnail = image;
+        draw(performance.now());
+      };
+      image.src = 'https://i.ytimg.com/vi/' + videoId + '/hqdefault.jpg';
+      draw(performance.now());
+    },
+    clearPlaying: function () {
+      playing = null;
+      draw(performance.now());
     },
     get balance() { return balance; }
   };

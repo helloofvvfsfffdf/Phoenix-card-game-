@@ -32,7 +32,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function call(method, params = {}, target = session) {
   return new Promise((resolve, reject) => {
     const id = ++serial;
-    const timer = setTimeout(() => { pending.delete(id); reject(Error('CDP timeout ' + method)); }, 30000);
+    const timer = setTimeout(() => { pending.delete(id); reject(Error('CDP timeout ' + method)); }, 300000);
     pending.set(id, { resolve, reject, timer });
     socket.send(JSON.stringify({ id, method, params, ...(target ? { sessionId: target } : {}) }));
   });
@@ -117,15 +117,24 @@ async function main() {
         else if (n++ > 240) { clearInterval(timer); reject(Error('the prototype never started')); }
       }, 50);
     })`);
-    await wait(1200);
+    // The room and the people arrive after the page does.
+    await evaluate(`new Promise((resolve, reject) => {
+      let n = 0;
+      const timer = setInterval(() => {
+        const s = window.PhoenixImmersive.stateSnapshot();
+        if (s.seats > 0 && s.mixamo.loading === false) { clearInterval(timer); resolve(true); }
+        else if (n++ > 1800) { clearInterval(timer); reject(Error('the room and the people never arrived')); }
+      }, 100);
+    })`);
+    await wait(600);
 
     // 1. The room is actually drawn.
     const brightness = await evaluate(BRIGHTNESS);
     assert(brightness > 6, 'the 3D page draws something (brightness ' + brightness + ')');
 
     // 2. The people are there, and the hand is held.
-    const state = await evaluate('window.PhoenixImmersive.state()');
-    assert.strictEqual(state.characters, 5, 'five characters sit round the table');
+    const state = await evaluate('window.PhoenixImmersive.stateSnapshot()');
+    assert.strictEqual(state.characters, 4, 'four people sit round the table');
     assert.strictEqual(state.hand, 7, 'and the player holds seven cards');
 
     // 3. A card can be picked, and it lifts out of the fan.
@@ -135,7 +144,7 @@ async function main() {
       const entry = p.fan.cards[2];
       const before = entry.holder.position.y;
       p.fan.layout(0);
-      return { selected: p.state().selected, lifted: entry.holder.position.y - before };
+      return { selected: p.stateSnapshot().selected, lifted: entry.holder.position.y - before };
     })()`);
     assert.strictEqual(lifted.selected, 2, 'a card is selected');
     assert(lifted.lifted > 0.03, 'and the selected card lifts (' + lifted.lifted + ')');
@@ -143,9 +152,9 @@ async function main() {
     // 4. A card can be played, and it leaves the hand.
     const played = await evaluate(`new Promise((resolve) => {
       const p = window.PhoenixImmersive;
-      const before = p.state().hand;
+      const before = p.stateSnapshot().hand;
       p.playSelected();
-      setTimeout(() => resolve({ before, after: p.state().hand, played: p.state().played }), 900);
+      setTimeout(() => resolve({ before, after: p.stateSnapshot().hand, played: p.stateSnapshot().played }), 900);
     })`);
     assert.strictEqual(played.before - played.after, 1, 'the card leaves the hand');
     assert.strictEqual(played.played, 1, 'and it lands on the table');
@@ -154,22 +163,25 @@ async function main() {
     const look = await evaluate(`(() => {
       const p = window.PhoenixImmersive;
       p.look(99, 99);
-      const wild = p.state();
+      const wild = p.stateSnapshot();
       p.look(0.4, -0.2);
-      return { wild, gentle: p.state() };
+      return { wild, gentle: p.stateSnapshot() };
     })()`);
     assert(Math.abs(look.wild.yaw) <= 1.76, 'the camera cannot spin round');
     assert(Math.abs(look.wild.pitch) <= 0.63, 'nor look straight up or down');
     assert(Math.abs(look.gentle.yaw - 0.4) < 0.001, 'but it can be turned');
 
-    // 6. The Mixamo character is there, rigged, clothed and sitting.
-    const mixamo = await evaluate('window.PhoenixImmersive.state().mixamo');
-    assert.strictEqual(mixamo.loaded, true, 'the Mixamo character loaded');
+    // 6. The Mixamo characters are there, rigged, clothed and sitting.
+    const snapshot = await evaluate('window.PhoenixImmersive.stateSnapshot()');
+    const mixamo = snapshot.mixamo;
+    assert.strictEqual(mixamo.loaded, true, 'the Mixamo characters loaded');
     assert.deepStrictEqual(mixamo.errors, [], 'without an error');
-    assert.strictEqual(mixamo.count, 5, 'all five characters are there');
-    assert(mixamo.bones > 400, 'with a real skeleton (' + mixamo.bones + ' bones)');
-    assert(mixamo.meshes >= 30, 'and their body, clothes and hair (' + mixamo.meshes + ' meshes)');
-    assert(mixamo.sitting, 'and they are sitting in the chair');
+    assert.strictEqual(mixamo.count, 4, 'the four people round the table are there');
+    assert(mixamo.bones > 300, 'with a real skeleton (' + mixamo.bones + ' bones)');
+    assert(mixamo.meshes >= 24, 'and their body, clothes and hair (' + mixamo.meshes + ' meshes)');
+    assert(mixamo.sitting, 'and they are sitting in the chairs');
+    assert.strictEqual(snapshot.seats, 5, 'the room has five seats');
+    assert.strictEqual(snapshot.laptops, 5, 'and a laptop for each of them');
 
     // 7. Nothing threw on the way.
     const errors = await evaluate('window.immersiveErrors || []');

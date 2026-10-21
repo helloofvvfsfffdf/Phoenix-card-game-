@@ -12,7 +12,7 @@
 'use strict';
 
 import * as THREE from '../../vendor/three/three.module.js';
-import { roundedBox } from './geometry.js';
+import { roundedBox, turned } from './geometry.js';
 import { createBankScreen } from './textures.js';
 
 const SCREEN_WIDTH = 0.29;

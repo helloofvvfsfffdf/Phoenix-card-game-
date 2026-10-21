@@ -100,6 +100,65 @@ body {
   color: var(--immersive-gold);
 }
 
+/* ---- the caption the cinematics speak through ---- */
+
+.immersive-caption {
+  position: fixed;
+  top: 14%;
+  left: 50%;
+  transform: translate(-50%, -8px);
+  max-width: 70vw;
+  padding: 10px 22px;
+  border: 1px solid rgba(255, 209, 107, .5);
+  border-radius: 12px;
+  background: rgba(6, 10, 18, .82);
+  color: #ffe6a8;
+  font-size: clamp(15px, 2.4vw, 24px);
+  font-weight: 800;
+  letter-spacing: 3px;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s ease, transform .25s ease;
+  z-index: 12;
+}
+
+.immersive-caption.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* ---- the video on a laptop screen ---- */
+
+.immersive-embed {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  width: min(46vw, 520px);
+  border: 2px solid #c9963f;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #05080e;
+  z-index: 14;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .6);
+}
+
+.immersive-embed iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+}
+
+.immersive-embed-note {
+  margin: 0;
+  padding: 6px 10px;
+  background: #0b0f18;
+  color: #f0d9a8;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-align: center;
+}
+
 /* ---- the HUD ---- */
 
 .immersive-hud {

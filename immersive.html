@@ -6,7 +6,7 @@
   <title>PHOENIX - Immersive Table (prototype)</title>
   <link rel="stylesheet" href="css/immersive.css" />
 </head>
-<body class="immersive-body">
+<body class="immersive-body" data-map="modern-gaming-lounge">
   <!-- The 3D stage. Everything else is drawn on top of it. -->
   <div id="immersive-stage" class="immersive-stage"></div>
 
@@ -25,6 +25,9 @@
     </p>
     <p><a href="index.html">BACK TO THE MENU</a></p>
   </div>
+
+  <!-- The caption the cinematics speak through. -->
+  <div id="immersive-caption" class="immersive-caption" aria-live="polite"></div>
 
   <!-- The HUD. Small, out of the way, and never over the cards. -->
   <div id="immersive-hud" class="immersive-hud">
@@ -65,6 +68,7 @@
       <div class="immersive-hud-actions">
         <button id="immersive-draw" type="button">DRAW</button>
         <button id="immersive-play" type="button">PLAY CARD</button>
+        <button id="immersive-rehearse" type="button">CINEMATICS</button>
         <button id="immersive-reset" type="button">RESET</button>
         <a href="index.html">BACK TO THE MENU</a>
       </div>

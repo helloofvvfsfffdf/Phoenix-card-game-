@@ -1,10 +1,12 @@
-/* PHOENIX - the immersive (3D) prototype.
+/* PHOENIX - the immersive (3D) table.
  *
- * MILESTONE 1. This is a STANDALONE prototype: it runs on its own page, it
- * uses MOCK data, and it is not connected to the live multiplayer yet. The
- * gameplay it shows is the real game's shape - five people round a table,
- * a hand of up to seven cards, a card picked and played - but nothing here
- * talks to the server.
+ * The scene, the room, the people and the cards.
+ *
+ * The room is a MAP: somebody made it in Blender, it is loaded as it was
+ * made, and the places the game needs - the seats, the laptops, the table,
+ * the deck, the cell - are read out of it by the names of the objects. The
+ * map says where things are; the card system says what they do, and the two
+ * never talk.
  *
  * The camera is FIRST PERSON and SEATED: the player never stands, never
  * walks, and can only look around. The mouse or a finger turns the head,
@@ -14,46 +16,33 @@
 'use strict';
 
 import * as THREE from '../../vendor/three/three.module.js';
-import { createScene, buildRoom, webglAvailable, QUALITY, PALETTE, ROOM } from './scene.js';
+import { createScene, webglAvailable, QUALITY, PALETTE } from './scene.js';
 import { createCharacter, animateCharacter, animateDraw, animatePlay, CHARACTERS } from './characters.js';
 import { createHand, createFan, MAX_HAND } from './hand.js';
-import { createLaptop, createTableLaptops } from './laptop.js';
-import { buildPoster, buildNotepad, buildJailCell } from './props.js';
-import { loadMixamoCharacter, loadMixamoGLB, playAnimation } from './mixamo.js';
+import { createLaptop } from './laptop.js';
+import { buildPoster, buildNotepad } from './props.js';
+import { loadMixamoGLB, playAnimation } from './mixamo.js';
+import { loadMap, playAreaPoint } from './maps.js';
+import { createDirector } from './director.js';
+import { playCinematic } from './cinematics.js';
 
-const SEATS = 6;
+const CHARACTER_FILES = ['ash', 'brook', 'cass', 'dara', 'emery'];
 /** The height of the seat of a chair, which is where a seated person's hips are. */
 const SEAT_HEIGHT = 0.52;
-const SETTINGS_KEY = 'phoenix.immersive.settings.v1';
-
-const DEFAULTS = {
-  quality: 'medium',
-  sensitivity: 1,
-  reducedMotion: false
-};
-
-/** The mock hand. Real card records, so the faces are the real faces. */
-function mockHand() {
-  const Cards = window.PhoenixCards;
-  const ids = ['bonus', 'knife', 'steal', 'trick', 'wheel', 'hostage', 'support'];
-  return ids
-    .map(function (id) { return Cards ? Cards.byId(id) : null; })
-    .filter(Boolean);
-}
 
 function readSettings() {
   let saved = {};
   try {
-    saved = JSON.parse(window.localStorage.getItem(SETTINGS_KEY) || '{}');
+    saved = JSON.parse(window.localStorage.getItem('phoenix.immersive.settings.v1') || '{}');
   } catch (error) {
     saved = {};
   }
-  return Object.assign({}, DEFAULTS, saved);
+  return Object.assign({ quality: 'medium', sensitivity: 1, reducedMotion: false }, saved);
 }
 
 function saveSettings(settings) {
   try {
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    window.localStorage.setItem('phoenix.immersive.settings.v1', JSON.stringify(settings));
   } catch (error) { /* the settings simply do not persist */ }
 }
 
@@ -68,6 +57,7 @@ export function startPrototype(root) {
   const hud = root.querySelector('#immersive-hud');
   const loading = root.querySelector('#immersive-loading');
   const failure = root.querySelector('#immersive-failure');
+  const caption = root.querySelector('#immersive-caption');
 
   if (!webglAvailable()) {
     if (loading) loading.hidden = true;
@@ -79,31 +69,10 @@ export function startPrototype(root) {
   const view = createScene(stage, { quality: settings.quality });
   const { renderer, scene, camera } = view;
 
-  const room = buildRoom(scene, { seats: SEATS, quality: settings.quality });
-
-  /* ---- the people round the table ---- */
-
-  const characters = [];
-  for (let i = 0; i < SEATS - 1; i++) {
-    const look = CHARACTERS[i % CHARACTERS.length];
-    const character = createCharacter({ look: look });
-    const angle = ((i + 1) / SEATS) * Math.PI * 2;
-    const radius = room.tableRadius + 0.72;
-    character.root.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
-    character.root.rotation.y = angle + Math.PI;
-    character.eyes = [];
-    scene.add(character.root);
-    characters.push(character);
-  }
-
   /* ---- the player: seated, in the first person ---- */
 
-  // The seat the camera sits in, and the height of a seated person's eyes.
-  const seatAngle = 0;
-  const seatRadius = room.tableRadius + 0.72;
+  const cameraState = { yaw: 0, pitch: 0, dragging: false, lastX: 0, lastY: 0, pointerId: null, moved: 0 };
   const head = new THREE.Group();
-  head.position.set(Math.sin(seatAngle) * seatRadius, 1.16, Math.cos(seatAngle) * seatRadius);
-  head.rotation.y = seatAngle + Math.PI;
   scene.add(head);
   camera.position.set(0, 0, 0);
   head.add(camera);
@@ -112,105 +81,18 @@ export function startPrototype(root) {
   const hands = createHand(camera, { skin: look.skin, sleeve: look.shirt });
   const fan = createFan(camera, {});
 
-  /* ---- the laptops ---- */
+  /* ---- what is on the table ---- */
 
-  // One open laptop on the table in front of every player, turned to face
-  // them and low enough that it hides neither the table nor their cards. The
-  // screen is a live canvas: your PHOENIX points balance, a green or red band
-  // when it moves, and a LEAVE MATCH button.
-  const laptops = createTableLaptops(scene, {
-    seats: SEATS,
-    radius: room.tableRadius - 0.42,
-    tableHeight: room.tableHeight
-  });
-  const laptopBySeat = {};
-  laptops.forEach(function (entry) { laptopBySeat[entry.seat] = entry.laptop; });
-
-  // The balances on the screens. In a real match these come from the server;
-  // here they are the mock table's, and they move so the notifications can
-  // be seen working.
-  const balances = {};
-  Object.keys(laptopBySeat).forEach(function (seat) { balances[seat] = 0; });
-  let nextSwing = 4;
-
-  /* ---- the Mixamo character ---- */
-
-  // Every seat is taken by a real person: a Mixamo model with its skeleton,
-  // its clothes, its hair and its textures. The files are the downloads the
-  // owner made, converted into small glTF files with the pictures made a
-  // sensible size, so a character arrives in a moment rather than a coffee
-  // break. They arrive after the room is already standing, so the table is
-  // never waiting for a download.
-  const CHARACTER_FILES = ['ash', 'brook', 'cass', 'dara', 'emery'];
-  const mixamo = {
-    loading: true,
+  const state = {
+    map: null,
+    seats: [],
+    laptops: [],
     characters: [],
-    errors: [],
-    clipNames: [],
-    seat: -1
+    mixamo: { loading: true, characters: [], errors: [], clipNames: [] },
+    hand: [],
+    selected: -1,
+    played: []
   };
-
-  CHARACTER_FILES.forEach(function (name, index) {
-    const seat = index + 1;
-    const placeholder = characters[index];
-    const angle = (seat / SEATS) * Math.PI * 2;
-    const radius = room.tableRadius + 0.72;
-
-    loadMixamoGLB('assets/mixamo/characters/' + name + '.glb', { name: name })
-      .then(function (loaded) {
-        loaded.group.position.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
-        loaded.group.rotation.y = angle + Math.PI;
-        scene.add(loaded.group);
-
-        // The placeholder steps aside.
-        if (placeholder) placeholder.root.visible = false;
-
-        mixamo.characters.push({ seat: seat, character: loaded, name: name });
-        mixamo.clipNames = loaded.clipNames;
-
-        // The character sits down. The sitting animation is the one Mixamo
-        // calls "Sitting Idle", extracted into a small file of keyframes; the
-        // skeleton is never bent by hand into a shape nobody would sit like.
-        return playAnimation(loaded, 'sittingIdle', { loop: true }).then(function (played) {
-          loaded.sitting = !!played;
-          // The character is placed by its hips, which have to be on the seat
-          // of the chair: the models do not all start from the same place, and
-          // the seat is a known height.
-          const hips = loaded.bones.filter(function (bone) {
-            return /Hips/.test(bone.name) && bone.name.indexOf('_') === -1;
-          })[0];
-          if (hips) {
-            const where = new THREE.Vector3();
-            hips.getWorldPosition(where);
-            loaded.group.position.y += SEAT_HEIGHT - where.y;
-          }
-        });
-      })
-      .catch(function (error) {
-        mixamo.errors.push((name || 'a character') + ': ' +
-          (error && error.message ? error.message : String(error)));
-      })
-      .then(function () {
-        if (mixamo.characters.length + mixamo.errors.length >= CHARACTER_FILES.length) {
-          mixamo.loading = false;
-          mixamo.seat = mixamo.characters.length ? mixamo.characters[0].seat : -1;
-          const line = document.getElementById('immersive-status');
-          if (line) {
-            line.textContent = mixamo.errors.length
-              ? mixamo.errors.length + ' character(s) could not be loaded: ' + mixamo.errors[0]
-              : mixamo.characters.length + ' Mixamo characters are sitting at the table.';
-          }
-        }
-      });
-  });
-
-  /* ---- the things in the room ---- */
-
-  buildPoster(scene, { x: -0.4, z: -ROOM.depth / 2 + 0.06, ry: 0 });
-  buildNotepad(scene, {});
-  buildJailCell(scene, {});
-
-  /* ---- the mock game ---- */
 
   const mock = {
     hand: mockHand(),
@@ -220,16 +102,149 @@ export function startPrototype(root) {
   };
   fan.set(mock.hand);
 
+  /* ---- the director and the cinematics ---- */
+
+  const director = createDirector({
+    scene: scene,
+    camera: camera,
+    cameraState: cameraState,
+    cameraPosition: new THREE.Vector3(),
+    characters: state.characters,
+    laptops: state.laptops,
+    seats: 5,
+    tableRadius: 1.9,
+    tableHeight: 1.0,
+    lights: { lamp: view.lamp, hemi: view.hemi, hemiBase: view.hemi.intensity },
+    caption: caption,
+    localSeat: 0
+  });
+
+  /* ---- the map ---- */
+
+  const mapId = root.getAttribute('data-map') || 'modern-gaming-lounge';
+  loadMap(mapId, { seats: 5 })
+    .then(function (map) {
+      state.map = map;
+      scene.add(map.root);
+
+      // The room's own lights, and the ones the scene already had.
+      map.lights.forEach(function (light) { scene.add(light); });
+
+      state.seats = map.anchors.seats.slice(0, 5);
+
+      // The local player sits in the first seat, and the camera is their eyes.
+      const mine = state.seats[0];
+      if (mine) {
+        head.position.set(mine.position.x, mine.eye, mine.position.z);
+        cameraState.yaw = 0;
+        head.rotation.y = 0;
+        // The camera looks at the middle of the table from where they sit.
+        const table = map.anchors.table;
+        if (table) {
+          const toTable = Math.atan2(table.centre.x - mine.position.x, table.centre.z - mine.position.z);
+          head.rotation.y = toTable + Math.PI;
+          cameraState.yaw = 0;
+        }
+      }
+
+      // The laptops: the room says where they stand, and the game puts a
+      // LIVE bank screen on each of them.
+      const surface = map.anchors.table ? map.anchors.table.surface : 1.0;
+      state.laptops = map.anchors.laptops.map(function (anchor) {
+        const laptop = createLaptop({});
+        laptop.group.position.set(anchor.position.x, surface + 0.002, anchor.position.z);
+        laptop.group.quaternion.copy(anchor.quaternion);
+        scene.add(laptop.group);
+        return { seat: anchor.seat - 1, laptop: laptop, anchor: anchor };
+      });
+
+      // The PHOENIX decorations, on the new room's walls.
+      buildPoster(scene, { x: -5.86, z: -1.2, ry: Math.PI / 2 });
+      if (map.anchors.counter) {
+        buildNotepad(scene, {
+          x: map.anchors.counter.x,
+          y: map.anchors.counterTop + 0.01,
+          z: map.anchors.counter.z
+        });
+      }
+
+      // The people: one at each seat, once their model has arrived.
+      placeCharacters();
+    })
+    .catch(function (error) {
+      const line = root.querySelector('#immersive-status');
+      if (line) line.textContent = 'The room could not be loaded: ' +
+        (error && error.message ? error.message : String(error));
+    });
+
+  /* ---- the people ---- */
+
+  function seatPlace(seat) {
+    const entry = state.seats[seat];
+    if (!entry) return null;
+    return {
+      position: entry.position.clone(),
+      angle: entry.angle,
+      // Just behind the chair, where somebody stands up from it.
+      standing: entry.position.clone().add(
+        new THREE.Vector3(Math.sin(entry.angle), 0, Math.cos(entry.angle)).multiplyScalar(0.55))
+    };
+  }
+
+  function placeCharacters() {
+    // The first seat is the local player's - they are the camera. The rest
+    // are the people round the table.
+    CHARACTER_FILES.slice(0, Math.max(0, state.seats.length - 1)).forEach(function (name, index) {
+      const seat = index + 1;
+      const place = seatPlace(seat);
+      if (!place) return;
+      loadMixamoGLB('assets/mixamo/characters/' + name + '.glb', { name: name })
+        .then(function (loaded) {
+          loaded.group.position.set(place.position.x, 0, place.position.z);
+          loaded.group.rotation.y = place.angle + Math.PI;
+          scene.add(loaded.group);
+          state.characters[seat] = loaded;
+          state.mixamo.characters.push({ seat: seat, character: loaded, name: name });
+          state.mixamo.clipNames = loaded.clipNames;
+          return playAnimation(loaded, 'sittingIdle', { loop: true }).then(function (played) {
+            loaded.sitting = !!played;
+            // The character is placed by its hips, which have to be on the
+            // seat of the chair: the models do not all start from the same
+            // place, and the seat is a known height.
+            const hips = loaded.bones.filter(function (bone) {
+              return /Hips/.test(bone.name) && bone.name.indexOf('_') === -1;
+            })[0];
+            const where = hips ? hips.getWorldPosition(new THREE.Vector3()) : null;
+            const seatInfo = state.seats[seat];
+            const top = seatInfo ? seatInfo.seatTop : SEAT_HEIGHT;
+            if (where && isFinite(where.y)) {
+              loaded.group.position.y += top - where.y;
+            } else {
+              loaded.group.position.y = top;
+            }
+          });
+        })
+        .catch(function (error) {
+          state.mixamo.errors.push(name + ': ' +
+            (error && error.message ? error.message : String(error)));
+        })
+        .then(function () {
+          if (state.mixamo.characters.length + state.mixamo.errors.length >=
+              Math.max(0, state.seats.length - 1)) {
+            state.mixamo.loading = false;
+            const line = root.querySelector('#immersive-status');
+            if (line) {
+              line.textContent = state.mixamo.errors.length
+                ? state.mixamo.errors.length + ' character(s) could not be loaded: ' + state.mixamo.errors[0]
+                : state.mixamo.characters.length + ' characters are sitting at the table.';
+            }
+          }
+        });
+    });
+  }
+
   /* ---- the camera: seated, looking around, and nothing more ---- */
 
-  const cameraState = {
-    yaw: 0,
-    pitch: 0,
-    dragging: false,
-    lastX: 0,
-    lastY: 0,
-    pointerId: null
-  };
   const LIMITS = { yaw: 1.75, pitch: 0.62 };
 
   function lookBy(dx, dy) {
@@ -241,8 +256,6 @@ export function startPrototype(root) {
   const canvas = renderer.domElement;
 
   canvas.addEventListener('pointerdown', function (event) {
-    // A drag looks around; a tap picks a card. The tap is decided on the way
-    // up, by how far the pointer moved.
     cameraState.dragging = true;
     cameraState.pointerId = event.pointerId;
     cameraState.lastX = event.clientX;
@@ -273,7 +286,6 @@ export function startPrototype(root) {
   canvas.addEventListener('pointerup', function (event) {
     const moved = cameraState.moved || 0;
     endDrag(event);
-    // A tap, not a drag: pick a card.
     if (moved < 6) {
       const pointer = new THREE.Vector2(
         (event.clientX / window.innerWidth) * 2 - 1,
@@ -296,7 +308,6 @@ export function startPrototype(root) {
     updateHud();
   }
 
-  /** The card lifts off the fan, travels to the table, and lands there. */
   function playSelected() {
     if (mock.selected < 0) return;
     const index = mock.selected;
@@ -306,21 +317,23 @@ export function startPrototype(root) {
     fan.set(mock.hand);
     mock.selected = -1;
 
-    // The card is put into the WORLD, so it can travel to the table.
+    // The card is put into the room, so it can travel to the table.
     const mesh = entry.mesh;
     const cardGroup = new THREE.Group();
     cardGroup.add(mesh);
     scene.add(cardGroup);
-    // The card was in the camera's space; put it back into the room's.
     mesh.position.set(0, 0, 0);
     mesh.rotation.set(0, 0, 0);
     cardGroup.position.copy(camera.getWorldPosition(new THREE.Vector3()));
     cardGroup.quaternion.copy(camera.getWorldQuaternion(new THREE.Quaternion()));
+
+    const table = state.map && state.map.anchors.table;
+    const to = new THREE.Vector3(0, playAreaPoint(state.map ? state.map.anchors : {}, mock.played.length),
+      table ? table.centre.z : 0);
     flying.push({
       group: cardGroup,
-      mesh: mesh,
       from: cardGroup.position.clone(),
-      to: new THREE.Vector3(0, room.tableHeight - 0.02, 0),
+      to: to,
       start: performance.now(),
       duration: settings.reducedMotion ? 120 : 520,
       onDone: function () {
@@ -337,7 +350,6 @@ export function startPrototype(root) {
     updateHud();
   }
 
-  /** A card slides in from the deck, the way a draw does. */
   function drawCard() {
     if (mock.hand.length >= MAX_HAND) {
       setStatus('Your hand is full - play a card first.');
@@ -359,9 +371,6 @@ export function startPrototype(root) {
   const hudSelected = hud.querySelector('#immersive-selected');
   const hudHand = hud.querySelector('#immersive-hand');
   const hudStatus = hud.querySelector('#immersive-status');
-  const hudQuality = hud.querySelector('#immersive-quality');
-  const hudSensitivity = hud.querySelector('#immersive-sensitivity');
-  const hudReduced = hud.querySelector('#immersive-reduced');
 
   function setStatus(message) {
     if (hudStatus) hudStatus.textContent = message;
@@ -373,10 +382,12 @@ export function startPrototype(root) {
         ? mock.hand[mock.selected].name
         : 'Nothing selected';
     }
-    if (hudHand) {
-      hudHand.textContent = mock.hand.length + ' of ' + MAX_HAND + ' cards in hand';
-    }
+    if (hudHand) hudHand.textContent = mock.hand.length + ' of ' + MAX_HAND + ' cards in hand';
   }
+
+  const hudQuality = hud.querySelector('#immersive-quality');
+  const hudSensitivity = hud.querySelector('#immersive-sensitivity');
+  const hudReduced = hud.querySelector('#immersive-reduced');
 
   if (hudQuality) {
     hudQuality.value = settings.quality;
@@ -417,6 +428,38 @@ export function startPrototype(root) {
       updateHud();
     });
   }
+  const rehearseButton = hud.querySelector('#immersive-rehearse');
+  if (rehearseButton) rehearseButton.addEventListener('click', rehearse);
+
+  /* ---- the rehearsal: the card cinematics, on demand ---- */
+
+  /**
+   * Play the cinematics one after another, with the events the server would
+   * send. It is how the cinematics are looked at without a table of real
+   * players.
+   */
+  function rehearse() {
+    const script = [
+      { cardId: 'steal', seat: 1, targetSeat: 3 },
+      { cardId: 'judge', seat: 0, targetSeat: 4 },
+      { cardId: 'hostage', seat: 2, targetSeat: 3 },
+      { cardId: 'mimic', seat: 1, targetSeat: 1 },
+      { cardId: 'nothing', seat: 5, targetSeat: -1 }
+    ];
+    let chain = Promise.resolve();
+    script.forEach(function (step) {
+      chain = chain.then(function () {
+        const events = [
+          { type: 'card', cardId: step.cardId, seat: step.seat, targetSeat: step.targetSeat },
+          { type: 'result', cardId: step.cardId, text: '' }
+        ];
+        return playCinematic(step.cardId, director.context, events);
+      });
+    });
+    chain.then(function () {
+      setStatus('That was the whole lot of them.');
+    });
+  }
 
   /* ---- the loop ---- */
 
@@ -432,38 +475,13 @@ export function startPrototype(root) {
     head.rotation.y = cameraState.yaw;
     head.rotation.x = cameraState.pitch;
 
-    characters.forEach(function (character) {
-      animateCharacter(character, time, delta, settings.reducedMotion);
+    // The people are Mixamo models, so their own animations are what move
+    // them: the mixer, and nothing else.
+    state.characters.forEach(function (character) {
+      if (!character) return;
+      character.mixer.update(delta);
     });
 
-    // The Mixamo characters' own animations.
-    mixamo.characters.forEach(function (entry) {
-      entry.character.mixer.update(delta);
-    });
-
-    // The laptops: their screens are redrawn when the balance moves, so the
-    // positive and negative notifications really happen.
-    if (!settings.reducedMotion && time > nextSwing) {
-      nextSwing = time + 5 + Math.random() * 6;
-      laptops.forEach(function (entry) {
-        const change = Math.round((Math.random() - 0.45) * 20000);
-        balances[entry.seat] += change;
-        entry.laptop.bank.set(balances[entry.seat], change >= 0 ? 'Round won' : 'Round lost');
-      });
-    }
-    laptops.forEach(function (entry) { entry.laptop.bank.tick(); });
-
-    // The fire in the grate: a slow flicker, and the light it throws moves with
-    // it. Reduced motion keeps the light steady.
-    if (room.fireplace) {
-      const flicker = settings.reducedMotion
-        ? 1
-        : 0.82 + Math.sin(time * 7.3) * 0.1 + Math.sin(time * 11.7) * 0.06;
-      room.fireplace.light.intensity = 9 * flicker;
-      room.fireplace.mesh.scale.set(1, 1.5 * (0.9 + flicker * 0.12), 0.6);
-    }
-
-    // The player's own hands breathe a little, and the fan settles.
     if (!settings.reducedMotion) {
       hands.group.position.y = Math.sin(time * 1.05) * 0.008;
       hands.group.rotation.z = Math.sin(time * 0.6) * 0.012;
@@ -487,6 +505,14 @@ export function startPrototype(root) {
       }
     }
 
+    // The balances on the screens.
+    state.laptops.forEach(function (entry) {
+      entry.laptop.bank.tick();
+    });
+
+    // Where the camera is, for the cinematics that want to look at it.
+    camera.getWorldPosition(director.context.cameraPosition);
+
     renderer.render(scene, camera);
   }
 
@@ -503,43 +529,44 @@ export function startPrototype(root) {
 
   return {
     view: view,
-    room: room,
-    characters: characters,
-    fan: fan,
+    state: state,
     mock: mock,
+    fan: fan,
     settings: settings,
+    director: director,
     selectCard: selectCard,
     playSelected: playSelected,
     drawCard: drawCard,
-    // A small handle on the camera, so an automated check can look around
-    // and take a picture of each side of the table.
+    rehearse: rehearse,
+    // Look around, for the check and for the cinematics.
     look: function (yaw, pitch) {
       cameraState.yaw = Math.max(-LIMITS.yaw, Math.min(LIMITS.yaw, yaw || 0));
       cameraState.pitch = Math.max(-LIMITS.pitch, Math.min(LIMITS.pitch, pitch || 0));
     },
-    mixamo: mixamo,
-    state: function () {
+    stateSnapshot: function () {
       return {
         hand: mock.hand.length,
         selected: mock.selected,
         played: mock.played.length,
-        characters: characters.length,
+        seats: state.seats.length,
+        laptops: state.laptops.length,
+        characters: state.mixamo.characters.length,
         yaw: cameraState.yaw,
         pitch: cameraState.pitch,
         mixamo: {
-          loading: mixamo.loading,
-          loaded: mixamo.characters.length > 0,
-          count: mixamo.characters.length,
-          errors: mixamo.errors,
-          sitting: mixamo.characters.every(function (entry) { return entry.character.sitting; }),
-          seat: mixamo.seat,
-          clips: mixamo.clipNames,
-          bones: mixamo.characters.reduce(function (n, entry) {
+          loading: state.mixamo.loading,
+          loaded: state.mixamo.characters.length > 0,
+          count: state.mixamo.characters.length,
+          errors: state.mixamo.errors,
+          bones: state.mixamo.characters.reduce(function (n, entry) {
             return n + entry.character.bones.length;
           }, 0),
-          meshes: mixamo.characters.reduce(function (n, entry) {
+          meshes: state.mixamo.characters.reduce(function (n, entry) {
             return n + entry.character.meshes.length;
-          }, 0)
+          }, 0),
+          sitting: state.mixamo.characters.every(function (entry) {
+            return !!entry.character.sitting;
+          })
         }
       };
     },
@@ -551,6 +578,15 @@ export function startPrototype(root) {
   };
 }
 
+/** The mock hand: real card records, so the faces are the real faces. */
+function mockHand() {
+  const Cards = window.PhoenixCards;
+  const ids = ['bonus', 'knife', 'steal', 'trick', 'wheel', 'hostage', 'support'];
+  return ids
+    .map(function (id) { return Cards ? Cards.byId(id) : null; })
+    .filter(Boolean);
+}
+
 /**
  * Start the prototype as soon as the page is ready.
  *
@@ -558,9 +594,8 @@ export function startPrototype(root) {
  * server, and nothing here can break a real match.
  */
 function boot() {
-  const prototype = startPrototype(document.body);
-  window.PhoenixImmersive = prototype;
-  return prototype;
+  window.PhoenixImmersive = startPrototype(document.body);
+  return window.PhoenixImmersive;
 }
 
 if (document.readyState === 'loading') {
