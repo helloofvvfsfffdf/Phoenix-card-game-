@@ -971,7 +971,7 @@ test('the legendary cards are deliberately absent from the composition', functio
 suite('Cards');
 
 test('the game includes the full card catalogue', function () {
-  equal(Cards.CARDS.length, 39);
+  equal(Cards.CARDS.length, 40);
 });
 
 test('the thirty-eight cards are exactly the ones specified', function () {
@@ -982,7 +982,7 @@ test('the thirty-eight cards are exactly the ones specified', function () {
     ' | Dice Challenge | Rock Paper Scissors | Betrayal | Speed Challenge' +
     ' | Wheel of Fortune | Linked Fate | Impostor | Ally Swapper | Wheel of Misfortune' +
     ' | Musical Chairs | Russian Roulette | Memory Mayhem | Bank Robbery' +
-     ' | Point Swap | Hostage Situation | Definitely Not Amazon | President | Joshua Survey' +
+      ' | Point Swap | Hostage Situation | PHOENIXTube | Definitely Not Amazon | President | Joshua Survey' +
     ' | Did You Like the Trailer? | Enjoying the Trailer | The Mimic' +
     ' | Dehydrated? Maybe Drink Some Water' +
     ' | Nothing | The Uno Reverse of Doom | PHOENIX Entertainment Customer Support');
@@ -1001,7 +1001,7 @@ test('card ids are all lowercase, so resolve() always finds them', function () {
 
 test('the aimed cards are the cards that ask for a player', function () {
   var needs = Cards.CARDS.filter(function (c) { return c.needsTarget; }).map(function (c) { return c.id; });
-  equal(needs.join(','), 'knife,zombie,steal,reveal,trick,stealturn,curse,alvin,dice,rps,betrayal,speed,linkedfate,swapper,russianroulette,pointswap,hostage,definitelynotamazon,trailer,enjoyingthetrailer,mimic,dehydrated,support');
+  equal(needs.join(','), 'knife,zombie,steal,reveal,trick,stealturn,curse,alvin,dice,rps,betrayal,speed,linkedfate,swapper,russianroulette,pointswap,hostage,phoenixtube,definitelynotamazon,trailer,enjoyingthetrailer,mimic,dehydrated,support');
 });
 
 test('the two cards that hand back a choice say so', function () {

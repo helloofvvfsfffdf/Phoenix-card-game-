@@ -18,7 +18,7 @@ module.exports=function(test,equal,deepEqual,assert){
   test('all non-Phoenix sounds, ally recipes and victory/defeat remain byte-for-byte unchanged',function(){
     // Only the recipes that existed BEFORE the expansion are hashed, so this
     // guard still means "nothing that was already there has changed".
-    var expansionOnly=['musicalchairs','russianroulette','memorymayhem','bankrobbery','pointswap','hostage','president','mimic','dehydrated','nothing','reverseofdoom','support','joshuasurvey','trailer','enjoyingthetrailer'];
+    var expansionOnly=['musicalchairs','russianroulette','memorymayhem','bankrobbery','pointswap','hostage','phoenixtube','president','mimic','dehydrated','nothing','reverseofdoom','support','joshuasurvey','trailer','enjoyingthetrailer'];
     var preExpansion=Object.keys(E.DEFINITIONS).filter(function(k){return k!=='phoenix'&&expansionOnly.indexOf(k)===-1;});
     var h=crypto.createHash('sha256');preExpansion.filter(function(k){return k!=='phoenix';}).concat(['victory','defeat','draw']).forEach(function(k){h.update(k);h.update(JSON.stringify(Sound.recipe(k)));h.update(JSON.stringify(Sound.recipe(k,true)));});
     equal(h.digest('hex'),'42ebdf941f8ad2ac58c72f59731c3998dd201db807169b0f39266daac84316dc','shopping card sound catalogue baseline');

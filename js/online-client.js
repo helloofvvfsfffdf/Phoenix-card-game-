@@ -1264,7 +1264,7 @@ function renderPlaying() {
         if (player) actions.append(el('p', 'shopping-table-notice', '🛒 ' + player.name + ' is completing a shopping challenge.'));
       });
     }
-    if (state.shoppingChallenge) {
+     if (state.shoppingChallenge) {
       const box = el('div', 'shopping-match-card');
       box.append(el('h3', '', '🛒 Definitely Not Amazon'));
       box.append(el('p', '', state.shoppingChallenge.actorName + ' sent you shopping. Your PHOENIX match stays open while you browse.'));
@@ -1274,8 +1274,25 @@ function renderPlaying() {
       const back = el('button', 'online-secondary', 'RETURN TO SHOPPING');
       back.type = 'button'; back.onclick = () => window.open('/shopping.html?token=' + encodeURIComponent(state.shoppingChallenge.token), '_blank', 'noopener');
       box.append(open, back, el('small', '', 'You have five minutes. This button is only visible to you.'));
-      actions.append(box);
-    }
+       actions.append(box);
+     }
+     const tubePlayers = state.phoenixTubePlayers || [];
+     tubePlayers.forEach(id => {
+       const player = state.players.find(p => p.id === id);
+       if (player) actions.append(el('p', 'phoenixtube-table-notice', '📺 ' + player.name + ' is completing a PHOENIXTube challenge.'));
+     });
+     if (state.phoenixTubeChallenge) {
+       const box = el('div', 'phoenixtube-match-card');
+       box.append(el('h3', '', '📺 PHOENIXTube'));
+       box.append(el('p', '', state.phoenixTubeChallenge.actorName + ' sent you to PHOENIXTube. Your PHOENIX match stays open while you watch.'));
+       const open = el('button', 'online-primary', 'OPEN PHOENIXTUBE');
+       open.type = 'button';
+       open.onclick = () => window.open('/phoenixtube.html?token=' + encodeURIComponent(state.phoenixTubeChallenge.token), '_blank', 'noopener');
+       const back = el('button', 'online-secondary', 'RETURN TO PHOENIXTUBE');
+       back.type = 'button'; back.onclick = () => window.open('/phoenixtube.html?token=' + encodeURIComponent(state.phoenixTubeChallenge.token), '_blank', 'noopener');
+       box.append(open, back, el('small', '', 'You have ten minutes. These controls are private to you.'));
+       actions.append(box);
+     }
 
     if (state.over) {
       // The victory screen, restored from the previous client (commit a66b491).

@@ -24,12 +24,14 @@ const FriendAccess = require('./js/friend-access.js');
 const interactionView = require('./js/interaction-view.js');
 const SpeedInteraction = require('./js/speed-interaction.js');
 const Shopping = require('./js/shopping-challenge.js');
+const PhoenixTube = require('./js/phoenix-tube-challenge.js');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
 const OWNER_PASSWORD = process.env.PHOENIX_OWNER_PASSWORD || '';
 const MODE_ACCESS_CODE = process.env.PHOENIX_MODE_ACCESS_CODE || '';
 const SHOPPING_TIMEOUT_MS = 5 * 60 * 1000;
+const PHOENIXTUBE_TIMEOUT_MS = 10 * 60 * 1000;
 
 if (MODE_ACCESS_CODE.length < 12 || MODE_ACCESS_CODE.length > 256) {
   console.error('Set PHOENIX_MODE_ACCESS_CODE to a private access code of 12-256 characters.');
@@ -1796,6 +1798,14 @@ function shoppingForToken(token) {
   return null;
 }
 
+function phoenixTubeForToken(token) {
+  for (const room of rooms.values()) {
+    const challenge = room.phoenixTubeChallenges && room.phoenixTubeChallenges.get(token);
+    if (challenge) return { room, challenge };
+  }
+  return null;
+}
+
 function startShoppingChallenge(room, actorId, targetId) {
   room.shoppingChallenges = room.shoppingChallenges || new Map();
   room.lastShoppingRecipeByPlayer = room.lastShoppingRecipeByPlayer || {};
@@ -1819,6 +1829,31 @@ function settleShopping(room, challenge, outcome) {
     addLog(room, player.name + (outcome === 'complete'
       ? ' completed the Definitely Not Amazon challenge and earned 20,000 points.'
       : ' did not finish the Definitely Not Amazon challenge and lost 10,000 points.'));
+  }
+  broadcast(room);
+}
+
+function startPhoenixTubeChallenge(room, actorId, targetId) {
+  room.phoenixTubeChallenges = room.phoenixTubeChallenges || new Map();
+  const challenge = PhoenixTube.create();
+  challenge.actorId = actorId;
+  challenge.targetId = targetId;
+  room.phoenixTubeChallenges.set(challenge.token, challenge);
+  challenge.timer = setTimeout(() => settlePhoenixTube(room, challenge, 'timeout'), PHOENIXTUBE_TIMEOUT_MS + 100);
+  return challenge;
+}
+
+function settlePhoenixTube(room, challenge, outcome) {
+  if (!challenge || challenge.rewarded || (outcome !== 'complete' && challenge.status !== 'open')) return;
+  if (room.state && room.state.over) { challenge.status = 'cancelled'; return; }
+  challenge.status = outcome === 'complete' ? 'complete' : 'failed';
+  challenge.rewarded = true;
+  const player = room.state && room.state.players.find(p => p.id === challenge.targetId);
+  if (player) {
+    player.points += outcome === 'complete' ? 20000 : -10000;
+    addLog(room, player.name + (outcome === 'complete'
+      ? ' completed the PHOENIXTube code challenge and earned 20,000 points.'
+      : ' did not finish the PHOENIXTube challenge and lost 10,000 points.'));
   }
   broadcast(room);
 }
@@ -1905,6 +1940,31 @@ const httpServer = http.createServer(async (req, res) => {
     if (req.method === 'POST' && pathname === '/api/shopping/checkout') {
       const result = Shopping.complete(challenge, await readJsonBody());
       if (result.ok) settleShopping(room, challenge, 'complete');
+      return sendJson(result, result.ok ? 200 : 400);
+    }
+    return sendJson({ ok:false, message:'Not found.' }, 404);
+  }
+
+  if (pathname.indexOf('/api/phoenixtube/') === 0) {
+    const token = new URL(req.url, 'http://localhost').searchParams.get('token') || '';
+    const found = phoenixTubeForToken(token);
+    if (!found) return sendJson({ ok:false, message:'That PHOENIXTube challenge is no longer available.' }, 404);
+    const { room, challenge } = found;
+    if (req.method === 'GET' && pathname === '/api/phoenixtube/state') {
+      if (PhoenixTube.expired(challenge) && challenge.status === 'open') settlePhoenixTube(room, challenge, 'timeout');
+      return sendJson(PhoenixTube.publicState(challenge));
+    }
+    if (req.method === 'GET' && pathname === '/api/phoenixtube/reveal') {
+      const videoId = new URL(req.url, 'http://localhost').searchParams.get('video') || '';
+      const at = Number(new URL(req.url, 'http://localhost').searchParams.get('at'));
+      const video = challenge.videos.find(v => v.id === videoId);
+      if (!video || !Number.isFinite(at) || at < video.revealAt) return sendJson({ ok:false, visible:false });
+      return sendJson({ ok:true, visible:true, digit:video.digit });
+    }
+    if (req.method === 'POST' && pathname === '/api/phoenixtube/submit') {
+      const result = PhoenixTube.submit(challenge, (await readJsonBody()).code);
+      if (result.ok) settlePhoenixTube(room, challenge, 'complete');
+      else if (PhoenixTube.expired(challenge) && challenge.status === 'open') settlePhoenixTube(room, challenge, 'timeout');
       return sendJson(result, result.ok ? 200 : 400);
     }
     return sendJson({ ok:false, message:'Not found.' }, 404);
@@ -2589,6 +2649,9 @@ function snapshot(room, member) {
   const shopping = room.shoppingChallenges
     ? [...room.shoppingChallenges.values()].find(c => c.status === 'open' && c.targetId === mine)
     : null;
+  const phoenixTube = room.phoenixTubeChallenges
+    ? [...room.phoenixTubeChallenges.values()].find(c => c.status === 'open' && c.targetId === mine)
+    : null;
 
   // A HOSTAGE'S TURN belongs to the hostage, but the CRIMINAL plays it, so
   // the criminal is the one who is acting and the one who is given the moves.
@@ -2727,6 +2790,14 @@ function snapshot(room, member) {
     } : null,
     shoppingPlayers: room.shoppingChallenges
       ? [...room.shoppingChallenges.values()].filter(c => c.status === 'open').map(c => c.targetId)
+      : [],
+    phoenixTubeChallenge: phoenixTube ? {
+      token: phoenixTube.token,
+      expiresAt: phoenixTube.expiresAt,
+      actorName: (room.members.find(m => Rules.SEATS[m.seat].id === phoenixTube.actorId) || {}).name || 'An opponent'
+    } : null,
+    phoenixTubePlayers: room.phoenixTubeChallenges
+      ? [...room.phoenixTubeChallenges.values()].filter(c => c.status === 'open').map(c => c.targetId)
       : [],
 
     deckCount: s ? s.deck.length : 0,
@@ -2924,6 +2995,12 @@ function closeRoom(room, reason) {
   if (room.pendingInteraction && room.pendingInteraction.countdownTimer) clearTimeout(room.pendingInteraction.countdownTimer);
   if (room.shoppingChallenges) {
     room.shoppingChallenges.forEach(challenge => {
+      if (challenge.timer) clearTimeout(challenge.timer);
+      if (challenge.status === 'open') challenge.status = 'cancelled';
+    });
+  }
+  if (room.phoenixTubeChallenges) {
+    room.phoenixTubeChallenges.forEach(challenge => {
       if (challenge.timer) clearTimeout(challenge.timer);
       if (challenge.status === 'open') challenge.status = 'cancelled';
     });
@@ -3637,6 +3714,7 @@ async function handle(ws, data) {
       createdAt: Date.now(),
       members: [],
       shoppingChallenges: new Map(),
+      phoenixTubeChallenges: new Map(),
       state: null,
       phase: 'lobby',
       requestedRounds: 10,
@@ -4581,6 +4659,13 @@ async function handle(ws, data) {
       const targetMember = room.members.find(member => Rules.SEATS[member.seat].id === targetId);
       if (targetMember && targetMember.ws) send(targetMember.ws, {
         type: 'shopping-start', token: challenge.token, expiresAt: challenge.expiresAt
+      });
+    }
+    if (cardId === 'phoenixtube' && targetId && !s.over) {
+      const challenge = startPhoenixTubeChallenge(room, actorId, targetId);
+      const targetMember = room.members.find(member => Rules.SEATS[member.seat].id === targetId);
+      if (targetMember && targetMember.ws) send(targetMember.ws, {
+        type: 'phoenixtube-start', token: challenge.token, expiresAt: challenge.expiresAt
       });
     }
 

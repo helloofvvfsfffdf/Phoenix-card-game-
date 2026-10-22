@@ -283,7 +283,7 @@
       "sha256": "59c18979855b6b1d4d9dfc01d9d789ba6f1b0d7ed0eed2f8ceeab84a482257ea"
     }
   ],
-  "awaitingCompilation": ["definitelynotamazon"],
+  "awaitingCompilation": ["definitelynotamazon", "phoenixtube"],
   "textures": [
     {
       "url": "assets/card-cinematics/textures/coin.png",

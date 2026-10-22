@@ -93,6 +93,7 @@
     pointswap: 3,      // chaos
     hostage: 3,        // evil and long-running
     definitelynotamazon: 3, // chaos, with an asynchronous target challenge
+    phoenixtube: 3,          // chaos, with an asynchronous video challenge
     president: 2,      // special, and it shapes the whole match
     mimic: 5,          // evil and rare, but not so rare that it never comes up
     dehydrated: 4,     // evil, and it is temporary
@@ -1548,6 +1549,10 @@
     return actor.name + ' sends ' + target.name + ' shopping at Definitely Not Amazon.';
   }
 
+  function resolvePhoenixTube(state, actor, target) {
+    return actor.name + ' sends ' + target.name + ' to PHOENIXTube to find a secret code.';
+  }
+
   /**
    * Musical Chairs, in the engine: the server runs the real one, so this is the
    * single-player shape of it - nobody wins, nobody loses, and the turn is
@@ -1617,7 +1622,8 @@
     bankrobbery: resolveBankRobbery,
     pointswap: resolvePointSwap,
     hostage: resolveHostage,
-    definitelynotamazon: resolveDefinitelyNotAmazon,
+     definitelynotamazon: resolveDefinitelyNotAmazon,
+     phoenixtube: resolvePhoenixTube,
     president: resolvePresident,
     joshuasurvey: resolveJoshuaSurvey,
     trailer: resolveTrailer,

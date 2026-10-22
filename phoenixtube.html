@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PHOENIXTube</title><link rel="stylesheet" href="css/phoenixtube.css"></head>
+<body>
+  <header class="tube-nav"><a class="tube-brand" href="#">PHOENIX<span>Tube</span></a><div class="tube-warning">FICTIONAL PHOENIX ENTERTAINMENT</div><div class="timer" id="timer">10:00</div></header>
+  <main><section class="hero"><p class="eyebrow">SECRET CODE CHALLENGE</p><h1>Watch four videos. Find four digits.</h1><p>Each video is exactly two minutes. The hidden digit appears briefly during playback and stays the same when you return or refresh.</p></section><div id="message" role="status"></div><section id="videos" class="video-grid"></section><section class="code-panel"><h2>Enter the code</h2><p>Use the digits in video order: 1, 2, 3, 4. Repeated digits and leading zeroes are valid.</p><form id="code-form"><input id="code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" aria-label="Four digit code" placeholder="0000"><button>Submit code</button></form><p id="feedback" role="alert"></p><button id="return" class="return">↩ Return to PHOENIX</button></section></main>
+  <script src="js/phoenixtube-client.js"></script>
+</body></html>

@@ -40,6 +40,7 @@
     pointswap: ['Point Swap', '\u{1F501}', '#66d9e8', 'transfer', 'sine', [330, 660, 330], 0.6],
     hostage: ['Hostage Situation', '\u{1F52B}', '#e74c3c', 'impact', 'sawtooth', [110, 110, 82], 0.9],
     definitelynotamazon: ['Definitely Not Amazon', '\u{1F6D2}', '#ff8a22', 'transfer', 'triangle', [330, 440, 660], 0.8],
+    phoenixtube: ['PHOENIXTube', '\u{1F4FA}', '#5ee7ff', 'transfer', 'circle', [392, 523, 784], 0.8],
     president: ['President', '\u{1F396}\uFE0F}', '#ffd16b', 'shield', 'triangle', [523, 659, 784], 0.8],
     mimic: ['The Mimic', '\u{1F3AD}', '#9b59b6', 'illusion', 'triangle', [440, 392, 330], 0.7],
     dehydrated: ['Dehydrated', '\u{1F4A7}', '#5dade2', 'orbit', 'sine', [587, 523, 440], 0.8],

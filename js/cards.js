@@ -457,6 +457,19 @@
       targetNote: 'Pick one opponent to hold hostage.'
     },
     {
+      id: 'phoenixtube',
+      name: 'PHOENIXTube',
+      short: 'PHOENIXTube',
+      glyph: '\u{1F4FA}',
+      tone: 'phoenixtube',
+      kind: 'chaos',
+      needsTarget: true,
+      inLiveGame: true,
+      blurb: 'Send an opponent hunting for a secret code in four videos.',
+      rule: 'Choose an opponent. They receive a ten-minute PHOENIXTube challenge. Finding the four-digit code earns them 20,000 points; expiry costs them 10,000.',
+      targetNote: 'Pick one opponent to send to PHOENIXTube.'
+    },
+    {
       id: 'definitelynotamazon',
       name: 'Definitely Not Amazon',
       short: 'Not Amazon',
