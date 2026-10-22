@@ -23,7 +23,7 @@ import { createLaptop } from './laptop.js';
 import { buildPoster, buildNotepad } from './props.js';
 import { loadMixamoGLB, playAnimation, settleAnimation } from './mixamo.js';
 import { loadMap, playAreaPoint } from './maps.js';
-import { seatCharacter, lockToSeat, eyePoint, findBone } from './seating.js';
+import { seatCharacter, lockToSeat, eyePoint, findBone, sitCharacter } from './seating.js';
 import { createDirector } from './director.js';
 import { createEffects } from './effects3d.js';
 import { playCinematic, cardIdFor, cinematicCards } from './cinematics.js';
@@ -239,6 +239,44 @@ export function startPrototype(root) {
     });
   }
 
+  /**
+   * Put everybody back on their chairs after a show.
+   *
+   * A cinematic is allowed to walk somebody to the cell or leave them on
+   * their feet. But the round goes on, so anybody who is still in the game
+   * goes back to their chair - and anybody the server says is out of the
+   * round stays where the show left them.
+   */
+  function settleSeats() {
+    state.characters.forEach(function (character, seat) {
+      if (!character) return;
+      const player = snapshot && snapshot.players ? snapshot.players[seat] : null;
+      if (player && player.eliminated) return;
+      const place = seatPlace(seat);
+      if (!place) return;
+      sitCharacter(character, place);
+      playAnimation(character, 'sittingIdle', { loop: true }).catch(function () { return null; });
+    });
+  }
+
+  /**
+   * Play a card's show, and put the room back afterwards.
+   *
+   * Every show ends the same way: the round goes on, so anybody who is
+   * still in the game sits back down on their chair.
+   */
+  function playShow(cardId, events, options) {
+    return playCinematic(cardId, director.context, events, options)
+      .then(function (played) {
+        settleSeats();
+        return played;
+      })
+      .catch(function () {
+        settleSeats();
+        return false;
+      });
+  }
+
   /** The cards that have been played since the last snapshot, and their show. */
   function playJournal(next) {
     if (!effectCursor || !next.effects) return;
@@ -254,7 +292,7 @@ export function startPrototype(root) {
       };
       cinematicChain = cinematicChain
         .then(function () {
-          return playCinematic(cardId, director.context, [seatEvent], {
+          return playShow(cardId, [seatEvent], {
             outcome: event.outcome,
             reducedMotion: settings.reducedMotion
           });
@@ -387,11 +425,13 @@ export function startPrototype(root) {
     if (!entry) return null;
     return {
       position: entry.position.clone(),
+      // Where somebody sits, and where they stand when they get up. The
+      // seating code and the cinematics both use these names.
+      seated: entry.position.clone(),
       angle: entry.angle,
       // The top of the cushion: where the hips go.
       seatTop: entry.seatTop,
       eye: entry.eye,
-      // Just behind the chair, where somebody stands up from it.
       standing: entry.position.clone().add(
         new THREE.Vector3(Math.sin(entry.angle), 0, Math.cos(entry.angle)).multiplyScalar(0.55))
     };
@@ -818,6 +858,8 @@ export function startPrototype(root) {
     playSelected: playSelected,
     playCard: playCard,
     rehearse: rehearse,
+    /** Play a card's show, and settle the room afterwards. */
+    playShow: playShow,
     /** Feed a snapshot in, exactly as the server would. */
     applyState: applyState,
     /**

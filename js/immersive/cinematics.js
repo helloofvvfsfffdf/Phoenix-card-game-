@@ -767,8 +767,8 @@ function rps(context, event) {
  */
 function betrayal(context, event) {
   const centre = overTable(context, 0.3);
-  const targets = [];
-  if (typeof event.targetIds === 'object' && event.targetIds) targets = event.targetIds;
+  let targets = [];
+  if (Array.isArray(event.targetIds) && event.targetIds.length) targets = event.targetIds.slice();
   else if (event.targetSeat !== undefined && event.targetSeat >= 0) targets = [event.targetSeat];
   return context.announce('BETRAYAL', 1500)
     .then(function () { return cameraFocus(context, centre, 0.8); })
