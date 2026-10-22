@@ -1,4 +1,4 @@
-/* PHOENIX - the 3D table's connection, over a real socket.
+﻿/* PHOENIX - the 3D table's connection, over a real socket.
  *
  * The 3D table is another way of looking at the same multiplayer game, so
  * its client is tested against the same server the 2D game uses: a real
@@ -29,6 +29,13 @@ function suite(name) {
   console.log('\n' + name);
 }
 
+/**
+ * A window for the client to live in.
+ *
+ * The client is a browser module: it wants a location, a session store and
+ * a WebSocket. In a test it gets a small one of each, pointed at the
+ * fixture server.
+ */
 function makeWindow(port) {
   const store = {};
   const win = {
@@ -60,7 +67,12 @@ async function startServer() {
   await new Promise(resolve => probe.close(resolve));
   const server = spawn(process.execPath, ['tests/interactive-local-server.js', 'all', String(port)], {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, PHOENIX_REPRO_RANDOM: '0.1,0.8' },
+    env: {
+      ...process.env,
+      PHOENIX_REPRO_RANDOM: '0.1,0.8',
+      // A real deal: seven cards each, the way a player gets them.
+      PHOENIX_REPRO_NATURAL_DEAL: '1'
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   let output = '';
@@ -81,6 +93,7 @@ async function startServer() {
   }) };
 }
 
+/** Load the client with a window pointed at the fixture. */
 function loadClient(port) {
   const win = makeWindow(port);
   const file = path.join(__dirname, '..', 'js', 'immersive', 'multiplayer.js');
@@ -93,10 +106,12 @@ function loadClient(port) {
   };
 }
 
+/** A client with its own window, so two clients never share a session store. */
 function makeClient(loaded) {
   return loaded.module.createMultiplayer({ window: loaded.win });
 }
 
+/** Wait for a condition, or give up. */
 function waitFor(predicate, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     const deadline = Date.now() + timeoutMs;
@@ -118,40 +133,43 @@ async function main() {
 
     await test('it connects, and the server publishes the open rooms', async () => {
       const loaded = loadClient(fixture.port);
-      const rooms = [];
-      const client = loaded.module.createMultiplayer({
-        window: loaded.win,
-        onRooms: (list) => { rooms.length = 0; list.forEach((r) => rooms.push(r)); }
-      });
-      client.connect();
-      await waitFor(() => rooms.length > 0 || client.isConnected());
-      await waitFor(() => client.isConnected());
-      assert.strictEqual(client.isConnected(), true, 'the client is connected');
-      assert(Array.isArray(rooms), 'the server published the rooms');
-      loaded.restore();
+      try {
+        const rooms = [];
+        const client = loaded.module.createMultiplayer({
+          window: loaded.win,
+          onRooms: (list) => { rooms.length = 0; list.forEach((r) => rooms.push(r)); }
+        });
+        client.connect();
+        await waitFor(() => rooms.length > 0 || client.isConnected());
+        await waitFor(() => client.isConnected());
+        assert.strictEqual(client.isConnected(), true, 'the client is connected');
+        assert(Array.isArray(rooms), 'the server published the rooms');
+      } finally { loaded.restore(); }
     });
 
     await test('it creates a room, and the server says it is in one', async () => {
       const loaded = loadClient(fixture.port);
-      const client = makeClient(loaded);
-      client.connect();
-      await waitFor(() => client.isConnected());
-      client.createRoom('');
-      await waitFor(() => client.getState() && client.getState().code);
-      const state = client.getState();
-      assert(state.code, 'the server gave the room a code');
-      assert.strictEqual(state.phase, 'lobby', 'and the room is in the lobby');
-      assert.strictEqual(state.host, true, 'and the player who made it is the host');
-      assert.strictEqual(state.players.length, 1, 'and is the only one in it');
-      loaded.restore();
+      try {
+        const client = makeClient(loaded);
+        client.connect();
+        await waitFor(() => client.isConnected());
+        client.createRoom('');
+        await waitFor(() => client.getState() && client.getState().code);
+        const state = client.getState();
+        assert(state.code, 'the server gave the room a code');
+        assert.strictEqual(state.phase, 'lobby', 'and the room is in the lobby');
+        assert.strictEqual(state.host, true, 'and the player who made it is the host');
+        assert.strictEqual(state.players.length, 1, 'and is the only one in it');
+      } finally { loaded.restore(); }
     });
 
     await test('it refuses to send anything before it is connected', async () => {
       const loaded = loadClient(fixture.port);
-      const client = makeClient(loaded);
-      assert.strictEqual(client.play('bonus', null), false, 'the move was not sent');
-      assert.strictEqual(client.getState(), null, 'and there is no state');
-      loaded.restore();
+      try {
+        const client = makeClient(loaded);
+        assert.strictEqual(client.play('bonus', null), false, 'the move was not sent');
+        assert.strictEqual(client.getState(), null, 'and there is no state');
+      } finally { loaded.restore(); }
     });
 
     suite('A real match');
@@ -171,7 +189,8 @@ async function main() {
       await waitFor(() => host.isConnected() && guest.isConnected());
       host.createRoom('');
       await waitFor(() => host.getState() && host.getState().code);
-      guest.joinRoom(host.getState().code);
+      const code = host.getState().code;
+      guest.joinRoom(code);
       await waitFor(() => guest.getState() && guest.getState().players.length === 2);
       assert.strictEqual(guest.getState().players.length, 2, 'the guest sees both players');
       assert.strictEqual(guest.getState().seat, 1, 'and is in the second seat');
@@ -181,6 +200,8 @@ async function main() {
 
     await test('the host starts the match, and both hands are dealt', async () => {
       host.start(5);
+      // The dice decide the turn order and then the ally order.
+      await waitFor(() => ['turnDice', 'allyDice'].includes(host.getState().phase), 8000);
       let guard = 0;
       while (['turnDice', 'allyDice'].includes(host.getState().phase)) {
         assert(++guard < 150, 'the dice phases finish');
@@ -190,12 +211,14 @@ async function main() {
         await waitFor(() => host.getState().phase !== 'turnDice' ||
           host.getState().dice.next !== seat, 8000);
       }
+      // Then everybody picks an ally.
       guard = 0;
       while (host.getState().phase === 'draft') {
         assert(++guard < 20, 'the draft finishes');
         const seat = host.getState().draftTurn;
         const picker = seat === host.getState().seat ? host : guest;
         const choices = host.getState().availableAllies;
+        assert(choices.length > 0, 'there is an ally to pick');
         picker.chooseAlly(choices[0]);
         await waitFor(() => host.getState().draftTurn !== seat ||
           host.getState().phase !== 'draft', 8000);
@@ -210,66 +233,82 @@ async function main() {
     await test('a player only ever sees their own hand', async () => {
       const hostState = host.getState();
       const guestState = guest.getState();
+      // The host is told how many cards the guest is holding, and the count
+      // is the truth - but not the cards themselves.
       assert.strictEqual(hostState.players[1].handCount, guestState.hand.length,
         'the host is told how many cards the guest holds');
       assert.strictEqual(hostState.hand.length, hostState.players[0].handCount,
         'and their own count matches their own hand');
+      const hostIds = hostState.hand.join(',');
+      const guestIds = guestState.hand.join(',');
+      assert(hostIds !== guestIds || hostState.players.length < 2,
+        'and the two hands are not the same hand');
     });
 
     await test('the server decides which moves are legal', async () => {
       const state = host.getState();
       assert(Array.isArray(state.moves), 'the server published the legal moves');
-      state.moves.forEach(move => {
-        assert(state.hand.indexOf(move.cardId) !== -1,
-          'every legal move is a card in the hand (' + move.cardId + ')');
-      });
+      // The player whose turn it is gets moves; the other one does not.
+      const acting = host.getState().seat === state.seat && state.acting;
+      if (state.acting) {
+        assert(state.moves.length > 0, 'and there is at least one');
+        state.moves.forEach(move => {
+          assert(state.hand.indexOf(move.cardId) !== -1,
+            'every legal move is a card in the hand (' + move.cardId + ')');
+        });
+      }
+      assert(typeof acting === 'boolean', 'the client reports who may act');
     });
 
     await test('a card that is played is sent to the server, and the server accepts it', async () => {
+      // Find a player whose turn it is, and play a card they may play. A
+      // card that asks the players a question is left alone: the server
+      // would wait for an answer, which is a different thing entirely.
+      const INTERACTIVE = ['rps', 'betrayal', 'speed', 'dice', 'wheel', 'linkedfate', 'impostor',
+        'swapper', 'wheelofmisfortune', 'musicalchairs', 'russianroulette', 'memorymayhem',
+        'mimic', 'support', 'joshuasurvey', 'trailer'];
       const actor = host.getState().acting ? host : guest;
       await waitFor(() => actor.getState().acting, 8000);
       const moves = actor.getState().moves;
       assert(moves.length > 0, 'there is a legal move to make');
-      const INTERACTIVE = ['rps', 'betrayal', 'speed', 'dice', 'wheel', 'linkedfate', 'impostor',
-        'swapper', 'wheelofmisfortune', 'musicalchairs', 'russianroulette', 'memorymayhem',
-        'mimic', 'support', 'joshuasurvey', 'trailer'];
-      const move = moves.find(m => !INTERACTIVE.includes(m.cardId)) || moves[0];
+      const move = moves.find((m) => !INTERACTIVE.includes(m.cardId)) || moves[0];
+      const before = actor.getState().hand.length;
       const discardBefore = actor.getState().discardCount;
-      const handBefore = actor.getState().hand.length;
       actor.play(move.cardId, move.targetId);
       await waitFor(() => {
         const s = actor.getState();
-        return s && (s.discardCount > discardBefore || s.hand.length < handBefore);
+        return s && (s.discardCount > discardBefore || s.hand.length < before);
       }, 8000);
       const after = actor.getState();
-      assert(after.discardCount > discardBefore || after.hand.length < handBefore,
+      assert(after.discardCount > discardBefore || after.hand.length < before,
         'the card was taken from the hand and put on the table');
+      assert(after.current, 'and the server says whose turn it is now');
       assert(Array.isArray(after.moves), 'with the legal moves for that player');
     });
 
     await test('a move the server will not allow is refused', async () => {
-      const loaded = loadClient(fixture.port);
       const errors = [];
-      const client = loaded.module.createMultiplayer({
-        window: loaded.win,
-        onMessage: (m) => errors.push(m)
-      });
-      loaded.win.PhoenixOnline = { getState: () => client.getState() };
-      client.connect();
-      await waitFor(() => client.isConnected());
-      client.createRoom('');
-      await waitFor(() => client.getState() && client.getState().code);
-      client.play('bonus', null);
-      await waitFor(() => errors.length > 0, 5000);
-      assert(errors.length > 0, 'the server refused the move');
-      loaded.restore();
+      const loaded = loadClient(fixture.port);
+      try {
+        const client = loaded.module.createMultiplayer({ window: loaded.win, onMessage: (m) => errors.push(m) });
+        client.connect();
+        await waitFor(() => client.isConnected());
+        client.createRoom('');
+        await waitFor(() => client.getState() && client.getState().code);
+        client.play('bonus', null);
+        await waitFor(() => errors.some((e) => e.type === 'error'), 5000);
+        const error = errors.find((e) => e.type === 'error');
+        assert(error.message && error.message.length > 4,
+          'the server explains why (' + error.message + ')');
+      } finally { loaded.restore(); }
     });
 
     await test('the token for coming back is kept', async () => {
       const state = host.getState();
       assert(state.resumeToken && state.resumeToken.length === 64,
         'the server gave a resume token');
-      const saved = hostLoaded.win.sessionStorage.getItem('phoenix-online-resume:/immersive.html');
+      const saved = hostLoaded.win.sessionStorage.getItem(
+        'phoenix-online-resume:/immersive.html');
       assert(saved, 'and the client kept it');
       const parsed = JSON.parse(saved);
       assert.strictEqual(parsed.code, state.code, 'with the room code');
@@ -283,37 +322,6 @@ async function main() {
       assert.strictEqual(saved, null, 'and the token is thrown away');
       assert.strictEqual(host.isConnected(), true, 'the socket is still open');
     });
-
-    suite('Steal a Turn - a forced choice');
-
-    await test('the chooser picks from the target hand, not their own', async () => {
-      // The server's rules, which the 2D game already follows, are the
-      // reference. A Steal a Turn sets a forced choice of kind 'move', and
-      // the chooser is handed the TARGET's legal moves - not their own cards.
-      // The 3D client's handCards() reads from state.moves when a forced
-      // choice is in force, so it shows the target cards and sends the chosen one.
-      const fakeSnapshot = {
-        type: 'state', phase: 'playing', started: true, seat: 0, code: 'TEST',
-        host: true, players: [
-          { id: 'human', name: 'Ash', points: 0, handCount: 7, connected: true, eliminated: false, badges: [] },
-          { id: 'chatgpt', name: 'Brook', points: 0, handCount: 6, connected: true, eliminated: false, badges: [] }
-        ],
-        hand: ['bonus', 'knife', 'steal'],
-        pending: { kind: 'move', chooserId: 'human', targetId: 'chatgpt' },
-        moves: [
-          { cardId: 'bonus', targetId: null },
-          { cardId: 'steal', targetId: null }
-        ],
-        current: 'chatgpt', acting: true, effects: { stream: 'x', sequence: 0, events: [] }, log: []
-      };
-      assert.strictEqual(fakeSnapshot.pending.kind, 'move', 'the forced choice is of kind move');
-      assert.strictEqual(fakeSnapshot.pending.chooserId, 'human', 'and the chooser is the one who played it');
-      assert.strictEqual(fakeSnapshot.pending.targetId, 'chatgpt', 'and the target is the one it was aimed at');
-      assert(fakeSnapshot.moves.length > 0, 'the server published the target legal moves');
-      assert.deepStrictEqual(fakeSnapshot.moves.map(m => m.cardId), ['bonus', 'steal'],
-        'and they are the target cards, not the chooser own hand');
-    });
-
   } finally {
     await fixture.stop();
   }

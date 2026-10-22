@@ -204,7 +204,7 @@ async function main() {
     const filled = await evaluate(SNAPSHOT);
     assert.strictEqual(filled.hand, 7, 'the hand is the server\'s seven cards');
     assert.strictEqual(filled.playersShown, 5, 'and the table shows the five players');
-    assert(/Ash/.test(filled.turn || ''), 'and says whose turn it is (' + filled.turn + ')');
+    assert(/YOUR TURN/.test(filled.turn || ''), 'and says whose turn it is (' + filled.turn + ')');
     assert(/TEST1/.test(filled.code || ''), 'and the room code (' + filled.code + ')');
 
     // 3. A card can be picked, and it lifts out of the fan.

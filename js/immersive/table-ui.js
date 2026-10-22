@@ -265,11 +265,11 @@ export function createTableUI(options) {
     if (nodes.turn) {
       let line = phase;
       if (state.over) {
-        line = 'The match is over';
+        line = 'THE MATCH IS OVER';
       } else if (state.phase === 'turnDice' || state.phase === 'allyDice') {
         // The dice decide the order, and only one person may roll at a time.
         const roller = (state.dice && (state.dice.next != null))
-          ? (state.players || []).filter(function (p) { return p.seat === state.dice.next; })[0]
+          ? (state.players || [])[state.dice.next]
           : null;
         if (roller) {
           line = (state.phase === 'turnDice' ? 'ROLLING FOR THE TURN ORDER' : 'ROLLING FOR THE ALLY ORDER')
@@ -277,7 +277,7 @@ export function createTableUI(options) {
         }
       } else if (state.phase === 'draft') {
         const picker = (state.draftTurn != null)
-          ? (state.players || []).filter(function (p) { return p.seat === state.draftTurn; })[0]
+          ? (state.players || [])[state.draftTurn]
           : null;
         if (picker) {
           line = 'CHOOSING AN ALLY - ' + picker.name + (picker.id === (state.players[state.seat] || {}).id ? ' (YOU CHOOSE)' : ' is choosing');
@@ -301,10 +301,15 @@ export function createTableUI(options) {
           line = (chooser ? chooser.name : 'Somebody') + ' is choosing a card to destroy';
         }
       } else {
+        const me = state.players && state.players[state.seat] ? state.players[state.seat].id : null;
         const who = state.current && (state.players || []).filter(function (p) {
           return p.id === state.current;
         })[0];
-        line = phase + (who ? ' - ' + who.name + "'s turn" : '');
+        if (who && who.id === me) {
+          line = 'YOUR TURN - ' + (state.acting ? 'play a card' : 'waiting');
+        } else {
+          line = 'WAITING FOR ' + (who ? who.name.toUpperCase() : 'THE NEXT PLAYER');
+        }
       }
       text(nodes.turn, line);
     }

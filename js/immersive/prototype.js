@@ -805,12 +805,21 @@ export function startPrototype(root) {
         ? anchors.playAreas[played.length % anchors.playAreas.length].z
         : (anchors.table ? anchors.table.centre.z : 0)
     );
+    // A small trail behind the card, so it is seen travelling and not just
+    // appearing at the table.
+    const trail = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.02, 0.06),
+      new THREE.MeshBasicMaterial({ color: 0xffd16b, transparent: true, opacity: 0.6, side: THREE.DoubleSide })
+    );
+    trail.visible = false;
+    cardGroup.add(trail);
     flying.push({
       group: cardGroup,
       from: cardGroup.position.clone(),
       to: to,
       start: performance.now(),
       duration: settings.reducedMotion ? 120 : 520,
+      trail: trail,
       onDone: function () {
         scene.remove(cardGroup);
         mesh.geometry.dispose();
@@ -967,6 +976,11 @@ export function startPrototype(root) {
       flight.group.rotation.x = -eased * Math.PI / 2;
       flight.group.rotation.z = eased * 0.5;
       flight.group.scale.setScalar(1 - eased * 0.18);
+      if (flight.trail) {
+        flight.trail.visible = true;
+        flight.trail.position.set(0, 0, eased * 0.08);
+        flight.trail.material.opacity = (1 - eased) * 0.6;
+      }
       if (t >= 1) {
         flying.splice(i, 1);
         flight.onDone();
