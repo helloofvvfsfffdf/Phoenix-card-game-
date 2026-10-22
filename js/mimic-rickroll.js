@@ -28,28 +28,6 @@
   /* The official Rick Astley video. */
   var VIDEO_ID = 'dQw4w9WgXcQ';
 
-  /*
-   * HARDCORE plays a different prank: KSI - Thick Of It (feat. Trippie Redd).
-   * The same rules apply - no skip, no fast-forward, and the game carries on
-   * by itself if the video will not load.
-   */
-  var HARDCORE_VIDEO_ID = 'At8v_Yc044Y';
-
-  /** Is this a hardcore match? The room's own flag, from the server. */
-  function hardcore() {
-    try {
-      var state = root.PhoenixOnline && root.PhoenixOnline.getState();
-      return !!(state && state.hardcore);
-    } catch (e) {
-      return false;
-    }
-  }
-
-  /** The video this match plays. */
-  function videoId() {
-    return hardcore() ? HARDCORE_VIDEO_ID : VIDEO_ID;
-  }
-
   /* How long we wait for the API and the first frame before offering a way out.
      Long enough for a slow phone, short enough that nobody is stuck. */
   var LOAD_TIMEOUT_MS = 15000;
@@ -195,7 +173,7 @@
       if (!frame) return;
       try {
         player = new root.YT.Player('phoenix-rickroll-frame', {
-          videoId: videoId(),
+          videoId: VIDEO_ID,
           playerVars: {
             autoplay: 1,
             controls: 0,

@@ -8,7 +8,7 @@
   var CAPTION_AT={bonus:1.6,knife:1,hunter:1.3,zombie:1.3,steal:1.7,judge:1.5,reveal:1.5,skipall:1,trick:1.6,stealturn:1.4,curse:1.1,ghost:1.4,alvin:1.3,dice:1.2,rps:1.4,betrayal:1.5,speed:.9,wheel:1.8,linkedfate:1.4,impostor:1.9,swapper:1.2,
   // The expansion's own cue times.
   musicalchairs:1.5,russianroulette:1.9,memorymayhem:1.6,bankrobbery:1.7,pointswap:1.2,
-  hostage:2.1,president:1.7,mimic:1.6,dehydrated:1.4,nothing:1.1,reverseofdoom:1.9,
+  hostage:2.1,definitelynotamazon:1.8,president:1.7,mimic:1.6,dehydrated:1.4,nothing:1.1,reverseofdoom:1.9,
   support:1.6,wheelofmisfortune:2};
   function cardId(key){return key==='alvin-burn'?'alvin':key==='curse-trigger'?'curse':key==='hunter-block'?'hunter':key;}
   // Cards that have actual .efk binaries in assets/card-cinematics/

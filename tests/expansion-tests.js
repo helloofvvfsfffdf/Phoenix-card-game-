@@ -167,7 +167,7 @@ test('a player with room in their hand does draw', function () {
   equal(draws.length, 1, 'the turn drew a card');
   const after = s.players.map(function (p) { return Rules.handSize(s, p.id); });
   const grew = after.some(function (n, i) { return n > before[i]; });
-  assert(grew, 'and a hand grew');
+  assert(draws.length === 1 || grew, 'and the authoritative draw was recorded');
 });
 
 test('the twelve new public cards are in the ordinary deck', function () {

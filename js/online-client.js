@@ -841,10 +841,8 @@
       // Optional custom invite code: blank (or missing) creates a PUBLIC lobby,
       // a 3-6 character code creates a PRIVATE lobby joinable with that code.
       const code = $('online-create-code').value.trim();
-      // HARDCORE is the creator's choice, and the server decides what it means.
-      const hardcore = !!($('online-hardcore') && $('online-hardcore').checked);
       connect(() => {
-        send({ type: 'create', code, hardcore });
+        send({ type: 'create', code });
       });
       return;
     }
@@ -867,10 +865,8 @@
         feedback('Enter the owner password to create a room.');
         return;
       }
-      // HARDCORE works in an Owner & Friends room too.
-      const hardcore = !!($('online-owner-hardcore') && $('online-owner-hardcore').checked);
       connect(() => {
-        send({ type: 'create', code: '', ownerPassword, hardcore });
+        send({ type: 'create', code: '', ownerPassword });
         $('online-owner-password').value = '';
       });
       return;
@@ -1107,9 +1103,6 @@ function renderLobbyList(rooms) {
     row.append(el('span', 'lobby-code', r.code));
     row.append(el('span', 'lobby-host', r.host || '?'));
     row.append(el('span', 'lobby-players', r.players + '/' + r.max));
-    // HARDCORE is said out loud, so anybody can see what they are walking
-    // into before they join it.
-    if (r.hardcore) row.append(el('span', 'lobby-hardcore', 'HARDCORE'));
     const btn = el('button', 'online-primary lobby-join', 'JOIN');
     btn.type = 'button';
     btn.onclick = () => PhoenixOnline.join({ type: 'join', code: r.code });
@@ -1263,6 +1256,26 @@ function renderMapleNotice(actions) {
 function renderPlaying() {
     const actions = $('online-actions');
     actions.replaceChildren();
+
+    const shoppers = state.shoppingPlayers || [];
+    if (shoppers.length) {
+      shoppers.forEach(id => {
+        const player = state.players.find(p => p.id === id);
+        if (player) actions.append(el('p', 'shopping-table-notice', '🛒 ' + player.name + ' is completing a shopping challenge.'));
+      });
+    }
+    if (state.shoppingChallenge) {
+      const box = el('div', 'shopping-match-card');
+      box.append(el('h3', '', '🛒 Definitely Not Amazon'));
+      box.append(el('p', '', state.shoppingChallenge.actorName + ' sent you shopping. Your PHOENIX match stays open while you browse.'));
+      const open = el('button', 'online-primary', 'OPEN SHOPPING WEBSITE');
+      open.type = 'button';
+      open.onclick = () => window.open('/shopping.html?token=' + encodeURIComponent(state.shoppingChallenge.token), '_blank', 'noopener');
+      const back = el('button', 'online-secondary', 'RETURN TO SHOPPING');
+      back.type = 'button'; back.onclick = () => window.open('/shopping.html?token=' + encodeURIComponent(state.shoppingChallenge.token), '_blank', 'noopener');
+      box.append(open, back, el('small', '', 'You have five minutes. This button is only visible to you.'));
+      actions.append(box);
+    }
 
     if (state.over) {
       // The victory screen, restored from the previous client (commit a66b491).

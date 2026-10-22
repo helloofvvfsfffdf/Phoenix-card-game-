@@ -1,0 +1,45 @@
+/* The 38 card achievements. Unlock decisions remain server-side. */
+'use strict';
+
+module.exports = [
+  ['pocket-money', 'Pocket Money', 'common', 'Earn 10,000 points using +10,000 Points.'],
+  ['highway-robbery', 'Highway Robbery', 'epic', 'Steal the maximum 50,000 points using Steal Points.'],
+  ['master-thief', 'Master Thief', 'rare', 'Steal 25,000 points using Bank Robbery.'],
+  ['tables-turned', 'Tables Turned', 'rare', 'Swap scores with a player who has at least 50,000 more points.'],
+  ['partners-in-crime-card', 'Partners in Crime', 'rare', 'Gain 20,000 bonus points through Linked Fate.'],
+  ['sharp-decision', 'Sharp Decision', 'common', 'Successfully eliminate someone with Knife.'],
+  ['undead-nightmare', 'Undead Nightmare', 'uncommon', 'Successfully eliminate someone with Zombie.'],
+  ['hunter-hunted', 'The Hunter Becomes the Hunted', 'epic', 'Reflect a Knife or Zombie attack using Hunter.'],
+  ['untouchable', 'Untouchable', 'rare', 'Avoid a targeted attack using Ghost.'],
+  ['guilty-as-charged', 'Guilty as Charged', 'rare', 'Successfully activate Judge and eliminate the leading evil player.'],
+  ['not-today', 'Not Today!', 'legendary', 'Counter Phoenix using The Uno Reverse of Doom.'],
+  ['lucky-escape', 'Lucky Escape', 'uncommon', 'Survive Russian Roulette.'],
+  ['my-turn-again', 'My Turn Again!', 'uncommon', 'Successfully skip every other player.'],
+  ['puppet-master', 'Puppet Master', 'rare', 'Force another player to play your chosen card.'],
+  ['master-of-disguise-card', 'Master of Disguise', 'epic', 'Make a disguised player take the blame during Judge or Impostor.'],
+  ['cursed-fortune', 'Cursed Fortune', 'rare', "Successfully trigger a cursed card's backfire."],
+  ['card-destroyer', 'Card Destroyer', 'uncommon', "Destroy an opponent's card using Alvin."],
+  ['no-more-secrets', 'No More Secrets', 'common', "Publicly reveal an opponent's hand."],
+  ['identity-crisis-card', 'Identity Crisis', 'uncommon', 'Swap animal allies.'],
+  ['high-roller', 'High Roller', 'uncommon', 'Win Dice Challenge.'],
+  ['mind-reader-card', 'Mind Reader', 'uncommon', 'Win Rock Paper Scissors.'],
+  ['trust-issues', 'Trust Issues', 'rare', 'Choose Steal while the opponent chooses Share in Betrayal.'],
+  ['lightning-reflexes-card', 'Lightning Reflexes', 'rare', 'Win Speed Challenge without a false start.'],
+  ['among-us', 'Among Us', 'epic', 'Win Impostor while playing as the impostor.'],
+  ['take-a-seat', 'Take a Seat!', 'rare', 'Win Musical Chairs.'],
+  ['photographic-memory', 'Photographic Memory', 'epic', 'Complete all three Memory Mayhem sequences perfectly.'],
+  ['peoples-choice', "People's Choice", 'rare', 'Win a Joshua Survey vote.'],
+  ['fortune-favours-me', 'Fortune Favours Me', 'uncommon', 'Receive a positive Wheel of Fortune outcome.'],
+  ['disaster-magnet', 'Disaster Magnet', 'epic', 'Survive a negative Wheel of Misfortune outcome and complete the match.'],
+  ['rise-of-the-phoenix', 'Rise of the Phoenix', 'legendary', 'Successfully activate Phoenix.'],
+  ['mr-president', 'Mr President', 'epic', 'Complete five rounds as President.'],
+  ['negotiator', 'Negotiator', 'epic', 'Rescue a hostage as the police officer.'],
+  ['youve-been-mimicked', "You've Been Mimicked!", 'uncommon', "Trigger The Mimic's disguised-card surprise."],
+  ['free-advertising', 'Free Advertising', 'common', 'Successfully target someone with Did You Like the Trailer?.'],
+  ['biggest-fan', 'Biggest Fan', 'common', 'Successfully target someone with Enjoying the Trailer.'],
+  ['stay-hydrated', 'Stay Hydrated!', 'common', "Successfully rotate someone's interface."],
+  ['complaint-rejected', 'Complaint Rejected', 'uncommon', 'Successfully reject a complaint using Customer Support.'],
+  ['absolutely-nothing', 'Absolutely Nothing', 'common', 'Play Nothing and receive its ordinary no-effect outcome.']
+].map(function (row, index) {
+  return { key: row[0], name: row[1], rarity: row[2], description: row[3], sortOrder: 200 + index, secret: true };
+});

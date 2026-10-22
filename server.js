@@ -23,11 +23,13 @@ const ServerState = require('./js/server-state.js');
 const FriendAccess = require('./js/friend-access.js');
 const interactionView = require('./js/interaction-view.js');
 const SpeedInteraction = require('./js/speed-interaction.js');
+const Shopping = require('./js/shopping-challenge.js');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
 const OWNER_PASSWORD = process.env.PHOENIX_OWNER_PASSWORD || '';
 const MODE_ACCESS_CODE = process.env.PHOENIX_MODE_ACCESS_CODE || '';
+const SHOPPING_TIMEOUT_MS = 5 * 60 * 1000;
 
 if (MODE_ACCESS_CODE.length < 12 || MODE_ACCESS_CODE.length > 256) {
   console.error('Set PHOENIX_MODE_ACCESS_CODE to a private access code of 12-256 characters.');
@@ -336,10 +338,7 @@ function lobbySnapshot() {
         players: r.members.length,
         max: 5,
         rounds: r.requestedRounds || 10,
-        phase: r.phase || 'lobby',
-        // HARDCORE is said out loud in the lobby list, so anybody can see
-        // what they are walking into before they join it.
-        hardcore: !!r.hardcore
+        phase: r.phase || 'lobby'
       }))
   };
 }
@@ -1339,17 +1338,84 @@ function resolveInteraction(room, pi) {
   return null;
 }
 
-/**
- * The interactive cards HARDCORE never runs twice.
- *
- * The Mimic is a card that is HANDED OVER, so there is only ever one of them,
- * and Customer Support is one complaint rather than two.
- */
-const NEVER_TWICE_INTERACTIONS = { mimic: true, support: true };
+function achievementMember(room, playerId) {
+  if (!room || !playerId) return null;
+  const index = room.state && room.state.players
+    ? room.state.players.findIndex(p => p.id === playerId) : -1;
+  return index < 0 ? null : room.members.find(m => m.seat === index) || null;
+}
 
-/** Does this interaction run a second time in a hardcore match? */
-function interactionPlaysTwice(type) {
-  return !NEVER_TWICE_INTERACTIONS[type];
+function grantCardAchievements(room, awards) {
+  const seen = new Set();
+  (awards || []).forEach(function (award) {
+    const member = achievementMember(room, award.playerId);
+    if (!member || !member.account || !member.ws) return;
+    const key = member.account.id + ':' + award.badgeKey;
+    if (seen.has(key)) return;
+    seen.add(key);
+    Achievements.grantBadge(member.account, award.badgeKey, member.ws).catch(function (err) {
+      console.error('[PHOENIX achievements] card grant failed -> ' + Auth.describeError(err));
+    });
+  });
+}
+
+function interactionAchievementFacts(room, pi, result, beforePoints) {
+  const s = room && room.state;
+  const facts = { cardId: pi.type, actorId: pi.actorId };
+  Object.assign(facts, pi.roundData || {});
+  if (pi.type === 'dice' && facts.rolls) {
+    const ids = Object.keys(facts.rolls);
+    facts.winnerId = ids.find(id => facts.rolls[id] === Math.max(...ids.map(x => facts.rolls[x])));
+  }
+  if (pi.type === 'rps' && facts.choices) {
+    const ids = Object.keys(facts.choices);
+    const a = facts.choices[ids[0]], b = facts.choices[ids[1]];
+    facts.winnerId = a === 'rock' && b === 'scissors' || a === 'paper' && b === 'rock' || a === 'scissors' && b === 'paper' ? ids[0] : ids[1];
+  }
+  if (pi.type === 'speed' && pi.reactions) {
+    const ids = pi.participants || Object.keys(pi.reactions);
+    const valid = ids.filter(id => typeof pi.reactions[id] === 'number');
+    facts.falseStart = ids.some(id => pi.reactions[id] === 'false_start');
+    if (valid.length) facts.winnerId = valid.sort((a, b) => pi.reactions[a] - pi.reactions[b])[0];
+  }
+  if (pi.type === 'betrayal') facts.targetId = pi.participants && pi.participants[1];
+  if (pi.type === 'impostor' && /escaped/.test((result.events || []).map(e => e.text || '').join(' ').toLowerCase())) {
+    facts.winnerId = facts.impostorId;
+  }
+  if (pi.type === 'impostor' && facts.votes) {
+    const counts = {};
+    Object.values(facts.votes).forEach(id => { counts[id] = (counts[id] || 0) + 1; });
+    const votedId = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+    const blamed = s && s.players && s.players.find(p => p.id === votedId && p.alias);
+    if (blamed) {
+      facts.disguisedBlame = true;
+      facts.playerId = blamed.id;
+    }
+  }
+  if (pi.type === 'musicalchairs' && result && result.loser) {
+    facts.winnerIds = (pi.participants || []).filter(id => id !== result.loser);
+  }
+  if (pi.type === 'joshuasurvey' && facts.judged) {
+    facts.winnerId = Object.keys(facts.judged).find(id => facts.judged[id] === 'accepted');
+  }
+  if (beforePoints && room.state && pi.type === 'linkedfate') {
+    const bonuses = room.state.lastLinkedFateBonuses || {};
+    const receiverIndex = Object.keys(bonuses).find(i => bonuses[i] >= 20000);
+    facts.bonus = receiverIndex === undefined ? 0 : bonuses[receiverIndex];
+    facts.receiverId = receiverIndex === undefined ? null : room.state.players[Number(receiverIndex)].id;
+  }
+  if (beforePoints && room.state && pi.type === 'bankrobbery') {
+    const actor = room.state.players.find(p => p.id === pi.actorId);
+    const at = room.state.players.findIndex(p => p.id === pi.actorId);
+    facts.amount = actor && at >= 0 ? actor.points - beforePoints[at] : 0;
+  }
+  if (beforePoints && room.state && pi.type === 'pointswap' && pi.targetId) {
+    const a = room.state.players.findIndex(p => p.id === pi.actorId);
+    const b = room.state.players.findIndex(p => p.id === pi.targetId);
+    facts.scoreGap = a >= 0 && b >= 0 ? Math.abs(beforePoints[a] - beforePoints[b]) : 0;
+  }
+  if (pi.type === 'support') facts.rejected = /rejected/i.test((result.events || []).map(e => e.text || '').join(' '));
+  return facts;
 }
 
 /**
@@ -1357,8 +1423,7 @@ function interactionPlaysTwice(type) {
  *
  * The music has to be playing before the first press, the revolver has to be
  * loaded before it is aimed, the sequences have to exist before anybody writes
- * them down. A HARDCORE second run sets its scene up again, so this is done
- * in one place and used by both.
+ * them down.
  */
 function startInteractionScene(room, cardId) {
   const started = cardId === 'musicalchairs' ? Expansion.startMusicalChairs(room)
@@ -1415,37 +1480,20 @@ function finishInteraction(room, provided) {
     result.advanceTurn = true;
   }
   shareLinkedGains(s, beforePoints);
-
-  // HARDCORE: the card runs a second time. The SAME card, with the same
-  // players and the same target, so the wheel is spun twice, the trailer plays
-  // twice, and a target feels the effect twice. The decisions are cleared and
-  // the card gets a fresh moment, so the browser closes the first overlay and
-  // opens the second.
-  if (room.hardcore && !pi.hardcoreSecond && !s.over && interactionPlaysTwice(pi.type)) {
-    if (result && result.events) recordEvents(room, result.events);
-    const second = Object.assign({}, pi, {
-      createdAt: Date.now(),
-      decisions: {},
-      submittedAt: {},
-      hardcoreSecond: true
-    });
-    room.pendingInteraction = second;
-    if (second.type === 'musicalchairs' || second.type === 'russianroulette' ||
-        second.type === 'memorymayhem' || second.type === 'joshuasurvey' ||
-        second.type === 'trailer' || second.type === 'enjoyingthetrailer') {
-      startInteractionScene(room, second.type);
-    }
-    recordEvents(room, [{
-      type: 'result',
-      cardId: pi.type,
-      text: 'Hardcore - ' + ((Cards.byId(pi.type) || {}).name || 'The card') +
-        ' happens a second time.'
-    }]);
-    scheduleInteractionTimeout(room, second, second.timeoutMs);
-    broadcast(room);
-    return;
+  const hostageOfficerId = s.hostage && s.hostage.officerId;
+  const rescuedHostage = Expansion.checkHostage(room);
+  if (rescuedHostage) {
+    result.events.push(rescuedHostage);
+    grantCardAchievements(room, [{ badgeKey: 'negotiator', playerId: hostageOfficerId }]);
   }
-
+  if (pi.type === 'wheelofmisfortune' && pi.roundData &&
+      ['loan', 'puppets', 'restart', 'apocalypse', 'hell'].includes(pi.roundData.outcome)) {
+    const spinner = s.players.find(p => p.id === pi.actorId);
+    if (spinner && !Rules.isOut(spinner, s)) {
+      room.wheelMisfortuneSurvivors = room.wheelMisfortuneSurvivors || new Set();
+      room.wheelMisfortuneSurvivors.add(spinner.id);
+    }
+  }
   const actor = s.players.find(p => p.id === pi.actorId);
   actor.turnsPlayed++;
   actor.cardsPlayed.push(pi.type);
@@ -1500,6 +1548,10 @@ function finishInteraction(room, provided) {
         });
       }
     }
+
+    grantCardAchievements(room, Achievements.checkCardAchievements(
+      room, pi, result, interactionAchievementFacts(room, pi, result, beforePoints)
+    ));
   }
 
   if (result && result.advanceTurn && s && !s.over) {
@@ -1525,6 +1577,10 @@ function finishInteraction(room, provided) {
  * rounds, so it is retired here - at the round boundary - and not on a turn.
  */
 function applyRoundEndHousekeeping(room) {
+  const president = room.state && room.state.president;
+  if (president && room.state.round > president.untilRound) {
+    grantCardAchievements(room, [{ badgeKey: 'mr-president', playerId: president.id }]);
+  }
   Expansion.onRoundEnd(room);
 }
 
@@ -1559,6 +1615,7 @@ function applyLinkedFate(room) {
 
 function shareLinkedGains(s, beforePoints) {
   const gains = s.players.map((p, i) => Math.max(0, p.points - beforePoints[i]));
+  s.lastLinkedFateBonuses = {};
   for (const link of s.linkedFate || []) {
     const a = s.players.findIndex(p => p.id === link.a);
     const b = s.players.findIndex(p => p.id === link.b);
@@ -1567,13 +1624,15 @@ function shareLinkedGains(s, beforePoints) {
     const bonusB = Math.floor(gains[a] / 2);
     s.players[b].points += bonusB;
     s.players[a].points += bonusA;
+    if (bonusB > 0) s.lastLinkedFateBonuses[b] = (s.lastLinkedFateBonuses[b] || 0) + bonusB;
+    if (bonusA > 0) s.lastLinkedFateBonuses[a] = (s.lastLinkedFateBonuses[a] || 0) + bonusA;
     // Track for Partners in Crime achievement
-    if (bonusB >= 10000) {
+      if (bonusB >= 10000) {
       // Player b received >= 10000 bonus
       if (s.linkedFateBonus) s.linkedFateBonus[b] = (s.linkedFateBonus[b] || 0) + bonusB;
       else s.linkedFateBonus = { [b]: bonusB };
     }
-    if (bonusA >= 10000) {
+      if (bonusA >= 10000) {
       if (s.linkedFateBonus) s.linkedFateBonus[a] = (s.linkedFateBonus[a] || 0) + bonusA;
       else s.linkedFateBonus = { [a]: bonusA };
     }
@@ -1659,8 +1718,6 @@ function startGame(room) {
 
   const s = Rules.createGame({
     rounds: room.requestedRounds,
-    // HARDCORE: every card plays twice, and the eliminations stack.
-    hardcore: !!room.hardcore,
     // How many players are really at the table - a card that needs a third
     // player is not dealt in a smaller lobby.
     playerCount: room.members.length,
@@ -1724,8 +1781,47 @@ const mime = {
   '.mp4': 'video/mp4',
   '.wasm': 'application/wasm',
   '.efk': 'application/octet-stream',
+  // 3D models for the immersive table. A model file, not a script.
+  '.fbx': 'application/octet-stream',
+  '.glb': 'model/gltf-binary',
+  '.gltf': 'model/gltf+json',
   '.efkefc': 'application/octet-stream'
 };
+
+function shoppingForToken(token) {
+  for (const room of rooms.values()) {
+    const challenge = room.shoppingChallenges && room.shoppingChallenges.get(token);
+    if (challenge) return { room, challenge };
+  }
+  return null;
+}
+
+function startShoppingChallenge(room, actorId, targetId) {
+  room.shoppingChallenges = room.shoppingChallenges || new Map();
+  room.lastShoppingRecipeByPlayer = room.lastShoppingRecipeByPlayer || {};
+  const challenge = Shopping.create(room.lastShoppingRecipeByPlayer[targetId]);
+  room.lastShoppingRecipeByPlayer[targetId] = challenge.recipe;
+  challenge.actorId = actorId;
+  challenge.targetId = targetId;
+  room.shoppingChallenges.set(challenge.token, challenge);
+  challenge.timer = setTimeout(() => settleShopping(room, challenge, 'timeout'), SHOPPING_TIMEOUT_MS + 100);
+  return challenge;
+}
+
+function settleShopping(room, challenge, outcome) {
+  if (!challenge || challenge.rewarded || (outcome !== 'complete' && challenge.status !== 'open')) return;
+  if (room.state && room.state.over) { challenge.status = 'cancelled'; return; }
+  challenge.status = outcome === 'complete' ? 'complete' : 'failed';
+  challenge.rewarded = true;
+  const player = room.state && room.state.players.find(p => p.id === challenge.targetId);
+  if (player) {
+    player.points += outcome === 'complete' ? 20000 : -10000;
+    addLog(room, player.name + (outcome === 'complete'
+      ? ' completed the Definitely Not Amazon challenge and earned 20,000 points.'
+      : ' did not finish the Definitely Not Amazon challenge and lost 10,000 points.'));
+  }
+  broadcast(room);
+}
 
 const httpServer = http.createServer(async (req, res) => {
   let pathname;
@@ -1785,6 +1881,34 @@ const httpServer = http.createServer(async (req, res) => {
     req.on('end', () => { try { resolve(JSON.parse(body || '{}')); } catch (e) { resolve({}); } });
   });
   const reqIp = ((req.socket.remoteAddress || '').replace(/^::ffff:/, '') || 'unknown');
+
+  // The shopping tab uses a random capability token, never an account or room
+  // code. It is private to the targeted player and exposes only challenge data.
+  if (pathname.indexOf('/api/shopping/') === 0) {
+    if (req.method === 'GET' && pathname === '/api/shopping/catalogue') {
+      return sendJson({ ok:true, products:Shopping.publicCatalogue() });
+    }
+    if (req.method === 'GET' && pathname === '/api/shopping/demo') {
+      return sendJson(Shopping.state(Shopping.create()));
+    }
+    const token = new URL(req.url, 'http://localhost').searchParams.get('token') || '';
+    const found = shoppingForToken(token);
+    if (!found) return sendJson({ ok:false, message:'That shopping challenge is no longer available.' }, 404);
+    const { room, challenge } = found;
+    if (req.method === 'GET' && pathname === '/api/shopping/state') return sendJson(Shopping.state(challenge));
+    if (req.method === 'POST' && pathname === '/api/shopping/basket') {
+      const body = await readJsonBody();
+      const result = Shopping.add(challenge, String(body.key || ''), body.quantity, body.answer);
+      if (result.ok) broadcast(room);
+      return sendJson(result, result.ok ? 200 : 400);
+    }
+    if (req.method === 'POST' && pathname === '/api/shopping/checkout') {
+      const result = Shopping.complete(challenge, await readJsonBody());
+      if (result.ok) settleShopping(room, challenge, 'complete');
+      return sendJson(result, result.ok ? 200 : 400);
+    }
+    return sendJson({ ok:false, message:'Not found.' }, 404);
+  }
 
   // Account routes exist only when Supabase is configured. Without it they
   // answer 503 rather than pretending to work (or silently letting anyone in).
@@ -2462,6 +2586,9 @@ function snapshot(room, member) {
   const pending = s ? dueChoice(s) : null;
   const pendingInteraction = interactionView(room.pendingInteraction, Rules.SEATS[member.seat].id);
   const mine = Rules.SEATS[member.seat].id;
+  const shopping = room.shoppingChallenges
+    ? [...room.shoppingChallenges.values()].find(c => c.status === 'open' && c.targetId === mine)
+    : null;
 
   // A HOSTAGE'S TURN belongs to the hostage, but the CRIMINAL plays it, so
   // the criminal is the one who is acting and the one who is given the moves.
@@ -2550,10 +2677,6 @@ function snapshot(room, member) {
     code: room.code,
     visibility: room.visibility || 'private',
     mode: room.mode || 'public',
-    // HARDCORE: every card plays twice in this room. The browser needs to
-    // know, so the Fake System Shutdown can be harsher and the Mimic can
-    // play its other prank.
-    hardcore: !!room.hardcore,
     host: room.members[0] === member,
     seat: member.seat,
     started: !!s,
@@ -2597,6 +2720,14 @@ function snapshot(room, member) {
     // TRUE when THIS player is the one watching the Mimic's video. The
     // client uses it to lock their own controls.
     watchingVideo: !!(room.rickroll && room.rickroll.playerId === mine),
+    shoppingChallenge: shopping ? {
+      token: shopping.token,
+      expiresAt: shopping.expiresAt,
+      actorName: (room.members.find(m => Rules.SEATS[m.seat].id === shopping.actorId) || {}).name || 'An opponent'
+    } : null,
+    shoppingPlayers: room.shoppingChallenges
+      ? [...room.shoppingChallenges.values()].filter(c => c.status === 'open').map(c => c.targetId)
+      : [],
 
     deckCount: s ? s.deck.length : 0,
     discardCount: s ? s.discard.length : 0,
@@ -2748,6 +2879,11 @@ function recordMatchWin(room) {
   if (!s || !s.over || !room.matchId || room.winRecorded) return;
   room.winRecorded = true;
 
+  if (room.wheelMisfortuneSurvivors) {
+    grantCardAchievements(room, Array.from(room.wheelMisfortuneSurvivors)
+      .map(playerId => ({ badgeKey: 'disaster-magnet', playerId })));
+  }
+
   // A tie is not a win for whoever happens to sit in the top seat.
   if (s.tied || s.winnerSeat < 0 || !room.members[s.winnerSeat]) return;
 
@@ -2786,6 +2922,12 @@ function closeRoom(room, reason) {
   const members = room.members.slice();
   if (room.interactionTimer) clearTimeout(room.interactionTimer);
   if (room.pendingInteraction && room.pendingInteraction.countdownTimer) clearTimeout(room.pendingInteraction.countdownTimer);
+  if (room.shoppingChallenges) {
+    room.shoppingChallenges.forEach(challenge => {
+      if (challenge.timer) clearTimeout(challenge.timer);
+      if (challenge.status === 'open') challenge.status = 'cancelled';
+    });
+  }
   room.interactionTimer = null;
   room.pendingInteraction = null;
   rooms.delete(room.code);
@@ -3153,7 +3295,7 @@ function handleExpansionInteraction(room, ws, data, m, pi) {
     broadcast(room);
     if (outcome.done) {
       recordEvents(room, outcome.events);
-      finishInteraction(room, { events: outcome.events, advanceTurn: true });
+      finishInteraction(room, { events: outcome.events, advanceTurn: true, loser: outcome.loser });
     }
     return true;
   }
@@ -3174,6 +3316,9 @@ function handleExpansionInteraction(room, ws, data, m, pi) {
     if (outcome.done) {
       finishInteraction(room, { events: outcome.events, advanceTurn: true });
     } else {
+      if (/gets away with it/i.test((outcome.events || []).map(e => e.text || '').join(' '))) {
+        grantCardAchievements(room, [{ badgeKey: 'lucky-escape', playerId: aimed }]);
+      }
       broadcast(room);
     }
     return true;
@@ -3412,9 +3557,7 @@ async function handle(ws, data) {
         log: ['Private room created. Invite at least one friend to start.']
       };
 
-      // HARDCORE is the creator's choice here too.
-    ownerRoom.hardcore = data.hardcore === true;
-    rooms.set(ownerRoom.code, ownerRoom);
+      rooms.set(ownerRoom.code, ownerRoom);
 
       const ownerMember = {
         seat: 0,
@@ -3490,12 +3633,10 @@ async function handle(ws, data) {
       name: playerName(ws, data),
       visibility,
       mode: 'public',
-      // HARDCORE is the creator's choice, and the server decides what it
-      // means: every card plays twice.
-      hardcore: data.hardcore === true,
       publicAllies: publicAllies(),
       createdAt: Date.now(),
       members: [],
+      shoppingChallenges: new Map(),
       state: null,
       phase: 'lobby',
       requestedRounds: 10,
@@ -4132,6 +4273,11 @@ async function handle(ws, data) {
         (o.targetId || null) === (targetId || null)
       )
     ) {
+      const ghostTarget = targetId && s.players.find(p => p.id === targetId);
+      const ghostCard = Rules.handOf(s, actorId).indexOf(cardId) !== -1;
+      if (ghostTarget && ghostTarget.ghost && ghostCard) {
+        grantCardAchievements(room, [{ badgeKey: 'untouchable', playerId: ghostTarget.id }]);
+      }
       return error(ws, 'That move is not legal.');
     }
 
@@ -4307,6 +4453,7 @@ async function handle(ws, data) {
     }
 
     const beforePoints = s.players.map(p => p.points);
+    const beforeOutUntil = s.players.map(p => p.outUntilRound);
 
     // A MIMIC is played through the engine's own path, because the effect
     // the card pretends to have must NEVER happen.
@@ -4345,6 +4492,9 @@ async function handle(ws, data) {
       const reflected = Expansion.checkTrap(room, actor, aimedAt, cardId);
       if (reflected) {
         recordEvents(room, [reflected]);
+        if (aimedAt.hunter && (cardId === 'knife' || cardId === 'zombie')) {
+          grantCardAchievements(room, [{ badgeKey: 'hunter-hunted', playerId: aimedAt.id }]);
+        }
         broadcast(room);
         return;
       }
@@ -4367,6 +4517,9 @@ async function handle(ws, data) {
         // server lets the player go whatever the client says.
         until: Date.now() + 8 * 60 * 1000
       };
+      grantCardAchievements(room, Achievements.checkCardAchievements(room, null, {
+        events: [{ type: 'result', cardId: 'mimic', text: 'The Mimic surprise.' }]
+      }, { cardId: 'mimic', actorId: actorId, targetId: actorId, disguisedCardPlayed: true, successful: true }));
       send(m.ws, { type: 'rickroll' });
       broadcast(room);
       return;
@@ -4374,10 +4527,71 @@ async function handle(ws, data) {
 
     recordEvents(room, result.events);
 
+    const directText = (result.events || []).map(e => e.text || '').join(' ').toLowerCase();
+    const directFact = {
+      cardId: cardId,
+      actorId: actorId,
+      successful: true,
+      eliminated: /eliminated|out for/.test(directText),
+      destroyedOpponentCard: cardId === 'alvin' && /destroy|burn/.test(directText),
+      revealedOpponentHand: cardId === 'reveal',
+      swappedAllies: cardId === 'swapper',
+      reflected: cardId === 'reverseofdoom' && /turned back|reflected|trap springs/.test(directText),
+      curseTriggered: result.events.some(e => e.type === 'curse')
+    };
+    const actorBefore = s.players.find(p => p.id === actorId);
+    const actorIndex = s.players.findIndex(p => p.id === actorId);
+    const target = targetId ? s.players.find(p => p.id === targetId) : null;
+    const targetIndex = targetId ? s.players.findIndex(p => p.id === targetId) : -1;
+    if (actorBefore && actorIndex >= 0) directFact.gain = actorBefore.points - beforePoints[actorIndex];
+    if (target && targetIndex >= 0) directFact.amount = Math.max(0, beforePoints[targetIndex] - target.points);
+    if (target && actorIndex >= 0 && targetIndex >= 0) directFact.scoreGap = Math.abs(beforePoints[targetIndex] - beforePoints[actorIndex]);
+    directFact.targetId = targetId;
+    const linkedReceiver = Object.keys(s.lastLinkedFateBonuses || {})
+      .find(i => s.lastLinkedFateBonuses[i] >= 20000);
+    if (linkedReceiver !== undefined) {
+      directFact.bonus = s.lastLinkedFateBonuses[linkedReceiver];
+      directFact.receiverId = s.players[Number(linkedReceiver)].id;
+    }
+    if (cardId === 'judge' && /judge activates/i.test(directText)) {
+      directFact.leadingEvilEliminated = /banished for/i.test(directText);
+      const blamed = s.players.find((p, i) => p.alias && p.outUntilRound > beforeOutUntil[i]);
+      if (blamed) {
+        directFact.disguisedBlame = true;
+        directFact.playerId = blamed.id;
+      }
+    }
+    if (pending && pending.kind === Rules.PENDING_CHOICE_KINDS.MOVE) {
+      directFact.forcedCard = cardId;
+      directFact.actorId = pending.chooserId;
+    }
+    if (cardId === 'zombie' && /zombie reflected/i.test(directText)) {
+      directFact.reflected = true;
+      directFact.hunterId = targetId;
+    }
+    if (cardId === 'skipall') directFact.skippedEveryone = true;
+    if (pending && pending.kind === Rules.PENDING_CHOICE_KINDS.BURN) {
+      directFact.destroyedOpponentCard = result.events.some(e => e.type === 'alvin' && !/already gone/i.test(e.text || ''));
+      directFact.actorId = pending.chooserId;
+    }
+    grantCardAchievements(room, Achievements.checkCardAchievements(room, null, result, directFact));
+
+    if (cardId === 'definitelynotamazon' && targetId && !s.over) {
+      const challenge = startShoppingChallenge(room, actorId, targetId);
+      const targetMember = room.members.find(member => Rules.SEATS[member.seat].id === targetId);
+      if (targetMember && targetMember.ws) send(targetMember.ws, {
+        type: 'shopping-start', token: challenge.token, expiresAt: challenge.expiresAt
+      });
+    }
+
     // THE POLICE OFFICER. If the hostage has been freed by now, the criminal
     // pays for it immediately.
+    const hostageOfficerId = s.hostage && s.hostage.officerId;
     const freed = Expansion.checkHostage(room);
-    if (freed) recordEvents(room, [freed]);
+    if (freed) {
+      recordEvents(room, [freed]);
+      grantCardAchievements(room, [{ badgeKey: 'negotiator', playerId: hostageOfficerId }]);
+    }
 
     if (
       s.round !== room.lastPhoenixRound &&

@@ -581,6 +581,8 @@ function startMemoryMayhem(room) {
   pi.roundData.phaseIndex = 0;
   pi.roundData.answers = {};
   pi.roundData.times = {};
+  pi.roundData.allAnswers = {};
+  pi.roundData.allTimes = {};
   pi.roundData.revealMs = 2500 + pi.roundData.sequences[0].length * 900;
   pi.phase = 'recall';
   return {
@@ -603,6 +605,10 @@ function memoryAnswer(room, playerId, sequenceIndex, answer) {
   // check here: the duplicate guard lives in the server's own submission check.
   data.answers[playerId] = String(answer || '');
   data.times[playerId] = Date.now();
+  data.allAnswers[playerId] = data.allAnswers[playerId] || {};
+  data.allTimes[playerId] = data.allTimes[playerId] || [];
+  data.allAnswers[playerId][sequenceIndex] = data.answers[playerId];
+  data.allTimes[playerId][sequenceIndex] = data.times[playerId];
 
   // Everybody answered? Move to the next sequence.
   const allAnswered = pi.participants.every(id => data.answers[id] !== undefined);
@@ -613,8 +619,8 @@ function memoryAnswer(room, playerId, sequenceIndex, answer) {
     data.answers = {};
     data.times = {};
     data.revealMs = 2500 + data.sequences[data.phaseIndex].length * 900;
-    return {
-      nextSequence: true,
+      return {
+        nextSequence: true,
       events: [{
         type: 'result', cardId: 'memorymayhem',
         text: 'Memory Mayhem - sequence ' + (data.phaseIndex + 1) + ' of 3.'
@@ -635,10 +641,12 @@ function memoryAnswer(room, playerId, sequenceIndex, answer) {
   // SLOWER player loses.
   scored.sort((a, b) => (a.accuracy - b.accuracy) || (b.time - a.time));
   const loser = scored[0];
+  const perfect = scored.filter(entry => entry.accuracy === 1).map(entry => entry.id);
   addPoints(room, loser.id, -8000);
   return {
     done: true,
     loser: loser.id,
+    achievementFacts: { perfectPlayerId: perfect[0] || null },
     events: [{
       type: 'result', cardId: 'memorymayhem',
       text: 'Memory Mayhem - ' + (playerById(room.state, loser.id) || {}).name +

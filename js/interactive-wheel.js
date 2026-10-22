@@ -79,18 +79,6 @@
       // The wheel may have changed under us: rebuild it for the new type.
       if (overlay.getAttribute('data-wheel') === type) {
         overlay.hidden = false;
-        // A HARDCORE second run: the wheel is spun again, so the button comes
-        // back, the feedback is cleared and the last result's highlight goes.
-        var spinAgain = document.getElementById('wheel-spin');
-        if (spinAgain) spinAgain.hidden = false;
-        var feedbackAgain = document.getElementById('wheel-feedback');
-        if (feedbackAgain) feedbackAgain.textContent = 'Waiting for spin…';
-        var graphicAgain = document.getElementById('wheel-graphic');
-        if (graphicAgain) graphicAgain.classList.remove('wheel-spinning');
-        var markedAgain = graphicAgain ? graphicAgain.querySelectorAll('.wheel-segment') : [];
-        Array.prototype.forEach.call(markedAgain, function (seg) {
-          seg.classList.remove('wheel-result');
-        });
         return;
       }
       close();

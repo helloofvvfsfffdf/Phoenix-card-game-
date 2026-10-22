@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "source": "server-generated local SVG placeholders",
+  "customArtworkPending": true,
+  "placeholderProducts": "all",
+  "notes": "No commercial product images are downloaded. Replace individual generated placeholders with licensed or original local artwork by stable product ID when artwork is commissioned.",
+  "counts": {
+    "ingredients": 37,
+    "equipment": 21,
+    "absurd": 35,
+    "maths": 15,
+    "total": 108
+  }
+}

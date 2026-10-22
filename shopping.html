@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Definitely Not Amazon</title><link rel="stylesheet" href="css/shopping.css">
+</head>
+<body>
+  <header class="shop-nav"><a class="brand" href="#">Definitely <b>Not Amazon</b></a><form id="search-form"><input id="search" placeholder="Search for ingredients, equipment, or suspicious cheese…" aria-label="Search products"><button>Search</button></form><button id="basket-button">Basket (<span id="basket-count">0</span>)</button></header>
+  <div class="notice"><b>This is NOT a real shopping website.</b> No real purchases will be made, and no money will be charged to your account. Everything here is part of a PHOENIX Entertainment minigame.</div>
+  <main class="shop-layout">
+    <aside><section class="recipe-card"><p class="eyebrow">YOUR PHOENIX RECIPE</p><h1 id="recipe-name">Loading…</h1><p>Find every required item, including the one that absolutely should not be in a kitchen.</p><ul id="requirements"></ul></section><section class="credentials"><h2>PHOENIX Purchase Credentials</h2><p>Use these fictional details at checkout. They remain yours for this challenge.</p><dl id="credentials"></dl></section><button id="return-game" class="return">↩ Return to PHOENIX</button></aside>
+    <section class="store"><div class="categories"><button data-category="all">All</button><button data-category="food">Ingredients</button><button data-category="equipment">Kitchen equipment</button><button data-category="absurd">Definitely sensible</button></div><div id="message" role="status"></div><div id="products" class="products"></div></section>
+  </main>
+  <aside id="basket-drawer" class="basket" hidden><button id="close-basket" class="close">×</button><h2>Your basket</h2><div id="basket-lines"></div><p class="basket-total">Total: <strong id="total">£0.00</strong></p><button id="checkout" class="checkout">Proceed to PHOENIXBANK checkout</button><p class="fineprint">Simulated checkout — no real payment required.</p></aside>
+  <dialog id="math-dialog"><form method="dialog"><h2>Kitchen maths</h2><p id="math-question"></p><input id="math-answer" inputmode="decimal" autocomplete="off"><p id="math-hint"></p><button id="math-submit" value="submit">Unlock product</button><button value="cancel">Cancel</button></form></dialog>
+  <dialog id="checkout-dialog"><form id="checkout-form"><h2>Would you like to pay with PHOENIXBANK?</h2><p>Type the fictional credentials shown in the PHOENIX Purchase Credentials panel.</p><p class="fineprint">Simulated checkout — no real payment required.</p><label>Email<input name="email" type="email" autocomplete="off" required placeholder="phoenix…@example.com"></label><label>Account ID<input name="accountId" autocomplete="off" required placeholder="PHX-…"></label><label>Security code<input name="securityCode" autocomplete="off" required placeholder="GECKO-…"></label><p id="checkout-message"></p><button>Pay with PHOENIXBANK</button><button type="button" id="cancel-checkout">Cancel</button></form></dialog>
+  <script src="js/shopping-client.js"></script>
+</body></html>

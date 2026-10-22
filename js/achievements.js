@@ -12,11 +12,14 @@
 const Auth = require('./auth');
 const Badges = require('./badges');
 const Rules = require('./rules');
+const CARD_ACHIEVEMENTS = require('./achievement-catalog');
 
 const SECRET_BADGE_KEYS = [
   'lucky-six', 'mind-reader', 'backstabber', 'lightning-reflexes',
   'jackpot', 'partners-in-crime', 'master-of-disguise', 'identity-crisis'
-];
+].concat(CARD_ACHIEVEMENTS.map(a => a.key));
+
+const CARD_ACHIEVEMENT_CATALOG = CARD_ACHIEVEMENTS;
 
 // Progress targets for multi-match achievements
 const PROGRESS_TARGETS = {
@@ -263,6 +266,64 @@ function checkProgressAchievements(room, pi, result) {
   return updates;
 }
 
+/* Evaluate card achievements only from completed server actions. */
+function checkCardAchievements(room, pi, result, facts) {
+  const out = [];
+  const s = room && room.state;
+  facts = facts || {};
+  if (result && result.achievementFacts) Object.assign(facts, result.achievementFacts);
+  const card = facts.cardId || (pi && pi.type) || '';
+  const text = ((result && result.events) || []).map(e => e.text || '').join(' ').toLowerCase();
+  const actorId = facts.actorId || (pi && pi.actorId);
+  const rd = (pi && pi.roundData) || {};
+  const add = (key, playerId) => out.push({ badgeKey: key, playerId: playerId || actorId });
+  const successful = result && result.events && result.events.length && !/nobody|incomplete|failed/i.test(text);
+
+  if (!successful && !facts.successful) return out;
+  if (card === 'bonus' && Number(facts.gain) >= 10000) add('pocket-money');
+  if (card === 'steal' && (facts.amount || 0) >= 50000) add('highway-robbery');
+  if (card === 'bankrobbery' && (facts.amount || 0) >= 25000) add('master-thief');
+  if (card === 'pointswap' && (facts.scoreGap || 0) >= 50000) add('tables-turned');
+  if ((facts.bonus || 0) >= 20000) add('partners-in-crime-card', facts.receiverId);
+  if (card === 'knife' && facts.eliminated) add('sharp-decision');
+  if (card === 'zombie' && facts.eliminated) add('undead-nightmare');
+  if (card === 'zombie' && facts.reflected && facts.hunterId) add('hunter-hunted', facts.hunterId);
+  if (card === 'reverseofdoom' && facts.reflected && ['knife', 'zombie'].includes(facts.reflectedCard)) add('hunter-hunted', facts.targetId);
+  if (card === 'ghost' && facts.blocked) add('untouchable', facts.targetId);
+  if (card === 'judge' && facts.leadingEvilEliminated) add('guilty-as-charged');
+  if (card === 'reverseofdoom' && facts.reflectedCard === 'phoenix') add('not-today', facts.targetId);
+  if (card === 'russianroulette' && facts.survived) add('lucky-escape', facts.survivorId);
+  if (card === 'skipall' && facts.skippedEveryone) add('my-turn-again');
+  if (card === 'stealturn' && facts.forcedCard) add('puppet-master');
+  if (facts.disguisedBlame) add('master-of-disguise-card', facts.playerId);
+  if (facts.curseTriggered) add('cursed-fortune');
+  if (card === 'alvin' && facts.destroyedOpponentCard) add('card-destroyer');
+  if (card === 'reveal' && facts.revealedOpponentHand) add('no-more-secrets');
+  if (card === 'swapper' && facts.swappedAllies) add('identity-crisis-card');
+  if (card === 'dice' && facts.winnerId) add('high-roller', facts.winnerId);
+  if (card === 'rps' && facts.winnerId) add('mind-reader-card', facts.winnerId);
+  if (card === 'betrayal' && facts.choices && facts.choices[actorId] === 'steal' &&
+      facts.choices[facts.targetId || (pi && pi.participants && pi.participants[1])] === 'share') add('trust-issues');
+  if (card === 'speed' && facts.winnerId && !facts.falseStart) add('lightning-reflexes-card', facts.winnerId);
+  if (card === 'impostor' && facts.impostorId === facts.winnerId) add('among-us', facts.impostorId);
+  if (card === 'musicalchairs' && facts.winnerId) add('take-a-seat', facts.winnerId);
+  if (card === 'musicalchairs' && Array.isArray(facts.winnerIds)) facts.winnerIds.forEach(id => add('take-a-seat', id));
+  if (card === 'memorymayhem' && facts.perfectPlayerId) add('photographic-memory', facts.perfectPlayerId);
+  if (card === 'joshuasurvey' && facts.winnerId) add('peoples-choice', facts.winnerId);
+  if (card === 'wheel' && ['gain_10k', 'others_gain_20k', 'victory'].includes(facts.outcome)) add('fortune-favours-me');
+  if (card === 'wheelofmisfortune' && facts.negative && facts.survived) add('disaster-magnet');
+  if (card === 'phoenix' && successful) add('rise-of-the-phoenix');
+  if (card === 'president' && facts.completedRounds >= 5) add('mr-president');
+  if (card === 'hostage' && facts.rescued && facts.policeId) add('negotiator', facts.policeId);
+  if (card === 'mimic' && facts.disguisedCardPlayed) add('youve-been-mimicked', facts.targetId);
+  if (card === 'trailer' && successful) add('free-advertising');
+  if (card === 'enjoyingthetrailer' && successful) add('biggest-fan');
+  if (card === 'dehydrated' && successful) add('stay-hydrated');
+  if (card === 'support' && facts.rejected) add('complaint-rejected');
+  if (card === 'nothing' && successful) add('absolutely-nothing');
+  return out;
+}
+
 module.exports = {
   SECRET_BADGE_KEYS,
   PROGRESS_TARGETS,
@@ -271,5 +332,7 @@ module.exports = {
   updateProgress,
   grantBadge,
   checkInteractionAchievements,
-  checkProgressAchievements
+  checkProgressAchievements,
+  checkCardAchievements,
+  CARD_ACHIEVEMENT_CATALOG
 };

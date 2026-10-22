@@ -408,42 +408,10 @@
 @keyframes badgeFadeOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(120%); } }
 
 /* ======================================================================== */
-/* HARDCORE                                                                  */
+/* THE LOBBY LIST                                                            */
 /* ======================================================================== */
 
-/* The tick box on the lobby forms. It is deliberately loud: a hardcore table
- * is a different game, and everybody at it should know before they sit down. */
-.online-hardcore {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  padding: 10px 14px;
-  border: 1px solid #a3402f;
-  border-radius: 10px;
-  background: rgba(74, 22, 16, .5);
-  color: #ff9d7a;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 2px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.online-hardcore input {
-  width: 17px;
-  height: 17px;
-  min-width: 0;
-  accent-color: #ff7a4d;
-  cursor: pointer;
-}
-
-.online-hardcore:hover {
-  border-color: #ff7a4d;
-  color: #ffb59c;
-}
-
-/* The lobby list. A hardcore lobby says so, in the list everybody reads
- * before they join. */
+/* The lobby list, in the list everybody reads before they join. */
 .lobby-list {
   display: flex;
   flex-direction: column;
@@ -478,15 +446,4 @@
 .lobby-players {
   color: #8fa4c8;
   font-size: 13px;
-}
-
-.lobby-hardcore {
-  padding: 3px 10px;
-  border: 1px solid #ff7a4d;
-  border-radius: 999px;
-  background: rgba(74, 22, 16, .6);
-  color: #ff9d7a;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 2px;
 }

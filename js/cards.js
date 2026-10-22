@@ -457,6 +457,19 @@
       targetNote: 'Pick one opponent to hold hostage.'
     },
     {
+      id: 'definitelynotamazon',
+      name: 'Definitely Not Amazon',
+      short: 'Not Amazon',
+      glyph: '\u{1F6D2}',
+      tone: 'shopping',
+      kind: 'chaos',
+      needsTarget: true,
+      inLiveGame: true,
+      blurb: 'Send an opponent shopping for dinner and nonsense.',
+      rule: 'Choose an opponent. They receive a five-minute fictional shopping challenge. A successful PHOENIXBANK checkout earns them 20,000 points; an expired challenge costs them 10,000.',
+      targetNote: 'Pick one opponent to send shopping.'
+    },
+    {
       id: 'president',
       name: 'President',
       short: 'President',
@@ -515,8 +528,8 @@
       ownerOnly: true,
       inDeck: false,
       // Like the other two owner-only cards, it is dealt in an OWNER room by
-      // name and nowhere else. It is a card in an ordinary match and in a
-      // hardcore one alike - hardcore doubles its effect like any other.
+      // name and nowhere else. It is a card in an ordinary match like any
+      // other, and it is the owner's alone.
       inLiveGame: false,
       needsTarget: true,
       blurb: 'They enjoy the trailer. All of it.',

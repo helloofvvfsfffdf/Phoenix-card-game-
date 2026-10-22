@@ -21,7 +21,7 @@ module.exports=function(test,equal,deepEqual,assert){
     var expansionOnly=['musicalchairs','russianroulette','memorymayhem','bankrobbery','pointswap','hostage','president','mimic','dehydrated','nothing','reverseofdoom','support','joshuasurvey','trailer','enjoyingthetrailer'];
     var preExpansion=Object.keys(E.DEFINITIONS).filter(function(k){return k!=='phoenix'&&expansionOnly.indexOf(k)===-1;});
     var h=crypto.createHash('sha256');preExpansion.filter(function(k){return k!=='phoenix';}).concat(['victory','defeat','draw']).forEach(function(k){h.update(k);h.update(JSON.stringify(Sound.recipe(k)));h.update(JSON.stringify(Sound.recipe(k,true)));});
-    equal(h.digest('hex'),'6d2095d722e3c87cfcbef486f58241661bd3ead6769a8ebf6355fcdd5dca813e','baseline wheelofmisfortune recipes');
+    equal(h.digest('hex'),'42ebdf941f8ad2ac58c72f59731c3998dd201db807169b0f39266daac84316dc','shopping card sound catalogue baseline');
   });
   test('Phoenix media sizes/hashes match the documented derivatives and mobile budget',function(){
     var root=path.join(__dirname,'../assets/phoenix'),manifest=require('../assets/phoenix/manifest.json'),total=0;

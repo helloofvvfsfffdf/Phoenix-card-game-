@@ -11,6 +11,7 @@
 'use strict';
 
 const Auth = require('./auth');
+const CARD_ACHIEVEMENTS = require('./achievement-catalog');
 
 const PHOENIX_KEY = 'phoenix';
 const MAX_FEATURED = 3;
@@ -51,7 +52,7 @@ const WIN_BADGE_KEY = 'champion';
 const SECRET_BADGE_KEYS = [
   'lucky-six', 'mind-reader', 'backstabber', 'lightning-reflexes',
   'jackpot', 'partners-in-crime', 'master-of-disguise', 'identity-crisis'
-];
+].concat(CARD_ACHIEVEMENTS.map(a => a.key));
 
 const AUTO_AWARDABLE_KEYS = [WIN_BADGE_KEY].concat(SECRET_BADGE_KEYS);
 

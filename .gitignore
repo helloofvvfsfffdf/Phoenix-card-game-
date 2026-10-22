@@ -3,3 +3,12 @@ npm-debug.log*
 .env
 test-output*.txt
 .phoenix-server-state.json
+
+# The raw Mixamo downloads are enormous and the converted characters are
+# what the game loads. The originals stay in Downloads.
+assets/mixamo/*.fbx
+
+# The editor's own folder, and a stray archive.
+.vs/
+assets.zip
+prototype-accidental-backup.js

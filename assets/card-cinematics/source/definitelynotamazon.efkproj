@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Original 2D PHOENIX shopping-basket composition. Compile with the
+     project's Effekseer toolchain when the asset build is available. -->
+<EffectProject name="DefinitelyNotAmazon" version="1.80.7" />

@@ -33,6 +33,7 @@
     bankrobbery:'<rect x="16" y="44" width="68" height="40" rx="5"/><circle cx="50" cy="62" r="12"/><path d="M50 50v24M38 62h24"/><path d="M30 44V32a20 20 0 0 1 40 0v12"/>',
     pointswap:'<path d="M22 38h40l-12-12"/><path d="M78 62H38l12 12"/><path d="M22 38v10M78 62V52"/>',
     hostage:'<circle cx="50" cy="34" r="14"/><path d="M36 50h28v34H36Z"/><path d="M28 30h44"/><path d="M44 50v-8M56 50v-8"/>',
+    definitelynotamazon:'<path d="M18 28h52l-6 38H28Z"/><path d="M18 28l-5-10H6M30 76a5 5 0 1 0 .01 0M62 76a5 5 0 1 0 .01 0"/><path d="M32 42h24M36 52h16"/>',
     president:'<path d="M50 18l8 12h-16Z"/><path d="M24 84l8-34 18 14 18-14 8 34Z"/><path d="M36 30l6-10 8 12 8-12 6 10"/>',
     mimic:'<path d="M20 62c0-20 14-34 30-34s30 14 30 34"/><path d="M34 60h.01M50 60h.01M66 60h.01"/><path d="M38 74q12 10 24 0"/><path d="M64 34l14-12"/>',
     dehydrated:'<path d="M50 14c-14 20-22 30-22 42a22 22 0 0 0 44 0c0-12-8-22-22-42Z"/><path d="M40 58a10 10 0 0 0 10 10"/>',
