@@ -176,6 +176,11 @@ function cameraFocus(context, point, seconds) {
   while (difference < -Math.PI) difference += Math.PI * 2;
   difference = Math.max(-0.8, Math.min(0.8, difference));
   const target = start + difference;
+  // The head tips towards the thing as well, so a player can be shown their
+  // own laptop on the table in front of them.
+  const here = context.cameraPosition;
+  const away = Math.hypot(point.x - here.x, point.z - here.z);
+  const targetPitch = Math.max(-1.15, Math.min(0.9, Math.atan2(point.y - here.y, Math.max(0.2, away))));
   const started = performance.now();
   const duration = (seconds || 1.2) * 1000;
   return new Promise(function (resolve) {
@@ -183,7 +188,7 @@ function cameraFocus(context, point, seconds) {
       const t = Math.min(1, (performance.now() - started) / duration);
       const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
       context.cameraState.yaw = start + (target - start) * eased;
-      context.cameraState.pitch = startPitch + (0.12 - startPitch) * eased * 0.5;
+      context.cameraState.pitch = startPitch + (targetPitch - startPitch) * eased;
       if (t < 1) requestAnimationFrame(step);
       else resolve();
     };

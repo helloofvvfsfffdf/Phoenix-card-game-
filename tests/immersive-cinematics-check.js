@@ -146,13 +146,17 @@ async function main() {
     const errors = await evaluate('window.immersiveErrors || []');
     assert.deepStrictEqual(errors, [], 'the page raised no errors');
 
-    // And everybody is still sitting where they were.
+    // And everybody is still sitting where they were. The room is given a
+    // moment to settle first: the seat lock runs on the next frame, and
+    // this is about where the people come to rest, not where they are
+    // between two frames.
+    await wait(500);
     const snapshot = await evaluate('window.PhoenixImmersive.stateSnapshot()');
     const wrong = snapshot.seatings.filter((seating) => {
       if (!seating) return false;
       return Math.abs(seating.hips - seating.seatTop) > 0.02;
     });
-    assert.deepStrictEqual(wrong.map((s) => s.seat), [],
+    assert.deepStrictEqual(wrong.map((s) => s.seat + ' at ' + s.hips.toFixed(3)), [],
       'everybody is still on their chair after thirty-eight cinematics');
 
     // The slow ones are worth knowing about.

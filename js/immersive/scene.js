@@ -91,12 +91,12 @@ export function createScene(container, options) {
   /* ---- the lights ---- */
 
   // The room's own ambience: cool from above, warm from the floor.
-  const hemi = new THREE.HemisphereLight(0x6d86b8, 0x33241a, 0.3);
+  const hemi = new THREE.HemisphereLight(0x6d86b8, 0x33241a, 0.16);
   scene.add(hemi);
 
   // The lamp over the table. It is the light everything is lit by, and the
   // only bright thing in the room: the table is the stage.
-  const lamp = new THREE.SpotLight(PALETTE.lamp, 42, 14, Math.PI * 0.46, 0.6, 1.5);
+  const lamp = new THREE.SpotLight(PALETTE.lamp, 20, 13, Math.PI * 0.46, 0.65, 1.6);
   lamp.position.set(0, 2.6, 0);
   lamp.target.position.set(0, 0.78, 0);
   lamp.castShadow = QUALITY[settings.quality].shadows;
@@ -108,24 +108,24 @@ export function createScene(container, options) {
   scene.add(lamp.target);
 
   // A soft fill from the side, so a face is never a black hole.
-  const fill = new THREE.DirectionalLight(PALETTE.cool, 0.55);
+  const fill = new THREE.DirectionalLight(PALETTE.cool, 0.3);
   fill.position.set(-4, 3.2, 3.4);
   scene.add(fill);
 
   // A second, cooler fill from the other side, so the table is lit all round.
-  const fillBack = new THREE.DirectionalLight(0xbcd0ff, 0.12);
+  const fillBack = new THREE.DirectionalLight(0xbcd0ff, 0.08);
   fillBack.position.set(4.2, 2.6, -3.6);
   scene.add(fillBack);
 
   // A warm bounce off the table, aimed back up at the players.
-  const bounce = new THREE.PointLight(0xffb765, 7, 5, 2);
+  const bounce = new THREE.PointLight(0xffb765, 3.5, 4.5, 2);
   bounce.position.set(0, 1.05, 0);
   scene.add(bounce);
 
   // The light in the player's own hands. It lives on the camera, so the cards
   // and the arms are always lit no matter where in the room the player is
   // looking - and it is short enough that it never reaches across the table.
-  const handLight = new THREE.PointLight(0xfff2d8, 2.4, 2.4, 1.5);
+  const handLight = new THREE.PointLight(0xfff2d8, 1.8, 2.2, 1.5);
   handLight.position.set(0, 0.05, -0.35);
   camera.add(handLight);
 

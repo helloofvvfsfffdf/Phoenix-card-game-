@@ -608,9 +608,70 @@ export function createBankScreen() {
   // What the game wants the player to know, and the video that is playing.
   let objective = null;
   let playing = null;
+  // Who this screen belongs to: the room, the seat, the round, the name.
+  let context = { room: '', seat: 0, round: 0, rounds: 0, name: '' };
+  // The result of the match, once there is one.
+  let result = null;
+
+  /** The masthead: the same words the menu has in its top left corner. */
+  function drawMasthead() {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(240, 196, 106, 0.92)';
+    ctx.font = 'bold 13px system-ui, sans-serif';
+    ctx.fillText('THE CARD GAME', 22, 24);
+    ctx.fillStyle = '#f6f0dc';
+    ctx.font = 'bold 34px system-ui, sans-serif';
+    ctx.fillText('PHOENIX', 22, 54);
+    ctx.fillStyle = 'rgba(215, 240, 228, 0.55)';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillText('RISE · PLAY · SURVIVE', 24, 70);
+    if (context.room) {
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#f0c46a';
+      ctx.font = 'bold 14px system-ui, sans-serif';
+      ctx.fillText('ROOM ' + context.room, w - 22, 26);
+    }
+    if (context.name) {
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(215, 240, 228, 0.75)';
+      ctx.font = '13px system-ui, sans-serif';
+      ctx.fillText(context.name, w - 22, 48);
+    }
+    if (context.round) {
+      ctx.textAlign = 'right';
+      ctx.fillStyle = 'rgba(215, 240, 228, 0.55)';
+      ctx.font = '12px system-ui, sans-serif';
+      ctx.fillText('ROUND ' + context.round + (context.rounds ? ' / ' + context.rounds : ''), w - 22, 66);
+    }
+  }
+
+  /** The result of the match: who won, and the table as it ended. */
+  function drawResult() {
+    ctx.textAlign = 'center';
+    const won = result.won;
+    ctx.fillStyle = won ? '#ffd16b' : '#9fb0c9';
+    ctx.font = 'bold 46px system-ui, sans-serif';
+    ctx.fillText(won ? 'VICTORY' : 'DEFEAT', w / 2, 148);
+    ctx.fillStyle = 'rgba(240, 236, 220, 0.85)';
+    ctx.font = '18px system-ui, sans-serif';
+    ctx.fillText(result.winner ? result.winner + ' wins' : 'The match is over', w / 2, 176);
+
+    // The table as it ended.
+    ctx.textAlign = 'left';
+    let y = 208;
+    (result.standings || []).slice(0, 4).forEach(function (row) {
+      ctx.fillStyle = row.me ? '#ffd16b' : 'rgba(240, 236, 220, 0.8)';
+      ctx.font = (row.me ? 'bold ' : '') + '15px system-ui, sans-serif';
+      ctx.fillText(row.name + (row.me ? '  (you)' : ''), 30, y);
+      ctx.textAlign = 'right';
+      ctx.fillText(String(row.points), w - 30, y);
+      ctx.textAlign = 'left';
+      y += 19;
+    });
+  }
 
   function draw(now) {
-    if (now < noticeUntil && notice) {
+    if (now < noticeUntil && notice && !result) {
       // The notification band.
       const up = notice.delta >= 0;
       const band = ctx.createLinearGradient(0, 0, 0, 74);
@@ -630,39 +691,39 @@ export function createBankScreen() {
     // The background: a lit screen, so it reads as a screen from across
     // the table and not as a black slab.
     const bg = ctx.createLinearGradient(0, 0, 0, h);
-    bg.addColorStop(0, '#2f6a5c');
-    bg.addColorStop(1, '#173a33');
+    bg.addColorStop(0, '#3d8874');
+    bg.addColorStop(1, '#1d5548');
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = 'rgba(160, 240, 205, 0.14)';
-    ctx.fillRect(0, 84, w, 92);
 
-    // The bank.
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#f0c46a';
-    ctx.font = 'bold 22px system-ui, sans-serif';
-    ctx.fillText('PHOENIX BANK', 26, 44);
-    ctx.fillStyle = 'rgba(215, 240, 228, 0.7)';
-    ctx.font = '15px system-ui, sans-serif';
-    ctx.fillText('GAME POINTS · NOT REAL MONEY', 26, 66);
+    if (result) {
+      drawMasthead();
+      ctx.fillStyle = 'rgba(8, 22, 20, 0.55)';
+      ctx.fillRect(0, 80, w, h - 80);
+      drawResult();
+      texture.needsUpdate = true;
+      return;
+    }
+
+    drawMasthead();
 
     // The balance.
     ctx.textAlign = 'right';
     ctx.fillStyle = '#f6f0dc';
-    ctx.font = 'bold 54px system-ui, sans-serif';
-    ctx.fillText(balance.toLocaleString('en-GB'), w - 26, 132);
+    ctx.font = 'bold 50px system-ui, sans-serif';
+    ctx.fillText(balance.toLocaleString('en-GB'), w - 26, 138);
     ctx.fillStyle = 'rgba(215, 240, 228, 0.75)';
-    ctx.font = '17px system-ui, sans-serif';
-    ctx.fillText('PHOENIX POINTS', w - 26, 158);
+    ctx.font = '16px system-ui, sans-serif';
+    ctx.fillText('PHOENIX POINTS', w - 26, 162);
 
     // The objective, when the game has set one.
     if (objective) {
       ctx.fillStyle = 'rgba(201, 150, 63, 0.92)';
       ctx.fillRect(0, 84, w, 34);
       ctx.fillStyle = '#1a1206';
-      ctx.font = 'bold 20px system-ui, sans-serif';
+      ctx.font = 'bold 19px system-ui, sans-serif';
       ctx.textAlign = 'left';
-      ctx.fillText(objective.slice(0, 40), 16, 107);
+      ctx.fillText(objective.slice(0, 42), 16, 107);
     }
 
     // The video that is playing, if there is one.
@@ -759,6 +820,26 @@ export function createBankScreen() {
       playing = null;
       draw(performance.now());
     },
-    get balance() { return balance; }
+    /**
+     * Who this screen belongs to.
+     *
+     * The room, the seat, the round and the name of the person sitting in
+     * front of it - so the screen says whose it is.
+     */
+    setContext: function (next) {
+      context = Object.assign({ room: '', seat: 0, round: 0, rounds: 0, name: '' }, context, next || {});
+      draw(performance.now());
+    },
+    /** The match is over: show the result instead of the balance. */
+    setResult: function (next) {
+      result = next || null;
+      draw(performance.now());
+    },
+    clearResult: function () {
+      result = null;
+      draw(performance.now());
+    },
+    get balance() { return balance; },
+    get result() { return result; }
   };
 }

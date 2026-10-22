@@ -163,7 +163,7 @@ body {
 
 .immersive-net {
   position: fixed;
-  top: 14px;
+  bottom: 14px;
   left: 14px;
   display: flex;
   flex-direction: column;
@@ -429,6 +429,48 @@ body {
   background: transparent;
   color: var(--immersive-dim);
   border-color: var(--immersive-edge);
+}
+
+/* ---- the video on a laptop screen ---- */
+
+/* The element that is put over the laptop's screen. The director works out
+ * where the screen is in the room and turns this into the right shape, so
+ * the video is really on the laptop and not floating over it. */
+.immersive-screen-map {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 640px;
+  height: 360px;
+  transform-origin: 0 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 9;
+  background: #05080e;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.immersive-screen-map-frame,
+.immersive-screen-map-frame iframe {
+  display: block;
+  width: 640px;
+  height: 360px;
+  border: 0;
+}
+
+.immersive-screen-map-note {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 3px 6px;
+  background: rgba(6, 10, 18, .8);
+  color: #f0d9a8;
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  text-align: center;
 }
 
 /* ---- the HUD ---- */

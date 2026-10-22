@@ -114,6 +114,15 @@ export function startPrototype(root) {
   let localSeat = 0;
 
   /**
+   * The view, locked onto something.
+   *
+   * At the end of a match the player looks at their own laptop and cannot
+   * look away: the result is on that screen, and the last thing they see
+   * of the match is their own bank saying how it went.
+   */
+  let viewLock = null;
+
+  /**
    * The server's own snapshot.
    *
    * This is the SAME shape the 2D game keeps: one object, replaced every
@@ -188,11 +197,22 @@ export function startPrototype(root) {
   function applyState(next) {
     const previousSeat = snapshot ? snapshot.seat : -1;
     const previousRound = snapshot ? snapshot.round : null;
+    const previousOver = snapshot ? !!snapshot.over : false;
     snapshot = next;
 
     // A new round: anything that lasts a round wears off.
     if (previousRound !== null && next.round !== previousRound) {
       restoreGhosts();
+    }
+
+    // The match is over: the laptops show the result, and the view is
+    // locked onto the player's own screen.
+    if (next.over && !previousOver) {
+      endOfMatch(next);
+    } else if (!next.over && previousOver) {
+      // A new match: the screens go back to being banks.
+      viewLock = null;
+      state.laptops.forEach(function (entry) { entry.laptop.bank.clearResult(); });
     }
 
     // The hand is the server's, always.
@@ -204,11 +224,18 @@ export function startPrototype(root) {
       setLocalSeat(next.seat);
     }
 
-    // The bank screens show their own owner's balance. The scores are
-    // public, so every screen is showing the truth.
+    // The bank screens show their own owner's balance, and say whose they
+    // are. The scores are public, so every screen is showing the truth.
     state.laptops.forEach(function (entry) {
       const owner = next.players && next.players[entry.seat] ? next.players[entry.seat] : null;
       if (owner) entry.laptop.bank.set(owner.points || 0);
+      entry.laptop.bank.setContext({
+        room: next.code || '',
+        seat: entry.seat + 1,
+        round: next.round || 0,
+        rounds: next.rounds || 0,
+        name: owner ? owner.name : ''
+      });
     });
 
     // The overlays that ask a question.
@@ -221,6 +248,82 @@ export function startPrototype(root) {
     playJournal(next);
 
     updateHud();
+  }
+
+  /**
+   * The match is over.
+   *
+   * The player's own laptop shows the result - who won, and the table as
+   * it ended - and the view is locked onto that screen, so the last thing
+   * the player sees is their own bank saying how it went. The look cannot
+   * be turned away from it until they leave.
+   */
+  function endOfMatch(next) {
+    const me = next.seat;
+    const winner = next.winner;
+    const standings = (next.players || []).slice().sort(function (a, b) {
+      return (b.points || 0) - (a.points || 0);
+    }).map(function (player, index) {
+      return {
+        name: player.name,
+        points: player.points || 0,
+        me: index === me,
+        seat: index
+      };
+    });
+    const won = !!winner && winner === (next.players && next.players[me] ? next.players[me].id : null);
+
+    state.laptops.forEach(function (entry) {
+      entry.laptop.bank.setResult({
+        won: won,
+        winner: winnerName(next),
+        standings: standings
+      });
+    });
+
+    // And the view is locked onto the player's own screen.
+    const mine = state.laptops.filter(function (entry) { return entry.seat === me; })[0];
+    if (mine) {
+      const point = mine.laptop.screenWorldPosition();
+      lockViewTo(point);
+    }
+
+    // The show the game already has: the same victory and defeat screens
+    // the 2D table puts up, over the top of the room.
+    const player = next.players && next.players[me] ? next.players[me] : null;
+    const identity = {
+      name: player ? player.name : 'The champion',
+      ally: player && player.ally ? player.ally : null
+    };
+    const scene = won ? window.PhoenixVictoryScene : window.PhoenixDefeatScene;
+    if (scene && typeof scene.start === 'function') {
+      try {
+        scene.start({
+          winner: identity,
+          reduced: !!settings.reducedMotion,
+          onFinish: function () { /* the room is left as it is */ }
+        });
+      } catch (error) { /* the show is a treat, not a requirement */ }
+    }
+
+    setStatus(won ? 'You won the match.' : 'The match is over.');
+  }
+
+  /** The name of the winner, if there is one. */
+  function winnerName(next) {
+    if (!next.winner) return '';
+    const player = (next.players || []).filter(function (p) { return p.id === next.winner; })[0];
+    return player ? player.name : next.winner;
+  }
+
+  /** The view is locked onto a point, and cannot be turned away from it. */
+  function lockViewTo(point) {
+    viewLock = {
+      point: point.clone(),
+      yaw: cameraState.yaw,
+      pitch: cameraState.pitch,
+      until: performance.now() + 1000
+    };
   }
 
   /** Put back anybody who was made transparent by the Ghost card. */
@@ -353,7 +456,7 @@ export function startPrototype(root) {
   /* ---- the map ---- */
 
   const mapId = root.getAttribute('data-map') || 'modern-gaming-lounge';
-  loadMap(mapId, { seats: 5 })
+  loadMap(mapId, { seats: 5, quality: settings.quality })
     .then(function (map) {
       state.map = map;
       scene.add(map.root);
@@ -385,14 +488,31 @@ export function startPrototype(root) {
 
       // The laptops: the room says where they stand, and the game puts a
       // LIVE bank screen on each of them.
+      //
+      // The room's own laptops were boxes, so the direction they faced was
+      // whatever way the box had been turned - which is no way at all. The
+      // screens are turned to face their owner instead, because a screen
+      // you cannot read is not a screen.
       const surface = map.anchors.table ? map.anchors.table.surface : 1.0;
-      state.laptops = map.anchors.laptops.map(function (anchor) {
+      const laptops = map.anchors.laptops.map(function (anchor) {
         const laptop = createLaptop({});
         laptop.group.position.set(anchor.position.x, surface + 0.002, anchor.position.z);
-        laptop.group.quaternion.copy(anchor.quaternion);
+        const owner = state.seats[anchor.seat - 1];
+        if (owner) {
+          laptop.group.rotation.y = Math.atan2(
+            owner.position.x - anchor.position.x,
+            owner.position.z - anchor.position.z
+          );
+        } else {
+          laptop.group.quaternion.copy(anchor.quaternion);
+        }
         scene.add(laptop.group);
         return { seat: anchor.seat - 1, laptop: laptop, anchor: anchor };
       });
+      // The list is filled in place, because the director was given the
+      // list before the room arrived and must be holding the same one.
+      state.laptops.length = 0;
+      laptops.forEach(function (entry) { state.laptops.push(entry); });
 
       // The PHOENIX decorations, on the new room's walls.
       buildPoster(scene, { x: -5.86, z: -1.2, ry: Math.PI / 2 });
@@ -542,6 +662,9 @@ export function startPrototype(root) {
   }
 
   function lookBy(dx, dy) {
+    // While the view is locked, the mouse does nothing: the player is
+    // looking at the result and stays looking at it.
+    if (viewLock) return;
     const speed = 0.0032 * settings.sensitivity;
     cameraState.yaw = Math.max(-LIMITS.yaw, Math.min(LIMITS.yaw, cameraState.yaw - dx * speed));
     cameraState.pitch = Math.max(-LIMITS.pitch, Math.min(LIMITS.pitch, cameraState.pitch - dy * speed));
@@ -790,6 +913,20 @@ export function startPrototype(root) {
     head.rotation.y = cameraState.baseYaw + cameraState.yaw;
     head.rotation.x = cameraState.pitch;
 
+    // The view, locked onto the laptop at the end of the match. The turn
+    // towards it is eased, so it reads as the player turning round rather
+    // than as the camera being moved.
+    if (viewLock) {
+      const here = camera.getWorldPosition(new THREE.Vector3());
+      const wanted = Math.atan2(viewLock.point.x - here.x, viewLock.point.z - here.z) - cameraState.baseYaw;
+      const distance = Math.hypot(viewLock.point.x - here.x, viewLock.point.z - here.z);
+      const wantedPitch = Math.max(-1.15, Math.min(0.9, Math.atan2(viewLock.point.y - here.y, distance)));
+      cameraState.yaw = wanted;
+      cameraState.pitch = wantedPitch;
+      head.rotation.y = cameraState.baseYaw + cameraState.yaw;
+      head.rotation.x = cameraState.pitch;
+    }
+
     // The people are Mixamo models, so their own animations are what move
     // them: the mixer, and nothing else. And then they are put back on
     // their chairs, exactly, whatever the animation did.
@@ -830,6 +967,10 @@ export function startPrototype(root) {
 
     // Where the camera is, for the cinematics that want to look at it.
     camera.getWorldPosition(director.context.cameraPosition);
+
+    // The video on a laptop screen, and anything else that has to be kept
+    // in step with the room.
+    director.update();
 
     renderer.render(scene, camera);
   }

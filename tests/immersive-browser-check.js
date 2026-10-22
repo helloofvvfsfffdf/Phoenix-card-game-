@@ -319,6 +319,66 @@ async function main() {
         drift.after[index].toFixed(4) + ')');
     });
 
+    // 6d. The Mimic's video really plays on the laptop's screen: the player
+    //      is put over the screen in the room, at the right shape.
+    const mimic = await evaluate(`new Promise((resolve) => {
+      const p = window.PhoenixImmersive;
+      const events = [{ type: 'card', cardId: 'mimic', seat: 0, targetSeat: 0 }];
+      const running = p.playShow('mimic', events, { reducedMotion: true });
+      setTimeout(() => {
+        const frame = document.querySelector('.immersive-screen-map');
+        resolve({
+          exists: !!frame,
+          visible: frame ? frame.style.visibility : null,
+          mapped: frame ? /^matrix3d\\(/.test(frame.style.transform) : false,
+          player: !!document.getElementById('immersive-mimic-frame'),
+          running: running
+        });
+      }, 2600);
+    })`);
+    assert.strictEqual(mimic.exists, true, 'the video is put on the laptop screen');
+    assert.strictEqual(mimic.visible, 'visible', 'and the screen is turned towards the player');
+    assert.strictEqual(mimic.mapped, true, 'and the player is fitted to the screen in the room');
+    assert.strictEqual(mimic.player, true, 'with a video player in it');
+    await evaluate('new Promise((resolve) => setTimeout(resolve, 6000))');
+    const mimicGone = await evaluate('!document.querySelector(".immersive-screen-map")');
+    assert.strictEqual(mimicGone, true, 'and it is put away when the video is over');
+
+    // 6e. The end of the match: the player's own laptop shows the result,
+    //      and the view is locked onto it.
+    const over = await evaluate(`(() => {
+      const p = window.PhoenixImmersive;
+      const snapshot = JSON.parse(JSON.stringify(window.__lastSnapshot));
+      snapshot.over = true;
+      snapshot.winner = 'chatgpt';
+      snapshot.players[0].points = 12000;
+      snapshot.players[1].points = 40000;
+      p.applyState(snapshot);
+      const bank = p.state.laptops[0].laptop.bank;
+      return {
+        result: bank.result,
+        context: bank.result ? { won: bank.result.won, winner: bank.result.winner,
+          standings: bank.result.standings.length } : null
+      };
+    })()`);
+    assert(over.result, 'the laptop shows the result of the match');
+    assert.strictEqual(over.context.won, false, 'and knows whether the player won');
+    assert.strictEqual(over.context.winner, 'Brook', 'and who did win');
+    assert.strictEqual(over.context.standings, 5, 'with the table as it ended');
+
+    // And the view cannot be turned away from it.
+    const locked = await evaluate(`(async () => {
+      const p = window.PhoenixImmersive;
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const before = p.stateSnapshot().yaw;
+      p.look(1.4, 0.5);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const after = p.stateSnapshot().yaw;
+      return { before: before, after: after };
+    })()`);
+    assert(Math.abs(locked.after - locked.before) < 0.02,
+      'and the view stays locked on the result');
+
     // 7. Nothing threw on the way.
     const errors = await evaluate('window.immersiveErrors || []');
     assert.deepStrictEqual(errors, [], 'the page raised no errors');

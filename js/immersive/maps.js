@@ -15,6 +15,7 @@
 
 import * as THREE from '../../vendor/three/three.module.js';
 import { GLTFLoader } from '../../vendor/three/loaders/GLTFLoader.js';
+import { createMapLights } from './map-lights.js';
 
 /**
  * The rooms there are.
@@ -172,7 +173,7 @@ function readAnchors(root) {
  * rebuilt or restyled here.
  */
 export function loadMap(id, options) {
-  const settings = Object.assign({ seats: 5 }, options || {});
+  const settings = Object.assign({ seats: 5, quality: 'medium' }, options || {});
   const map = MAPS[id];
   if (!map) return Promise.reject(new Error('There is no map called ' + id));
 
@@ -187,6 +188,12 @@ export function loadMap(id, options) {
       root.traverse(function (object) {
         if (object.isLight) lights.push(object);
       });
+
+      // And the lights the room was built with. Blender's area lights cannot
+      // travel in a glTF file, so the fittings glow but do not light; these
+      // put that back, one light for each fitting the room names.
+      const fittings = createMapLights(root, { quality: settings.quality });
+      fittings.lights.forEach(function (light) { lights.push(light); });
 
       // The emissive materials in a glTF come through as standard materials
       // with an emissive colour, which Three already reads; nothing to do.

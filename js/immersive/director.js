@@ -9,8 +9,39 @@
 'use strict';
 
 import * as THREE from '../../vendor/three/three.module.js';
+import { createScreenMap } from './screen-map.js';
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * The official YouTube IFrame Player API.
+ *
+ * The API announces itself by calling a global. Any other name and the
+ * player is never created: the script loads, and nothing happens. So the
+ * global is set, the script is added, and the callback is called when the
+ * API says it is ready.
+ */
+let youtubeApi = null;
+function withYouTube(callback) {
+  if (window.YT && window.YT.Player) { callback(); return; }
+  if (youtubeApi) { youtubeApi.push(callback); return; }
+  youtubeApi = [callback];
+  const previous = window.onYouTubeIframeAPIReady;
+  window.onYouTubeIframeAPIReady = function () {
+    window.onYouTubeIframeAPIReady = previous || null;
+    const waiting = youtubeApi || [];
+    youtubeApi = null;
+    waiting.forEach(function (fn) {
+      try { fn(); } catch (error) { /* the caller carries on without it */ }
+    });
+  };
+  if (!document.getElementById('phoenix-youtube-api')) {
+    const tag = document.createElement('script');
+    tag.id = 'phoenix-youtube-api';
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(tag);
+  }
+}
 
 export function createDirector(options) {
   const settings = Object.assign({
@@ -29,6 +60,9 @@ export function createDirector(options) {
     youtubeId: 'dQw4w9WgXcQ',
     onVideo: null
   }, options || {});
+
+  let screenMap = null;
+  let mimicPlayer = null;
 
   const director = {
     context: {
@@ -120,11 +154,15 @@ export function createDirector(options) {
     /**
      * The video on the laptop screen.
      *
-     * The player who was pranked gets the real thing, in the official embed,
-     * put where their laptop is; everybody else sees the screen light up with
-     * the picture on it. The sound is the embed's own, and the browser's rules
-     * about starting a video with sound are respected: if it will not start,
-     * it says so and waits to be pressed.
+     * The player who was pranked gets the real thing, and it is really on
+     * the laptop: the player is put over the screen in the room, at the
+     * right angle and the right shape, so it tilts with the lid and is the
+     * right size from every seat. Everybody else sees the screen light up
+     * with the picture on it.
+     *
+     * The sound is quieter the further away the player is sitting, and the
+     * browser's rules about starting a video with sound are respected: if
+     * it will not start, the screen says so and the game carries on.
      */
     playMimicVideo: function (seat, point) {
       const laptop = director.laptopAt(seat);
@@ -138,30 +176,83 @@ export function createDirector(options) {
         });
       }
 
-      // The real embed, in a frame the size of the laptop's screen.
+      // The frame the video lives in, and the mapping that puts it on the
+      // laptop's screen.
       const frame = document.createElement('div');
-      frame.className = 'immersive-embed';
+      frame.className = 'immersive-screen-map';
       frame.innerHTML =
-        '<iframe src="https://www.youtube.com/embed/' + settings.youtubeId +
-        '?autoplay=1&controls=0&modestbranding=1&rel=0&playsinline=1" ' +
-        'title="The video on the laptop" allow="autoplay; encrypted-media; picture-in-picture" ' +
-        'allowfullscreen></iframe>' +
-        '<p class="immersive-embed-note">The card was a Mimic.</p>';
+        '<div class="immersive-screen-map-frame" id="immersive-mimic-frame"></div>' +
+        '<p class="immersive-screen-map-note">The card was a Mimic.</p>';
       document.body.appendChild(frame);
 
-      // Put it where the laptop is, if the laptop is on the screen.
-      if (point && settings.camera) {
-        const projected = point.clone().project(settings.camera);
-        if (projected.z < 1) {
-          frame.style.left = ((projected.x * 0.5 + 0.5) * 100) + '%';
-          frame.style.top = ((-projected.y * 0.5 + 0.5) * 100) + '%';
-        }
-      }
+      const holder = frame.querySelector('#immersive-mimic-frame');
+      const map = createScreenMap({
+        camera: settings.camera,
+        mesh: laptop ? laptop.screen : null,
+        element: frame,
+        width: 640,
+        height: 360
+      });
+      screenMap = map;
 
+      // The player is put on the laptop's screen, and the sound is turned
+      // down with the distance to it.
+      withYouTube(function () {
+        if (!frame.parentNode) return;
+        try {
+          const player = new window.YT.Player('immersive-mimic-frame', {
+            videoId: settings.youtubeId,
+            width: 640,
+            height: 360,
+            playerVars: {
+              autoplay: 1,
+              controls: 0,
+              disablekb: 1,
+              fs: 0,
+              rel: 0,
+              modestbranding: 1,
+              playsinline: 1
+            },
+            events: {
+              onReady: function (event) {
+                try { event.target.playVideo(); } catch (error) { /* the state is reported instead */ }
+              }
+            }
+          });
+          mimicPlayer = player;
+        } catch (error) {
+          /* no player: the screen keeps the picture and the game carries on */
+        }
+      });
+
+      // Six seconds of video, and then the screen goes back to being a bank.
       return wait(6000).then(function () {
+        if (mimicPlayer && typeof mimicPlayer.destroy === 'function') {
+          try { mimicPlayer.destroy(); } catch (error) { /* already gone */ }
+        }
+        mimicPlayer = null;
+        screenMap = null;
         if (frame.parentNode) frame.parentNode.removeChild(frame);
         if (laptop) laptop.bank.clearPlaying();
       });
+    },
+
+    /**
+     * The video's sound, quieter the further away it is.
+     *
+     * The player is a page, so its sound is not in the room - but the
+     * volume can still follow the distance to the laptop it is on.
+     */
+    update: function () {
+      if (screenMap) screenMap.update();
+      if (mimicPlayer && mimicPlayer.setVolume && settings.camera) {
+        const laptop = director.laptopAt(settings.localSeat);
+        const here = settings.camera.getWorldPosition(new THREE.Vector3());
+        const there = laptop ? laptop.screenWorldPosition() : here;
+        const distance = here.distanceTo(there);
+        const volume = Math.max(0, Math.min(100, Math.round(100 - distance * 18)));
+        try { mimicPlayer.setVolume(volume); } catch (error) { /* the player is not ready */ }
+      }
     }
   };
 

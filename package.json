@@ -12,7 +12,8 @@
     "test:mobile": "node tests/mobile-browser-check.js",
     "test:mobile:desktop": "node tests/mobile-browser-check.js --desktop",
     "test:immersive": "node tests/immersive-browser-check.js",
-    "test:immersive-net": "node tests/immersive-multiplayer-tests.js"
+    "test:immersive-net": "node tests/immersive-multiplayer-tests.js",
+    "test:immersive-cinematics": "node tests/immersive-cinematics-check.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
