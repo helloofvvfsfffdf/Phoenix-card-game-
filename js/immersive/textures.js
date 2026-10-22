@@ -617,14 +617,14 @@ export function createBankScreen() {
   function drawMasthead() {
     ctx.textAlign = 'left';
     ctx.fillStyle = 'rgba(240, 196, 106, 0.92)';
-    ctx.font = 'bold 13px system-ui, sans-serif';
-    ctx.fillText('THE CARD GAME', 22, 24);
+    ctx.font = 'bold 14px system-ui, sans-serif';
+    ctx.fillText('THE CARD GAME', 22, 26);
     ctx.fillStyle = '#f6f0dc';
-    ctx.font = 'bold 34px system-ui, sans-serif';
-    ctx.fillText('PHOENIX', 22, 54);
+    ctx.font = 'bold 40px system-ui, sans-serif';
+    ctx.fillText('PHOENIX', 22, 60);
     ctx.fillStyle = 'rgba(215, 240, 228, 0.55)';
-    ctx.font = '11px system-ui, sans-serif';
-    ctx.fillText('RISE · PLAY · SURVIVE', 24, 70);
+    ctx.font = '12px system-ui, sans-serif';
+    ctx.fillText('RISE · PLAY · SURVIVE', 24, 78);
     if (context.room) {
       ctx.textAlign = 'right';
       ctx.fillStyle = '#f0c46a';
@@ -710,8 +710,8 @@ export function createBankScreen() {
     // The balance.
     ctx.textAlign = 'right';
     ctx.fillStyle = '#f6f0dc';
-    ctx.font = 'bold 50px system-ui, sans-serif';
-    ctx.fillText(balance.toLocaleString('en-GB'), w - 26, 138);
+    ctx.font = 'bold 58px system-ui, sans-serif';
+    ctx.fillText(balance.toLocaleString('en-GB'), w - 26, 142);
     ctx.fillStyle = 'rgba(215, 240, 228, 0.75)';
     ctx.font = '16px system-ui, sans-serif';
     ctx.fillText('PHOENIX POINTS', w - 26, 162);
@@ -747,11 +747,11 @@ export function createBankScreen() {
     ctx.textAlign = 'left';
     ctx.fillStyle = 'rgba(190, 60, 50, 0.92)';
     ctx.beginPath();
-    ctx.roundRect(26, 196, 196, 58, 12);
+    ctx.roundRect(26, 196, 210, 62, 12);
     ctx.fill();
     ctx.fillStyle = '#fff4ef';
-    ctx.font = 'bold 24px system-ui, sans-serif';
-    ctx.fillText('LEAVE MATCH', 52, 234);
+    ctx.font = 'bold 26px system-ui, sans-serif';
+    ctx.fillText('LEAVE MATCH', 56, 236);
 
     // A little bar chart of the round's swings, so the screen is alive.
     ctx.strokeStyle = 'rgba(201, 150, 63, 0.35)';

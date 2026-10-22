@@ -15,8 +15,8 @@ import * as THREE from '../../vendor/three/three.module.js';
 import { roundedBox, turned } from './geometry.js';
 import { createBankScreen } from './textures.js';
 
-const SCREEN_WIDTH = 0.29;
-const SCREEN_HEIGHT = 0.163;
+const SCREEN_WIDTH = 0.34;
+const SCREEN_HEIGHT = 0.19;
 
 /**
  * One laptop, open.
@@ -69,7 +69,7 @@ export function createLaptop(options) {
   // the laptop, and the top of it stays below their eye line.
   const lid = new THREE.Group();
   lid.position.set(0, 0.016, -0.108);
-  lid.rotation.x = 0.26;
+  lid.rotation.x = 0.22;
   group.add(lid);
 
   const back = new THREE.Mesh(roundedBox(0.33, 0.205, 0.008, 0.008, 0.003), shell);
@@ -89,6 +89,19 @@ export function createLaptop(options) {
   );
   screen.position.set(0, 0.1, 0.0035);
   lid.add(screen);
+
+  // A soft glow around the screen, so it reads as a lit screen from
+  // across the table and not as a black slab.
+  const glow = new THREE.Mesh(
+    new THREE.PlaneGeometry(SCREEN_WIDTH + 0.02, SCREEN_HEIGHT + 0.02),
+    new THREE.MeshBasicMaterial({
+      color: 0x3d8874, transparent: true, opacity: 0.18,
+      side: THREE.DoubleSide, depthWrite: false,
+      blending: THREE.AdditiveBlending
+    })
+  );
+  glow.position.set(0, 0.1, 0.002);
+  lid.add(glow);
 
   // The glass over the screen, and the camera in the bezel.
   const glass = new THREE.Mesh(
