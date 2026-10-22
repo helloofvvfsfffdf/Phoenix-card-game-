@@ -53,12 +53,13 @@ export function createEffects(scene, options) {
   geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
   const material = new THREE.PointsMaterial({
-    size: 0.055,
+    size: 0.075,
     vertexColors: true,
     transparent: true,
     opacity: 0.95,
     depthWrite: false,
-    blending: THREE.AdditiveBlending
+    blending: THREE.AdditiveBlending,
+    sizeAttenuation: true
   });
   const points = new THREE.Points(geometry, material);
   points.frustumCulled = false;
@@ -122,7 +123,7 @@ export function createEffects(scene, options) {
         live.splice(i, 1);
         continue;
       }
-      velocities[index * 3 + 1] -= 1.6 * delta;
+      velocities[index * 3 + 1] -= 1.2 * delta;
       positions[index * 3] += velocities[index * 3] * delta;
       positions[index * 3 + 1] += velocities[index * 3 + 1] * delta;
       positions[index * 3 + 2] += velocities[index * 3 + 2] * delta;
@@ -169,7 +170,7 @@ export function createEffects(scene, options) {
       const tint = new THREE.Color(colour === undefined ? 0xffd16b : colour);
       const total = count || 40;
       for (let i = 0; i < total; i++) {
-        addParticle(point, tint, power || 1.4, 0.6 + Math.random() * 0.7);
+        addParticle(point, tint, power || 1.8, 0.8 + Math.random() * 0.9);
       }
       return wait(0);
     },
@@ -189,10 +190,10 @@ export function createEffects(scene, options) {
       );
       mesh.position.copy(point);
       mesh.rotation.x = -Math.PI / 2;
-      addThing(mesh, life || 0.9, function (object, t) {
+      addThing(mesh, life || 1.1, function (object, t) {
         const size = 1 + t * (radius || 2.4);
         object.scale.setScalar(size);
-        object.material.opacity = 0.95 * (1 - t);
+        object.material.opacity = 0.95 * (1 - t * t);
       });
       return wait(0);
     },
@@ -237,7 +238,7 @@ export function createEffects(scene, options) {
         to.clone().sub(from).normalize()
       );
       addThing(mesh, life || 0.8, function (object, t) {
-        object.material.opacity = 0.85 * (1 - t);
+        object.material.opacity = 0.9 * (1 - t * t);
       });
       return wait(0);
     },
@@ -251,11 +252,11 @@ export function createEffects(scene, options) {
         depthWrite: false,
         depthTest: false
       }));
-      sprite.scale.set(0.9, 0.225, 1);
+      sprite.scale.set(1.1, 0.275, 1);
       sprite.position.copy(point);
-      addThing(sprite, life || 1.6, function (object, t) {
-        object.position.y += 0.006;
-        object.material.opacity = t < 0.15 ? t / 0.15 : 1 - (t - 0.15) / 0.85;
+      addThing(sprite, life || 2.0, function (object, t) {
+        object.position.y += 0.008;
+        object.material.opacity = t < 0.1 ? t / 0.1 : (t > 0.7 ? (1 - t) / 0.3 : 1);
       });
       return wait(0);
     },
@@ -264,8 +265,8 @@ export function createEffects(scene, options) {
     flare: function (point, colour, strength, life) {
       const light = new THREE.PointLight(colour === undefined ? 0xffd16b : colour, strength || 30, 9, 2);
       light.position.copy(point);
-      addThing(light, life || 0.7, function (object, t) {
-        object.intensity = (strength || 30) * (1 - t) * (1 - t);
+      addThing(light, life || 0.9, function (object, t) {
+        object.intensity = (strength || 40) * (1 - t) * (1 - t);
       });
       return wait(0);
     },
@@ -300,8 +301,9 @@ export function createEffects(scene, options) {
       group.add(sprite);
       addThing(group, 1.5, function (object, t) {
         object.position.lerpVectors(from, to, t);
-        object.position.y += Math.sin(t * Math.PI) * 0.45;
-        sprite.material.opacity = t < 0.1 ? t / 0.1 : (t > 0.85 ? (1 - t) / 0.15 : 1);
+        object.position.y += Math.sin(t * Math.PI) * 0.55;
+        sprite.material.opacity = t < 0.1 ? t / 0.1 : (t > 0.75 ? (1 - t) / 0.25 : 1);
+        sprite.scale.set(0.85, 0.21, 1);
       });
       return wait(0);
     },
@@ -318,9 +320,10 @@ export function createEffects(scene, options) {
       );
       addThing(mesh, 1.1, function (object, t) {
         object.position.lerpVectors(from, to, t);
-        object.position.y += Math.sin(t * Math.PI) * 0.3;
+        object.position.y += Math.sin(t * Math.PI) * 0.35;
         object.rotation.y = t * Math.PI * 2;
         object.rotation.x = -t * 0.6;
+        object.scale.setScalar(1 + (1 - t) * 0.15);
       });
       return wait(0);
     },

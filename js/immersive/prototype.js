@@ -198,11 +198,21 @@ export function startPrototype(root) {
     const previousSeat = snapshot ? snapshot.seat : -1;
     const previousRound = snapshot ? snapshot.round : null;
     const previousOver = snapshot ? !!snapshot.over : false;
+    const previousPendingInteraction = snapshot ? snapshot.pendingInteraction : null;
     snapshot = next;
 
     // A new round: anything that lasts a round wears off.
     if (previousRound !== null && next.round !== previousRound) {
       restoreGhosts();
+    }
+
+    // An interaction that has just resolved: the room can be put back to
+    // normal, now that the question has been answered.
+    const interactionJustResolved =
+      previousPendingInteraction && !next.pendingInteraction && next.lastInteractionResult;
+    if (interactionJustResolved && cinematicOpen) {
+      settleSeats();
+      cinematicOpen = false;
     }
 
     // The match is over: the laptops show the result, and the view is
@@ -380,6 +390,17 @@ export function startPrototype(root) {
       });
   }
 
+  /** The cards that ask the players a question. */
+  const INTERACTIVE_CARDS = new Set([
+    'rps', 'betrayal', 'speed', 'dice', 'wheel', 'linkedfate', 'impostor',
+    'swapper', 'wheelofmisfortune', 'musicalchairs', 'russianroulette',
+    'memorymayhem', 'mimic', 'support', 'joshuasurvey', 'trailer',
+    'enjoyingthetrailer'
+  ]);
+
+  /** Whether a cinematic is still playing and the room has not been settled. */
+  let cinematicOpen = false;
+
   /** The cards that have been played since the last snapshot, and their show. */
   function playJournal(next) {
     if (!effectCursor || !next.effects) return;
@@ -393,14 +414,29 @@ export function startPrototype(root) {
         seat: event.actor,
         targetSeat: event.target
       };
+      const interactive = INTERACTIVE_CARDS.has(cardId);
       cinematicChain = cinematicChain
         .then(function () {
+          cinematicOpen = true;
           return playShow(cardId, [seatEvent], {
             outcome: event.outcome,
             reducedMotion: settings.reducedMotion
           });
         })
-        .catch(function () { return null; });
+        .then(function () {
+          // A card that asks a question leaves the room in its show state
+          // until the question is answered. Settling now would move the
+          // camera and the lights back while the player is still being asked.
+          if (!interactive) {
+            settleSeats();
+            cinematicOpen = false;
+          }
+        })
+        .catch(function () {
+          settleSeats();
+          cinematicOpen = false;
+          return null;
+        });
     });
   }
 
