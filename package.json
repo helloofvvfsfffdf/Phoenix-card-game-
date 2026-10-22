@@ -7,7 +7,7 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node tests/unique-hand-tests.js && node tests/reverse-turn-tests.js && node tests/room-cleanup-regression-tests.js && node tests/rounds-tests.js && node tests/interactive-regression-tests.js && node tests/speed-flow-check.js && node tests/run-tests.js && node tests/expansion-tests.js && node tests/expansion-network-tests.js && node tests/effects-network-tests.js && node tests/multiplayer-admin-tests.js && node tests/other-cards-network-tests.js && node tests/badge-tests.js && node tests/announcement-tests.js && node tests/leaderboard-tests.js && node tests/victory-recovery-check.js && node tests/security-tests.js && node tests/reconnect-network-tests.js && node tests/reconnect-account-tests.js && node tests/phoenixtube-tests.js",
+    "test": "node tests/unique-hand-tests.js && node tests/reverse-turn-tests.js && node tests/room-cleanup-regression-tests.js && node tests/rounds-tests.js && node tests/interactive-regression-tests.js && node tests/speed-flow-check.js && node tests/run-tests.js && node tests/expansion-tests.js && node tests/expansion-network-tests.js && node tests/effects-network-tests.js && node tests/multiplayer-admin-tests.js && node tests/other-cards-network-tests.js && node tests/badge-tests.js && node tests/announcement-tests.js && node tests/leaderboard-tests.js && node tests/victory-recovery-check.js && node tests/security-tests.js && node tests/reconnect-network-tests.js && node tests/reconnect-account-tests.js && node tests/phoenixtube-tests.js && node tests/phoenixtube-demo-tests.js",
     "test:other-cards": "node tests/other-cards-network-tests.js",
     "test:card-timeouts": "node tests/other-cards-timeout-tests.js",
     "test:reconnect": "node tests/reconnect-network-tests.js && node tests/reconnect-account-tests.js",
@@ -19,7 +19,7 @@
     "test:immersive-cinematics": "node tests/immersive-cinematics-check.js",
     "test:card-achievements": "node tests/card-achievement-tests.js",
     "test:shopping": "node tests/shopping-challenge-tests.js",
-    "test:phoenixtube": "node tests/phoenixtube-tests.js"
+    "test:phoenixtube": "node tests/phoenixtube-tests.js && node tests/phoenixtube-demo-tests.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
