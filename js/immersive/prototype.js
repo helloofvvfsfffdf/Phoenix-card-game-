@@ -720,10 +720,23 @@ export function startPrototype(root) {
 
   const flying = [];
 
-  /** The cards in your hand, as card records. */
+  /** The cards in your hand, as card records.
+   *
+   * The server is the only one who knows whose hand these are. Most of the
+   * time they are the player's own cards, but when a Steal a Turn is in
+   * force the chooser is picking from the *target's* hand, and the server
+   * sends those cards as the legal moves instead. The fan shows what the
+   * player may actually choose, and nothing else.
+   */
   function handCards() {
     const Cards = window.PhoenixCards;
-    if (!Cards || !snapshot || !Array.isArray(snapshot.hand)) return [];
+    if (!Cards || !snapshot) return [];
+    if (snapshot.pending && snapshot.pending.kind === 'move' && Array.isArray(snapshot.moves)) {
+      // Steal a Turn: the chooser picks from the target's hand.
+      const ids = [...new Set(snapshot.moves.map(function (m) { return m.cardId; }))];
+      return ids.map(function (id) { return Cards.byId(id); }).filter(Boolean);
+    }
+    if (!Array.isArray(snapshot.hand)) return [];
     return snapshot.hand.map(function (id) { return Cards.byId(id); }).filter(Boolean);
   }
 

@@ -263,12 +263,50 @@ export function createTableUI(options) {
 
     const phase = PHASE_WORDS[state.phase] || 'Waiting';
     if (nodes.turn) {
-      const who = state.current && (state.players || []).filter(function (p) {
-        return p.id === state.current;
-      })[0];
-      text(nodes.turn, state.over
-        ? 'The match is over'
-        : phase + (who ? ' - ' + who.name + "'s turn" : ''));
+      let line = phase;
+      if (state.over) {
+        line = 'The match is over';
+      } else if (state.phase === 'turnDice' || state.phase === 'allyDice') {
+        // The dice decide the order, and only one person may roll at a time.
+        const roller = (state.dice && (state.dice.next != null))
+          ? (state.players || []).filter(function (p) { return p.seat === state.dice.next; })[0]
+          : null;
+        if (roller) {
+          line = (state.phase === 'turnDice' ? 'ROLLING FOR THE TURN ORDER' : 'ROLLING FOR THE ALLY ORDER')
+            + ' - ' + roller.name + (roller.id === (state.players[state.seat] || {}).id ? ' (YOU ROLL)' : ' is rolling');
+        }
+      } else if (state.phase === 'draft') {
+        const picker = (state.draftTurn != null)
+          ? (state.players || []).filter(function (p) { return p.seat === state.draftTurn; })[0]
+          : null;
+        if (picker) {
+          line = 'CHOOSING AN ALLY - ' + picker.name + (picker.id === (state.players[state.seat] || {}).id ? ' (YOU CHOOSE)' : ' is choosing');
+        }
+      } else if (state.pending && state.pending.kind === 'move') {
+        const chooser = (state.players || []).filter(function (p) { return p.id === state.pending.chooserId; })[0];
+        const target = (state.players || []).filter(function (p) { return p.id === state.pending.targetId; })[0];
+        if (chooser && chooser.id === (state.players[state.seat] || {}).id) {
+          line = 'Choose the card ' + (target ? target.name : 'they') + ' has to play';
+        } else if (target && target.id === (state.players[state.seat] || {}).id) {
+          line = chooser.name + ' is choosing your card';
+        } else {
+          line = chooser.name + ' is choosing ' + (target ? target.name : 'a card') + "'s card";
+        }
+      } else if (state.pending && state.pending.kind === 'burn') {
+        const chooser = (state.players || []).filter(function (p) { return p.id === state.pending.chooserId; })[0];
+        const target = (state.players || []).filter(function (p) { return p.id === state.pending.targetId; })[0];
+        if (chooser && chooser.id === (state.players[state.seat] || {}).id) {
+          line = 'Choose a card for ' + (target ? target.name : 'them') + ' to lose - Alvin';
+        } else {
+          line = (chooser ? chooser.name : 'Somebody') + ' is choosing a card to destroy';
+        }
+      } else {
+        const who = state.current && (state.players || []).filter(function (p) {
+          return p.id === state.current;
+        })[0];
+        line = phase + (who ? ' - ' + who.name + "'s turn" : '');
+      }
+      text(nodes.turn, line);
     }
 
     renderPlayers();
@@ -277,8 +315,11 @@ export function createTableUI(options) {
     // The buttons that only make sense at a particular moment.
     if (nodes.start) nodes.start.hidden = !(state.phase === 'lobby' && state.host);
     if (nodes.roll) {
-      const myTurn = state.phase === 'turnDice' || state.phase === 'allyDice';
+      const myTurn = (state.phase === 'turnDice' || state.phase === 'allyDice') &&
+        state.dice && state.dice.next === state.seat;
       nodes.roll.hidden = !myTurn;
+      nodes.roll.disabled = !myTurn;
+      if (myTurn) nodes.roll.textContent = 'ROLL (' + (state.phase === 'turnDice' ? 'TURN ORDER' : 'ALLY ORDER') + ')';
     }
     if (nodes.leave) nodes.leave.hidden = !state.code;
   }
