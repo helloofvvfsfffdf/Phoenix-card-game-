@@ -1986,7 +1986,7 @@ function render() {
         if (box) box.classList.toggle('is-open', open);
       };
     }
-    $('online-create').onclick = null;
+    $('online-create').onclick = openHostSettings;
     $('online-join').onclick = () => join('join');
 
     // Owner & Friends, kept separate from the public lobby system.
