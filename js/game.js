@@ -67,7 +67,11 @@
       seed: this.seed,
       fixedOrder: !!options.fixedOrder,
       rotateStart: options.rotateStart,
-      roundStartSeat: options.roundStartSeat
+      roundStartSeat: options.roundStartSeat,
+      // Single Player deals the human-only cards out of the deck - see
+      // Rules.deal. `options.singlePlayer` is only ever set by the local menu;
+      // the multiplayer client never sends it.
+      singlePlayer: !!options.singlePlayer
     });
     this.order = this.state.players.map(function (p) { return p.name; }).join(' -> ');
     this.log = [];
@@ -172,6 +176,13 @@
 
     var card = Cards.byId(cardId);
     if (!card) return this.fail('Unknown card.');
+
+    // A human-only card is not in this match at all, so say that rather than
+    // letting it read like a card that went missing from the deck.
+    if (s.singlePlayer && card.humanOnly) {
+      return this.fail(card.name + ' is not in a Single Player match: '
+        + 'it is dealt in multiplayer only.');
+    }
 
     // A switched-off player is not a legal target. Report it as such rather
     // than letting the generic "not a legal target" message through.
@@ -389,7 +400,9 @@
       draw: this.state ? this.state.deck.length : 0,
       discard: this.state ? this.state.discard.length : 0,
       reshuffles: this.state ? this.state.reshuffles : 0,
-      total: Rules.deckSize()
+      // The state decides the total: a Single Player deck is smaller by the
+      // human-only cards it never dealt.
+      total: Rules.deckSize(this.state)
     };
   };
 
@@ -512,6 +525,22 @@
 
     // The parser validates card and target; this is the deck check, because an
     // AI can only play a card it is actually holding.
+    //
+    // A human-only card is refused with its own message first: it was never
+    // dealt into a Single Player match, so "not holding" would be the wrong
+    // reason to give an AI that picked it off the old card list.
+    var aiCard = Cards.byId(parsed.cardId);
+    if (s.singlePlayer && aiCard && aiCard.humanOnly) {
+      this.lastError = aiCard.name + ' is not in a Single Player match: '
+        + 'it is dealt in multiplayer only.';
+      return {
+        ok: false,
+        error: this.lastError,
+        hint: player.name + ' is holding: '
+          + (Rules.handOf(s, player.id).map(function (id) { return Rules.formatCard(id); }).join(', ') || 'nothing')
+          + '.'
+      };
+    }
     if (!Rules.holdsCard(s, player.id, parsed.cardId)) {
       // Already-spent Phoenix is its own message: it is not a card the AI was
       // dealt, it is a card it burned, and the reply is being refused for that.

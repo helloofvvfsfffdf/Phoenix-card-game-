@@ -137,9 +137,19 @@
   /** The most cards a player may hold at any one time. */
   var HAND_LIMIT = 7;
 
-  function deckSize() {
-    return Cards.deckIds().reduce(function (n, id) {
-      return n + (DECK_COMPOSITION[id] || 0);
+  /**
+   * How many cards the whole deck holds.
+   *
+   * `state` is optional. Pass the game and the count is what that game REALLY
+   * dealt, because a Single Player game leaves the human-only cards out of the
+   * deck entirely (see `deal`). With no state it is the full multiplayer deck,
+   * which is what the server and the card-conservation tests ask for.
+   */
+  function deckSize(state) {
+    var singlePlayer = !!(state && state.singlePlayer);
+    return Cards.deckCards().reduce(function (n, card) {
+      if (singlePlayer && card.humanOnly) return n;
+      return n + (DECK_COMPOSITION[card.id] || 0);
     }, 0);
   }
 
@@ -542,6 +552,13 @@
       // Whether the owner-only cards are in this game at all. True ONLY for
       // an owner room; the server decides, never the client.
       includeOwnerCards: options.includeOwnerCards === true,
+
+      // Single Player - the creator's own local mode, driven by the manual AI
+      // relay - deals a slightly smaller deck: the human-only cards (The
+      // Mimic's unskippable video, the two website challenges and the two live
+      // minigames) are left out. See `deal`. Multiplayer never sets this, so
+      // the multiplayer deck is exactly what it always was.
+      singlePlayer: options.singlePlayer === true,
 
       // Card types the president has banned. A banned card stays in hands
       // but cannot be played by anybody, the president included.
@@ -2290,6 +2307,13 @@
     // deckCards() excludes the legendary card, so Phoenix can never be dealt
     // however the counts are edited above.
     Cards.deckCards().forEach(function (card) {
+      // Single Player never deals a human-only card. The Mimic's punchline is
+      // an unskippable video only a server can play over somebody's game, the
+      // two website challenges need a person with a browser and a countdown,
+      // and the two minigames need everybody at the table pressing a button.
+      // The cards themselves are untouched - multiplayer still deals every one
+      // of them - this match simply does not contain them.
+      if (state.singlePlayer && card.humanOnly) return;
       // The Hostage Situation calls the police, and the police officer has to
       // be somebody else at the table - so the card is only dealt when there
       // are at least three players.

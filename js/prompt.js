@@ -157,9 +157,15 @@
    *
    * The deck cards come first. The legendary card is listed separately and last,
    * because it is never dealt and can only be in one player's hand.
+   *
+   * A Single Player game lists exactly the cards that game can produce: an AI
+   * told about The Mimic would only ever be told it cannot hold it.
    */
-  function cardRulesSection() {
-    var deck = Cards.deckCards();
+  function cardRulesSection(state) {
+    var singlePlayer = !!(state && state.singlePlayer);
+    var deck = Cards.deckCards().filter(function (card) {
+      return !(singlePlayer && card.humanOnly);
+    });
     var lines = ['', '=== THE ' + deck.length + ' CARDS IN THE DECK (exact rules) ==='];
     deck.forEach(function (card, i) {
       lines.push((i + 1) + '. ' + card.name);
@@ -308,7 +314,7 @@
 
     lines.push('');
     lines.push('Rules for your reply:');
-    lines.push('- Write "PLAY:" then the exact card name, one of: ' + cardList() + '.');
+    lines.push('- Write "PLAY:" then the exact card name, one of: ' + cardList(state) + '.');
     if (withTarget) {
       lines.push('- If that card needs a target, add a second line "TARGET:" then the');
       lines.push('  exact player name, e.g. "TARGET: ' + targetName + '".');
@@ -324,12 +330,23 @@
   }
 
   /**
-   * "Knife, Zombie, Steal Points, ..." - every card an AI could name, including
-   * the legendary one, since holding it is the only way to play it and that is
-   * covered by the hand section.
+   * "Knife, Zombie, Steal Points, ..." - every card an AI could name in THIS
+   * match, plus the legendary one, since holding it is the only way to play it
+   * and that is covered by the hand section.
+   *
+   * Filtered to the deck this game was actually dealt from, so a Single Player
+   * prompt never offers a human-only card, and the owner-only cards are never
+   * offered in an ordinary match either.
    */
-  function cardList() {
-    return Cards.CARDS.map(function (c) { return c.name; }).join(', ');
+  function cardList(state) {
+    var singlePlayer = !!(state && state.singlePlayer);
+    var playable = Cards.deckCards().filter(function (c) {
+      return !(singlePlayer && c.humanOnly);
+    }).map(function (c) { return c.name; });
+    Cards.CARDS.filter(function (c) { return c.legendary; }).forEach(function (c) {
+      playable.push(c.name);
+    });
+    return playable.join(', ');
   }
 
   /* --------------------------------------------------------------------- */
@@ -349,7 +366,7 @@
     lines = lines.concat(scoresSection(state, me));
     lines = lines.concat(effectsSection(state, me));
     lines = lines.concat(handSection(state, me));
-    lines = lines.concat(cardRulesSection());
+    lines = lines.concat(cardRulesSection(state));
     lines = lines.concat(legalMovesSection(state, seat));
     lines = lines.concat(historySection(state, me, log));
     lines = lines.concat(formatSection(state, me));

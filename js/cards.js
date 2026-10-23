@@ -26,6 +26,14 @@
    * forcedChoice - 'move' or 'burn': when this card resolves it hands control
    *                back to the player who played it, to pick a card. See
    *                Rules.PENDING_CHOICE_KINDS.
+   * humanOnly    - true when the card only means something with a living human
+   *                on the other end: watching a video all the way through,
+   *                finishing a website challenge, or playing a live minigame at
+   *                the table. Single Player - the creator's local mode, driven
+   *                by the manual AI relay - deals NONE of them, because a
+   *                pasted reply cannot watch a video or press a button in time.
+   *                Multiplayer deals them exactly as before: the flag is read
+   *                only by Rules.deal when a game is marked `singlePlayer`.
    */
   /**
    * The cards played most in Phoenix are considered "evil" - see EVIL_CARDS.
@@ -387,6 +395,12 @@
       kind: 'neutral',
       needsTarget: false,
       inLiveGame: true,
+      // The real card is a live, timed, table-wide reaction game: the music
+      // stops and every person at the table has to press a button. In a
+      // Single Player match there is nobody at a button - the engine's own
+      // resolver is only a log line - so the card is dealt in multiplayer and
+      // left out of the Single Player deck.
+      humanOnly: true,
       blurb: 'Music stops. Last to press loses 10,000.',
       rule: 'Music plays for an unpredictable time, then stops. Press your button AFTER the music stops. The last eligible player to press loses 10,000 points. Pressing too early disables your button for 10 seconds.',
       targetNote: 'No target: everybody at the table plays.'
@@ -413,6 +427,10 @@
       kind: 'neutral',
       needsTarget: false,
       inLiveGame: true,
+      // A live memory test that everybody at the table plays, run by the
+      // server. The Single Player engine cannot show the sequences or time the
+      // answers, so this one stays in multiplayer only.
+      humanOnly: true,
       blurb: 'Three sequences. The weakest memory pays.',
       rule: 'Three symbol sequences of increasing difficulty are shown. Every player tries to reproduce them. The player with the lowest accuracy across all three loses 8,000 points, with response time as the tiebreaker.',
       targetNote: 'No target: everybody at the table plays.'
@@ -465,6 +483,10 @@
       kind: 'chaos',
       needsTarget: true,
       inLiveGame: true,
+      // The whole card is ten minutes of human video-watching: four PHOENIXTube
+      // videos, a hidden code, and a live countdown that only the server runs.
+      // An AI relay cannot watch a video, so Single Player leaves it out.
+      humanOnly: true,
       blurb: 'Send an opponent hunting for a secret code in four videos.',
       rule: 'Choose an opponent. They receive a ten-minute PHOENIXTube challenge. Finding the four-digit code earns them 20,000 points; expiry costs them 10,000.',
       targetNote: 'Pick one opponent to send to PHOENIXTube.'
@@ -478,6 +500,10 @@
       kind: 'chaos',
       needsTarget: true,
       inLiveGame: true,
+      // A live five-minute shopping challenge on a website, played by a human
+      // with a browser and a countdown. Single Player has no such page and no
+      // clock, so the card is dealt in multiplayer only.
+      humanOnly: true,
       blurb: 'Send an opponent shopping for dinner and nonsense.',
       rule: 'Choose an opponent. They receive a five-minute fictional shopping challenge. A successful PHOENIXBANK checkout earns them 20,000 points; an expired challenge costs them 10,000.',
       targetNote: 'Pick one opponent to send shopping.'
@@ -558,6 +584,13 @@
       kind: 'evil',
       needsTarget: true,
       inLiveGame: true,
+      // The punchline is an unskippable Rick Astley video played over the
+      // victim's game by the SERVER (see js/mimic-rickroll.js). The manual AI
+      // relay cannot deliver that: there is no server message, and in a local
+      // match the card would never fizzle or expire. So it is dealt in
+      // multiplayer exactly as before, and left out of the Single Player deck
+      // rather than being half a card.
+      humanOnly: true,
       // The whole point of this card is that nobody knows what it does until
       // it is played, so the rules page does not give it away.
       secret: true,

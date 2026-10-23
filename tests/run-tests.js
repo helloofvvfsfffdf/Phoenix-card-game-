@@ -3240,8 +3240,18 @@ test('the prompt spells out the reply format with real examples', function () {
   var seat = game.state.turnInRound;
 
   assert(/PLAY: \+10,000 Points/.test(prompt), 'a no-target example is given');
-  Cards.CARDS.forEach(function (card) {
-    assert(prompt.indexOf(card.name) !== -1, card.name + ' appears in the card list');
+  // The card list names every card this ordinary (non-owner) match could
+  // actually produce: the whole deck, plus the legendary Phoenix which is only
+  // ever held rather than dealt. The owner-only cards are never dealt into an
+  // ordinary match, so they are correctly absent.
+  var expectedNames = Cards.deckCards().map(function (c) { return c.name; })
+    .concat(Cards.CARDS.filter(function (c) { return c.legendary; }).map(function (c) { return c.name; }));
+  expectedNames.forEach(function (name) {
+    assert(prompt.indexOf(name) !== -1, name + ' appears in the card list');
+  });
+  Cards.CARDS.filter(function (c) { return c.ownerOnly; }).forEach(function (c) {
+    assert(prompt.indexOf(c.name) === -1,
+      c.name + ' is owner-only and never offered in an ordinary match');
   });
 
   // The targeted example must name a card that really needs a target, and a

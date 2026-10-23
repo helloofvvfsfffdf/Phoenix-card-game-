@@ -28,6 +28,11 @@
   var hoverTarget = null;  // the target button the pointer is on
   var toastTimer = null;
   var lastEffectEvents = null;
+  // Whether the CURRENT session is Single Player. It is a property of the
+  // session rather than of one deal, so New Game and Play Again keep dealing
+  // the Single Player deck (human-only cards left out) until the menu says
+  // otherwise.
+  var singlePlayerSession = false;
 
   /**
    * The hand fan: how far each card tilts and drops per step away from the
@@ -61,8 +66,17 @@
   /* --------------------------------------------------------------------- */
 
   function newGame(options) {
+    options = options || {};
+    if (options.singlePlayer !== undefined) {
+      singlePlayerSession = !!options.singlePlayer;
+    }
     var rounds = Number(($('rounds-select') || {}).value) || Rules.DEFAULT_ROUNDS;
-    game = GameApi.create({ rounds: rounds, seed: (options || {}).seed });
+    game = GameApi.create({
+      rounds: rounds,
+      seed: options.seed,
+      // Single Player deals the human-only cards out - see Rules.deal.
+      singlePlayer: singlePlayerSession
+    });
     lastEffectEvents = null;
     if (window.PhoenixCinematics) window.PhoenixCinematics.cleanup();
     chosenCard = null;

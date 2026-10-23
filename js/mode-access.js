@@ -1,9 +1,11 @@
 (function(){'use strict';
 let pending=null;const unlocked=new Set();const $=id=>document.getElementById(id);
-// Only Multiplayer Testing ('test') is wired to the access-code gate in this
-// build. Single Player is deliberately left alone: its menu button keeps its
-// current behaviour, so requests for 'single' are not acted on here either.
-function request(mode){if(mode!=='test')return;if(unlocked.has(mode)){document.dispatchEvent(new CustomEvent('phoenix-mode-unlocked',{detail:{mode}}));return;}pending=mode;$('mode-access-overlay').hidden=false;$('mode-access-feedback').textContent='';$('mode-access-input').value='';$('mode-access-input').focus();}
+// Multiplayer Testing ('test') is the one mode behind the access-code gate.
+// Single Player is the creator's own LOCAL match - no server takes part, the
+// menu button is already hidden for everyone but the owner, and the deck it
+// deals is decided by Rules.deal - so a request for 'single' unlocks straight
+// away and the code is never asked for.
+function request(mode){if(mode==='single'){document.dispatchEvent(new CustomEvent('phoenix-mode-unlocked',{detail:{mode:'single'}}));return;}if(mode!=='test')return;if(unlocked.has(mode)){document.dispatchEvent(new CustomEvent('phoenix-mode-unlocked',{detail:{mode}}));return;}pending=mode;$('mode-access-overlay').hidden=false;$('mode-access-feedback').textContent='';$('mode-access-input').value='';$('mode-access-input').focus();}
 function cancel(){pending=null;$('mode-access-overlay').hidden=true;$('mode-access-input').value='';}
 document.addEventListener('DOMContentLoaded',()=>{
  $('mode-access-cancel').onclick=cancel;

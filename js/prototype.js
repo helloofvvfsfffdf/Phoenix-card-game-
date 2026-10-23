@@ -20,9 +20,20 @@
     $('testing-panel').hidden = mode !== 'test';
     $('game-mode-label').textContent = mode === 'test' ? 'Multiplayer Testing · Local pass-and-play' : 'Single Player · Creator Only';
     if (mode === 'test') {
-      window.phoenix.newGame();
+      // Explicit, because the local session remembers whether it was last
+      // dealing the Single Player deck - and the testing table wants the full
+      // multiplayer deck, human-only cards included.
+      window.phoenix.newGame({ singlePlayer: false });
       $('testing-feedback').textContent = 'Local test match started. Only you control the players.';
       renderTest();
+    }
+    if (mode === 'single') {
+      // A fresh Single Player match: you hold the human seat and the four AIs
+      // take their turns through the copy-and-paste relay. The human-only
+      // cards - The Mimic's unskippable video, the two website challenges and
+      // the two live minigames - are dealt in multiplayer only, so they are
+      // not in this deck. See Rules.deal.
+      window.phoenix.newGame({ singlePlayer: true });
     }
     if (window.PhoenixMusicPlayer) window.PhoenixMusicPlayer.setMatchActive('local', !!game() && !!game().state && !game().state.over);
   }
