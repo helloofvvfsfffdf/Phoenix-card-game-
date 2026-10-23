@@ -42,6 +42,7 @@
 
   let socket = null;
   let fooglePuzzleWindow = null;
+  let hostSelectedRounds = null;
   let state = null;
   const resumeStorageKey = 'phoenix-online-resume:' + (location.pathname || '/') + (location.search || '');
   let resumeSession = null;
@@ -835,7 +836,7 @@
     mode.onchange=refresh;rounds.onchange=refresh;custom.oninput=refresh;refresh();
     if(typeof dialog.showModal==='function')dialog.showModal();else{dialog.setAttribute('open','');dialog.classList.add('host-settings-visible');}
     $('host-settings-close').onclick=close;$('host-settings-cancel').onclick=close;
-    $('host-settings-form').onsubmit=event=>{event.preventDefault();const count=rounds.value==='custom'?Math.min(100,Math.max(5,Number(custom.value)||55)):Number(rounds.value);$('online-game-mode').value=mode.value;$('online-lobby-rounds').value=rounds.value;$('online-rounds-custom').value=count;$('online-long-rounds').checked=false;$('online-create-code').value=(ownerPermission||hostType==='owner')?'':invite.value;if(hostType==='owner')$('online-owner-password').value=ownerPermission?'':$('host-owner-password').value;close();join(hostType==='owner'?'ownerCreate':'create');};
+    $('host-settings-form').onsubmit=event=>{event.preventDefault();const count=rounds.value==='custom'?Math.min(100,Math.max(5,Number(custom.value)||55)):Number(rounds.value);hostSelectedRounds=count;$('online-game-mode').value=mode.value;$('online-lobby-rounds').value=rounds.value;$('online-long-rounds').checked=false;$('online-create-code').value=(ownerPermission||hostType==='owner')?'':invite.value;if(hostType==='owner')$('online-owner-password').value=ownerPermission?'':$('host-owner-password').value;close();join(hostType==='owner'?'ownerCreate':'create');};
   }
 
   function join(request) {
@@ -859,9 +860,9 @@
       const code = $('online-create-code').value.trim();
       const gameMode = $('online-game-mode') ? $('online-game-mode').value : 'classic';
       const roundSelect=$('online-lobby-rounds');
-      const rounds = roundSelect && roundSelect.value === 'custom'
+      const rounds = hostSelectedRounds || (roundSelect && roundSelect.value === 'custom'
         ? Math.min(100, Math.max(5, Number($('online-rounds-custom')?.value) || 55))
-        : (roundSelect ? Number(roundSelect.value) : 10);
+        : (roundSelect ? Number(roundSelect.value) : 10));
       const allowLongRounds = !!($('online-long-rounds') && $('online-long-rounds').checked);
       connect(() => {
         send({ type: 'create', code, gameMode, rounds, allowLongRounds });
@@ -890,9 +891,9 @@
       connect(() => {
         send({ type: 'create', code: '', ownerPassword,
           gameMode: $('online-game-mode') ? $('online-game-mode').value : 'classic',
-           rounds: $('online-lobby-rounds') && $('online-lobby-rounds').value === 'custom'
+           rounds: hostSelectedRounds || ($('online-lobby-rounds') && $('online-lobby-rounds').value === 'custom'
              ? Math.min(100, Math.max(5, Number($('online-rounds-custom')?.value) || 55))
-             : ($('online-lobby-rounds') ? Number($('online-lobby-rounds').value) : 10),
+             : ($('online-lobby-rounds') ? Number($('online-lobby-rounds').value) : 10)),
           allowLongRounds: !!($('online-long-rounds') && $('online-long-rounds').checked) });
         $('online-owner-password').value = '';
       });
