@@ -1621,7 +1621,11 @@ function renderFoogleTurn(actions) {
 function render() {
     const s = state;
     if (!s) return;
-    if (fooglePuzzleWindow && !fooglePuzzleWindow.closed && s.foogleChallenge) fooglePuzzleWindow.postMessage({type:'foogle-state',state:s.foogleChallenge},window.location.origin);
+    if (fooglePuzzleWindow && !fooglePuzzleWindow.closed && s.foogleChallenge) {
+      const visit=s.foogleChallenge.visit;
+      if (!visit || visit.expiresAt<=Date.now()) { fooglePuzzleWindow.close(); fooglePuzzleWindow=null; }
+      else fooglePuzzleWindow.postMessage({type:'foogle-state',state:s.foogleChallenge},window.location.origin);
+    }
     if (window.PhoenixMusicPlayer) {
       window.PhoenixMusicPlayer.setMatchActive('online', !$('online-screen').hidden && window.PhoenixMusic.isActiveMatch(s));
     }

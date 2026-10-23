@@ -31,7 +31,7 @@
     { topics:['iphone 47','iphone 47 pro'], type:'product', site:'definitely-not-apple.html', title:'Definitely Not Apple: iPhone 47 Pro Ultra Max Costs £19,999', source:'Foogle Premium Device Index', text:'Configure fictional storage, colours, and accessories with no checkout attached.', date:'Premium result' },
     { topics:['phoenix technologies','phoenix technology'], type:'corporate', site:'phoenix-technologies.html', title:'PHOENIX Technologies Opens Laboratory for Self-Aware Chairs', source:'Foogle Corporate Index', text:'Explore inventions, research and a simulated enquiry desk from the fictional division.', date:'Company announcement' },
     { topics:['grand theft toaster','five nights at tesco','potato edition'], type:'game', site:'definitely-not-steam.html', title:'Definitely Not Steam: Games That Require More Storage Than Sense', source:'Foogle Games Index', text:'Browse fictional games, ridiculous requirements, reviews, and a local pretend wishlist.', date:'Store update' }
-    ,{ topics:['the puzzle','phoenix puzzle','nine pieces'], type:'challenge', site:'the-puzzle.html', title:'THE PUZZLE: Nine Websites. Nine Missing Pieces. One Phoenix.', source:'Foogle Challenge Index', text:'Open the cooperative PHOOGLE Challenge board and place the pieces your team unlocks.', date:'Challenge result' }
+    ,{ topics:['the puzzle','phoenix puzzle','nine pieces','foogle puzzle'], type:'challenge', site:'the-puzzle.html', title:'THE PUZZLE: Nine Websites. Nine Missing Pieces. One Phoenix.', source:'Foogle Challenge Index', text:'Open the cooperative Foogle Challenge board and place the pieces your team unlocks.', date:'Challenge result' }
   ];
 
   function normalise(query) { return String(query || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
