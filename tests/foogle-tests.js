@@ -1,0 +1,10 @@
+'use strict';
+const assert=require('assert'),fs=require('fs'),path=require('path'),Foogle=require('../js/foogle-data');
+const html=fs.readFileSync(path.join(__dirname,'../foogle.html'),'utf8'),client=fs.readFileSync(path.join(__dirname,'../js/foogle-client.js'),'utf8'),css=fs.readFileSync(path.join(__dirname,'../css/foogle.css'),'utf8');
+function test(name,fn){try{fn();console.log('PASS',name);}catch(error){console.error('FAIL',name,error.message);process.exitCode=1;}}
+test('Foogle page has responsive search and parody disclosure',()=>{assert(html.includes('id="foogle-form"'));assert(html.includes('Search anything. Regret everything.'));assert(html.includes('fictional PHOENIX Entertainment parody'));assert(css.includes('@media(max-width:600px)'));});
+test('special searches recognise case and whitespace variations',()=>{assert(Foogle.matching('  WEATHER   IN   SPAIN ').length>=2);assert(Foogle.matching('DOWNLOAD MORE RAM').length>=2);assert(Foogle.matching('phoenix   matches').length>=2);});
+test('fictional catalogue contains at least fifteen templates',()=>{assert(Foogle.TEMPLATES.length>=15);assert(new Set(Foogle.TEMPLATES.map(item=>item.source)).size>=10);});
+test('weather values are randomized fictional units',()=>{const output=Foogle.weatherText('Current temperature: {apples} apples. Feels like: {bananas} bananas.');assert(/\d+ apples/.test(output));assert(/\d+ bananas/.test(output));});
+test('articles are fictional and include randomized match analysis',()=>{const article=Foogle.article('phoenix match',Foogle.matching('phoenix match')[0]);assert(article.body.some(line=>line.includes('fictional')));assert(article.body.some(line=>/Player [1-4]/.test(line)));});
+test('ordinary searches use encoded Google fallback in a new tab',()=>{assert(client.includes("window.open('https://www.google.com/search?q='+encodeURIComponent(query),'_blank'"));assert(client.includes("if(special.length)"));});
