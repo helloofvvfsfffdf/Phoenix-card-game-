@@ -41,6 +41,7 @@
   const $ = id => document.getElementById(id);
 
   let socket = null;
+  let fooglePuzzleWindow = null;
   let state = null;
   const resumeStorageKey = 'phoenix-online-resume:' + (location.pathname || '/') + (location.search || '');
   let resumeSession = null;
@@ -1261,8 +1262,10 @@ function renderMapleNotice(actions) {
 }
 
 window.addEventListener('message', function(event) {
-  if (event.origin !== window.location.origin || !event.data || event.data.type !== 'foogle-start-puzzle') return;
-  send({ type:'foogle_start_puzzle', puzzleId:String(event.data.puzzleId || '') });
+  if (event.origin !== window.location.origin || !event.data) return;
+  if (event.data.type === 'foogle-start-puzzle') send({ type:'foogle_start_puzzle', puzzleId:String(event.data.puzzleId || '') });
+  if (event.data.type === 'foogle-puzzle-action') send({ type:'foogle_action', action:'solve', payload:event.data.payload });
+  if (event.data.type === 'foogle-place-piece') send({ type:'foogle_place_piece', puzzleId:String(event.data.puzzleId || '') });
 });
 
 function renderFoogleTurn(actions) {
@@ -1270,13 +1273,14 @@ function renderFoogleTurn(actions) {
   const mine=(state.players[state.seat]||{}).id;
   const box=el('div','foogle-challenge-panel');
   box.append(el('h3','','🧩 THE PUZZLE — '+Object.keys(fc.placements||{}).length+'/9 PIECES'));
+  const board=el('button','online-secondary','OPEN THE PUZZLE BOARD');board.type='button';board.onclick=()=>{fooglePuzzleWindow=window.open('/the-puzzle.html','foogle-board','noopener');};box.append(board);
   if (fc.visit && fc.visit.playerId===mine) {
     const left=Math.max(0,Math.ceil((fc.visit.expiresAt-Date.now())/1000));
     box.append(el('p','','FOOGLE visit active: '+left+' seconds remaining. Progress saves automatically.'));
     const assigned=fc.assignments&&fc.assignments[mine];
     if (!assigned) {
       box.append(el('p','','Choose one available website puzzle. Your assignment remains yours across turns.'));
-      (fc.puzzles||[]).filter(p=>p.status==='available').forEach(p=>{const b=el('button','online-secondary','START PUZZLE: '+p.name);b.type='button';b.onclick=()=>send({type:'foogle_start_puzzle',puzzleId:p.id});box.append(b);const link=el('a','foogle-puzzle-link','Open website');link.href=({'nvidia':'definitely-not-nvidia','news':'phoenix-news','microsoft':'definitely-not-microsoft','weather':'foogle-weather','wikipedia':'definitely-not-wikipedia','reddit':'definitely-not-reddit','apple':'definitely-not-apple','technologies':'phoenix-technologies','steam':'definitely-not-steam'}[p.id]||'foogle')+'.html?puzzle='+encodeURIComponent(p.id);link.target='_blank';box.append(link);});
+      (fc.puzzles||[]).filter(p=>p.status==='available').forEach(p=>{const b=el('button','online-secondary','START PUZZLE: '+p.name);b.type='button';b.onclick=()=>send({type:'foogle_start_puzzle',puzzleId:p.id});box.append(b);const link=el('a','foogle-puzzle-link','Open website');link.href=({'nvidia':'definitely-not-nvidia','news':'phoenix-news','microsoft':'definitely-not-microsoft','weather':'foogle-weather','wikipedia':'definitely-not-wikipedia','reddit':'definitely-not-reddit','apple':'definitely-not-apple','technologies':'phoenix-technologies','steam':'definitely-not-steam'}[p.id]||'foogle')+'.html?puzzle='+encodeURIComponent(p.id);link.target='_blank';link.onclick=e=>{e.preventDefault();fooglePuzzleWindow=window.open(link.href,'foogle-puzzle','noopener');};box.append(link);});
     } else {
       const progress=fc.progress[assigned]||{stage:0};
       box.append(el('p','','Assigned puzzle: '+assigned.toUpperCase()+' · stage '+progress.stage+' / '+fc.difficulty.stages));
@@ -1606,9 +1610,10 @@ function renderFoogleTurn(actions) {
     }
   }
 
-  function render() {
+function render() {
     const s = state;
     if (!s) return;
+    if (fooglePuzzleWindow && !fooglePuzzleWindow.closed && s.foogleChallenge) fooglePuzzleWindow.postMessage({type:'foogle-state',state:s.foogleChallenge},window.location.origin);
     if (window.PhoenixMusicPlayer) {
       window.PhoenixMusicPlayer.setMatchActive('online', !$('online-screen').hidden && window.PhoenixMusic.isActiveMatch(s));
     }

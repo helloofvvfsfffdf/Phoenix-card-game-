@@ -1899,12 +1899,23 @@ function fooglePuzzleStart(room, member, puzzleId) {
   if (c.assignments[id] && c.assignments[id]!==puzzleId) return { ok:false, message:'Finish your assigned puzzle before switching.' };
   c.assignments[id]=puzzleId; if (!c.progress[puzzleId]) c.progress[puzzleId]={stage:0}; return { ok:true };
 }
-function fooglePuzzleAction(room, member, action) {
+function fooglePuzzleAction(room, member, action, payload) {
   const c=foogleState(room), id=fooglePlayerId(room,member), puzzle=c && c.assignments[id];
   if (!c || !c.visit || c.visit.playerId!==id || !puzzle) return { ok:false, message:'Choose an assigned puzzle first.' };
-  const progress=c.progress[puzzle] || {stage:0};
+  const config=c.configs[puzzle]; const progress=c.progress[puzzle] || {stage:0}; let solved=false;
+  payload=payload||{};
+  if (config.kind==='assembly') solved=payload.configuration && payload.configuration.gpu===config.answer.gpu && payload.configuration.vram===config.answer.vram && payload.configuration.cooling===config.answer.cooling && payload.configuration.power===config.answer.power;
+  else if (config.kind==='timeline') solved=Array.isArray(payload.order) && payload.order.join(',')===config.answerOrder.join(',') && payload.headline===config.headline;
+  else if (config.kind==='repair') solved=Array.isArray(payload.sequence) && payload.sequence.join(',')===config.answer.join(',');
+  else if (config.kind==='matching') solved=payload.matches && Object.keys(config.answer).every(key=>payload.matches[key]===config.answer[key]);
+  else if (config.kind==='path') solved=Array.isArray(payload.path) && payload.path.join(',')===config.answer.join(',');
+  else if (config.kind==='deduction') solved=payload.userId===config.answer;
+  else if (config.kind==='configuration') solved=payload.order && JSON.stringify(payload.order.products||[])===JSON.stringify(config.answer.products) && JSON.stringify(payload.order.accessories||[])===JSON.stringify(config.answer.accessories);
+  else if (config.kind==='blueprint') solved=Array.isArray(payload.connections) && payload.connections.join(',')===config.answer.join(',');
+  else if (config.kind==='investigation') solved=payload.gameId===config.answer;
+  if (solved) progress.solved=true;
   progress.stage=Math.min(c.difficulty.stages, progress.stage+1); c.progress[puzzle]=progress;
-  if (progress.stage>=c.difficulty.stages) { c.completed[puzzle]=true; delete c.assignments[id]; c.progress[puzzle]={stage:progress.stage,complete:true}; room.state.players.find(p=>p.id===id).points+=10000; addLog(room, member.name+' completed the '+puzzle+' puzzle and unlocked a jigsaw piece.'); }
+  if (progress.solved) { c.completed[puzzle]=true; delete c.assignments[id]; c.progress[puzzle]={stage:progress.stage,complete:true}; room.state.players.find(p=>p.id===id).points+=10000; addLog(room, member.name+' completed the '+puzzle+' puzzle and unlocked a jigsaw piece.'); }
   return { ok:true, complete:!!c.completed[puzzle], puzzle, stage:progress.stage };
 }
 function placeFooglePiece(room, member, puzzleId) {
@@ -3937,7 +3948,7 @@ async function handle(ws, data) {
     const result=fooglePuzzleStart(room,m,String(data.puzzleId||'')); if (result.ok) broadcast(room); else error(ws,result.message); return;
   }
   if (data.type === 'foogle_action') {
-    const result=fooglePuzzleAction(room,m,String(data.action||'')); if (result.ok) broadcast(room); else error(ws,result.message); return;
+    const result=fooglePuzzleAction(room,m,String(data.action||''),data.payload); if (result.ok) broadcast(room); else error(ws,result.message); return;
   }
   if (data.type === 'foogle_place_piece') {
     const result=placeFooglePiece(room,m,String(data.puzzleId||'')); if (result.ok) broadcast(room); else error(ws,result.message); return;
