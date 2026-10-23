@@ -447,3 +447,4 @@
   color: #8fa4c8;
   font-size: 13px;
 }
+.foogle-lobby-settings{align-items:center;background:rgba(255,203,90,.12);border:1px solid rgba(255,203,90,.35);border-radius:10px;display:flex;flex-wrap:wrap;gap:1rem;margin:1rem 0;padding:1rem}.foogle-lobby-settings label{font-weight:700}.foogle-lobby-settings select{margin-left:.35rem;padding:.35rem}.foogle-lobby-settings-copy{color:#f6c85f;font-weight:800}.foogle-challenge-panel{background:linear-gradient(135deg,#15294b,#201b43);border:1px solid #5573a6;border-radius:12px;margin:1rem 0;padding:1rem}.foogle-challenge-panel button{margin:.3rem}.foogle-challenge-panel h3{color:#ffcb5a}@media(max-width:650px){.foogle-lobby-settings{align-items:stretch;flex-direction:column}.foogle-lobby-settings select{display:block;margin:.3rem 0 0;width:100%}}

@@ -1,0 +1,6 @@
+'use strict';
+const assert=require('assert'),Challenge=require('../js/foogle-challenge');
+function test(name,fn){try{fn();console.log('PASS',name);}catch(e){console.error('FAIL',name,e.message);process.exitCode=1;}}
+test('FOOGLE difficulty scales by rounds and players',()=>{assert.strictEqual(Challenge.difficulty(5,2).level,'very-easy');assert.strictEqual(Challenge.difficulty(100,5).level,'expert');assert(Challenge.difficulty(50,5).stages>Challenge.difficulty(5,2).stages);});
+test('a challenge has nine unique puzzle assignments and shared state',()=>{const c=Challenge.create(25,5);assert.strictEqual(Challenge.PUZZLES.length,9);assert.strictEqual(Object.keys(c.completed).length,0);assert.strictEqual(c.difficulty.level,'easy');});
+test('public challenge state contains progress without private account data',()=>{const c=Challenge.create(50,2);const state=Challenge.publicState(Object.assign(c,{puzzles:Challenge.PUZZLES.map(p=>({id:p[0],name:p[1]}))}));assert.strictEqual(state.puzzles.length,9);assert(!JSON.stringify(state).includes('password'));});

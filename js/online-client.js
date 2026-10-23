@@ -841,8 +841,11 @@
       // Optional custom invite code: blank (or missing) creates a PUBLIC lobby,
       // a 3-6 character code creates a PRIVATE lobby joinable with that code.
       const code = $('online-create-code').value.trim();
+      const gameMode = $('online-game-mode') ? $('online-game-mode').value : 'classic';
+      const rounds = $('online-lobby-rounds') ? Number($('online-lobby-rounds').value) : 10;
+      const allowLongRounds = !!($('online-long-rounds') && $('online-long-rounds').checked);
       connect(() => {
-        send({ type: 'create', code });
+        send({ type: 'create', code, gameMode, rounds, allowLongRounds });
       });
       return;
     }
@@ -866,7 +869,10 @@
         return;
       }
       connect(() => {
-        send({ type: 'create', code: '', ownerPassword });
+        send({ type: 'create', code: '', ownerPassword,
+          gameMode: $('online-game-mode') ? $('online-game-mode').value : 'classic',
+          rounds: $('online-lobby-rounds') ? Number($('online-lobby-rounds').value) : 10,
+          allowLongRounds: !!($('online-long-rounds') && $('online-long-rounds').checked) });
         $('online-owner-password').value = '';
       });
       return;
@@ -1010,6 +1016,7 @@
   function renderLobby() {
     const actions = $('online-actions');
     actions.replaceChildren();
+    actions.append(el('p', 'foogle-lobby-settings-copy', (state.gameMode === 'foogle' ? 'FOOGLE CHALLENGE' : 'CLASSIC PHOENIX') + ' · ' + state.requestedRounds + ' rounds · estimated ' + (state.estimatedDuration || 15) + '–' + ((state.estimatedDuration || 15) * 2) + ' minutes'));
 
     if (state.host) {
       const start = el('button', 'online-primary', 'START MATCH');
@@ -1253,7 +1260,38 @@ function renderMapleNotice(actions) {
   ));
 }
 
-function renderPlaying() {
+window.addEventListener('message', function(event) {
+  if (event.origin !== window.location.origin || !event.data || event.data.type !== 'foogle-start-puzzle') return;
+  send({ type:'foogle_start_puzzle', puzzleId:String(event.data.puzzleId || '') });
+});
+
+function renderFoogleTurn(actions) {
+  const fc=state.foogleChallenge; if (!fc) return false;
+  const mine=(state.players[state.seat]||{}).id;
+  const box=el('div','foogle-challenge-panel');
+  box.append(el('h3','','🧩 THE PUZZLE — '+Object.keys(fc.placements||{}).length+'/9 PIECES'));
+  if (fc.visit && fc.visit.playerId===mine) {
+    const left=Math.max(0,Math.ceil((fc.visit.expiresAt-Date.now())/1000));
+    box.append(el('p','','FOOGLE visit active: '+left+' seconds remaining. Progress saves automatically.'));
+    const assigned=fc.assignments&&fc.assignments[mine];
+    if (!assigned) {
+      box.append(el('p','','Choose one available website puzzle. Your assignment remains yours across turns.'));
+      (fc.puzzles||[]).filter(p=>p.status==='available').forEach(p=>{const b=el('button','online-secondary','START PUZZLE: '+p.name);b.type='button';b.onclick=()=>send({type:'foogle_start_puzzle',puzzleId:p.id});box.append(b);const link=el('a','foogle-puzzle-link','Open website');link.href=({'nvidia':'definitely-not-nvidia','news':'phoenix-news','microsoft':'definitely-not-microsoft','weather':'foogle-weather','wikipedia':'definitely-not-wikipedia','reddit':'definitely-not-reddit','apple':'definitely-not-apple','technologies':'phoenix-technologies','steam':'definitely-not-steam'}[p.id]||'foogle')+'.html?puzzle='+encodeURIComponent(p.id);link.target='_blank';box.append(link);});
+    } else {
+      const progress=fc.progress[assigned]||{stage:0};
+      box.append(el('p','','Assigned puzzle: '+assigned.toUpperCase()+' · stage '+progress.stage+' / '+fc.difficulty.stages));
+      if (!fc.completed[assigned]) { const solve=el('button','online-primary','SOLVE NEXT CLUE');solve.type='button';solve.onclick=()=>send({type:'foogle_action',action:'advance'});box.append(solve); }
+      else box.append(el('p','','PUZZLE WON! +10,000 POINTS · A new jigsaw piece is unlocked.'));
+    }
+    Object.keys(fc.completed||{}).filter(id=>!fc.placements[id]).forEach(id=>{const b=el('button','online-secondary','PLACE '+id.toUpperCase()+' PIECE');b.type='button';b.onclick=()=>send({type:'foogle_place_piece',puzzleId:id});box.append(b);});
+    const end=el('button','online-secondary','END FOOGLE VISIT');end.type='button';end.onclick=()=>send({type:'foogle_end'});box.append(end);actions.append(box);return true;
+  }
+  if (state.acting && !fc.visit) { const visit=el('button','online-primary','VISIT FOOGLE');visit.type='button';visit.onclick=()=>send({type:'foogle_visit'});box.append(el('p','','Choose to play a PHOENIX card or spend this turn solving a website puzzle.'),visit); }
+  else if (fc.visit) box.append(el('p','',''+playerName(fc.visit.playerId)+' is visiting FOOGLE. Their 60-second puzzle turn is in progress.'));
+  actions.append(box); return false;
+}
+
+  function renderPlaying() {
     const actions = $('online-actions');
     actions.replaceChildren();
 
@@ -1281,7 +1319,7 @@ function renderPlaying() {
        const player = state.players.find(p => p.id === id);
        if (player) actions.append(el('p', 'phoenixtube-table-notice', '📺 ' + player.name + ' is completing a PHOENIXTube challenge.'));
      });
-     if (state.phoenixTubeChallenge) {
+      if (state.phoenixTubeChallenge) {
        const box = el('div', 'phoenixtube-match-card');
        box.append(el('h3', '', '📺 PHOENIXTube'));
        box.append(el('p', '', state.phoenixTubeChallenge.actorName + ' sent you to PHOENIXTube. Your PHOENIX match stays open while you watch.'));
@@ -1291,10 +1329,18 @@ function renderPlaying() {
        const back = el('button', 'online-secondary', 'RETURN TO PHOENIXTUBE');
        back.type = 'button'; back.onclick = () => window.open('/phoenixtube.html?token=' + encodeURIComponent(state.phoenixTubeChallenge.token), '_blank', 'noopener');
        box.append(open, back, el('small', '', 'You have ten minutes. These controls are private to you.'));
-       actions.append(box);
-     }
+        actions.append(box);
+      }
+      if (state.gameMode === 'foogle' && renderFoogleTurn(actions)) return;
 
     if (state.over) {
+      if (state.gameMode === 'foogle') {
+        const cooperative = el('div', 'phoenix-victory');
+        cooperative.append(el('h1', '', state.foogleChallenge && state.foogleChallenge.victory ? '🧩 YOU ALL WIN! 🧩' : 'CHALLENGE INCOMPLETE'));
+        cooperative.append(el('p', '', state.foogleChallenge && state.foogleChallenge.victory ? 'THE TRUTH HAS BEEN REVEALED' : 'The team did not finish THE PUZZLE before the round limit.'));
+        const image=el('img','phoenix-victory-display'); image.src='assets/phoenix.jpg'; image.alt='Phoenix the leopard gecko'; cooperative.append(image);
+        actions.append(cooperative); return;
+      }
       // The victory screen, restored from the previous client (commit a66b491).
       //
       // Its CSS - .phoenix-victory, .phoenix-champion, .phoenix-victory-ally,
@@ -1571,7 +1617,7 @@ function renderPlaying() {
     $('online-room').hidden = false;
     $('online-room-code').textContent = s.code;
     $('online-room-mode').textContent =
-      s.mode === 'owner' ? 'OWNER & FRIENDS' : 'PUBLIC MULTIPLAYER';
+      s.mode === 'owner' ? 'OWNER & FRIENDS' : (s.gameMode === 'foogle' ? 'FOOGLE CHALLENGE' : 'PUBLIC MULTIPLAYER');
 
     const current = s.players.find(p => p.id === s.current);
     const chooser=s.pending && s.players.find(p=>p.id===s.pending.chooserId);
@@ -1922,6 +1968,26 @@ function renderPlaying() {
     $('online-mode-owner').onclick = () => setMode('owner');
     $('online-owner-create').onclick = () => join('ownerCreate');
     $('online-owner-join').onclick = () => join('ownerJoin');
+
+    const lobbyMode = $('online-game-mode');
+    const lobbyRounds = $('online-lobby-rounds');
+    const longRounds = $('online-long-rounds');
+    const longLabel = $('classic-long-toggle');
+    function refreshLobbySettings() {
+      if (!lobbyMode || !lobbyRounds) return;
+      const foogle = lobbyMode.value === 'foogle';
+      if (longLabel) longLabel.hidden = foogle;
+      const values = foogle ? [5,10,15,20,25,30,40,50,60,75,80,90,100] : [5,10,15,20].concat(longRounds && longRounds.checked ? [100] : []);
+      const selected = Number(lobbyRounds.value) || 10;
+      lobbyRounds.replaceChildren(...values.map(value => { const option=document.createElement('option'); option.value=String(value); option.textContent=String(value); return option; }));
+      lobbyRounds.value = values.includes(selected) ? String(selected) : '10';
+      const estimate = $('online-duration-estimate');
+      if (estimate) { const minutes=Math.ceil(Number(lobbyRounds.value)*5/2); estimate.textContent='Estimated duration: approximately '+minutes+'–'+(minutes*2)+' minutes'+(foogle?' · cooperative puzzle may finish earlier':''); }
+    }
+    if (lobbyMode) lobbyMode.addEventListener('change', refreshLobbySettings);
+    if (longRounds) longRounds.addEventListener('change', refreshLobbySettings);
+    if (lobbyRounds) lobbyRounds.addEventListener('change', refreshLobbySettings);
+    refreshLobbySettings();
 
     // Admin entry points: the SERVER button on the multiplayer screen and the
     // OWNER DASHBOARD button on the main menu both open the same dashboard.

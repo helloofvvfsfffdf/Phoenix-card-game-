@@ -25,6 +25,7 @@ const interactionView = require('./js/interaction-view.js');
 const SpeedInteraction = require('./js/speed-interaction.js');
 const Shopping = require('./js/shopping-challenge.js');
 const PhoenixTube = require('./js/phoenix-tube-challenge.js');
+const FoogleChallenge = require('./js/foogle-challenge.js');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || 3000);
@@ -32,6 +33,7 @@ const OWNER_PASSWORD = process.env.PHOENIX_OWNER_PASSWORD || '';
 const MODE_ACCESS_CODE = process.env.PHOENIX_MODE_ACCESS_CODE || '';
 const SHOPPING_TIMEOUT_MS = 5 * 60 * 1000;
 const PHOENIXTUBE_TIMEOUT_MS = 10 * 60 * 1000;
+const FOOGLE_VISIT_MS = 60 * 1000;
 
 if (MODE_ACCESS_CODE.length < 12 || MODE_ACCESS_CODE.length > 256) {
   console.error('Set PHOENIX_MODE_ACCESS_CODE to a private access code of 12-256 characters.');
@@ -1742,6 +1744,11 @@ function startGame(room) {
 
   room.state = s;
   room.phase = 'playing';
+  room.foogleChallenge = room.gameMode === 'foogle'
+    ? Object.assign(FoogleChallenge.create(room.requestedRounds, room.members.length), {
+        puzzles: FoogleChallenge.PUZZLES.map(p => ({ id:p[0], name:p[1] }))
+      })
+    : null;
   room.lastPhoenixRound = 1;
   room.tedHiddenUntil = {};
 
@@ -1856,6 +1863,55 @@ function settlePhoenixTube(room, challenge, outcome) {
       : ' did not finish the PHOENIXTube challenge and lost 10,000 points.'));
   }
   broadcast(room);
+}
+
+function fooglePlayerId(room, member) { return Rules.SEATS[member.seat].id; }
+function foogleState(room) { return room.foogleChallenge || null; }
+function finishFoogleVisit(room) {
+  const visit = room.foogleChallenge && room.foogleChallenge.visit;
+  if (!visit) return;
+  if (visit.timer) clearTimeout(visit.timer);
+  room.foogleChallenge.visit = null;
+  if (room.state && !room.state.over) {
+    const events = Rules.advanceTurn(room.state);
+    events.forEach(event => addLog(room, event.text || 'Turn advanced.'));
+  }
+  broadcast(room);
+}
+function startFoogleVisit(room, member) {
+  const challenge = room.foogleChallenge;
+  if (!challenge || room.gameMode !== 'foogle') return { ok:false, message:'FOOGLE Challenge is not active.' };
+  if (challenge.visit) return { ok:false, message:'Another FOOGLE visit is already active.' };
+  const id = fooglePlayerId(room, member);
+  if (!room.state || room.state.players[room.state.turnInRound].id !== id) return { ok:false, message:'It is not your turn.' };
+  const now = Date.now();
+  challenge.visit = { playerId:id, startedAt:now, expiresAt:now + FOOGLE_VISIT_MS };
+  challenge.visit.timer = setTimeout(() => finishFoogleVisit(room), FOOGLE_VISIT_MS + 50);
+  return { ok:true };
+}
+function fooglePuzzleStart(room, member, puzzleId) {
+  const c=foogleState(room), id=fooglePlayerId(room,member);
+  if (!c || !c.visit || c.visit.playerId !== id) return { ok:false, message:'Start a FOOGLE visit on your turn first.' };
+  if (!c.puzzles || !c.puzzles.some(p=>p.id===puzzleId)) return { ok:false, message:'That puzzle does not exist.' };
+  if (c.completed[puzzleId]) return { ok:false, message:'That puzzle is already complete.' };
+  const reserved=Object.entries(c.assignments).some(([player,puzzle])=>puzzle===puzzleId && player!==id);
+  if (reserved) return { ok:false, message:'That puzzle is reserved by another player.' };
+  if (c.assignments[id] && c.assignments[id]!==puzzleId) return { ok:false, message:'Finish your assigned puzzle before switching.' };
+  c.assignments[id]=puzzleId; if (!c.progress[puzzleId]) c.progress[puzzleId]={stage:0}; return { ok:true };
+}
+function fooglePuzzleAction(room, member, action) {
+  const c=foogleState(room), id=fooglePlayerId(room,member), puzzle=c && c.assignments[id];
+  if (!c || !c.visit || c.visit.playerId!==id || !puzzle) return { ok:false, message:'Choose an assigned puzzle first.' };
+  const progress=c.progress[puzzle] || {stage:0};
+  progress.stage=Math.min(c.difficulty.stages, progress.stage+1); c.progress[puzzle]=progress;
+  if (progress.stage>=c.difficulty.stages) { c.completed[puzzle]=true; delete c.assignments[id]; c.progress[puzzle]={stage:progress.stage,complete:true}; room.state.players.find(p=>p.id===id).points+=10000; addLog(room, member.name+' completed the '+puzzle+' puzzle and unlocked a jigsaw piece.'); }
+  return { ok:true, complete:!!c.completed[puzzle], puzzle, stage:progress.stage };
+}
+function placeFooglePiece(room, member, puzzleId) {
+  const c=foogleState(room); if (!c || !c.completed[puzzleId]) return {ok:false,message:'That piece is not unlocked yet.'};
+  if (c.placements[puzzleId]) return {ok:false,message:'That piece is already placed.'}; c.placements[puzzleId]=member.name;
+  if (Object.keys(c.placements).length===FoogleChallenge.PUZZLES.length) { c.victory=true; room.state.over=true; room.state.winnerSeat=-1; addLog(room,'THE TRUTH HAS BEEN REVEALED — YOU ALL WIN!'); }
+  return {ok:true,victory:c.victory};
 }
 
 const httpServer = http.createServer(async (req, res) => {
@@ -2740,6 +2796,9 @@ function snapshot(room, member) {
     code: room.code,
     visibility: room.visibility || 'private',
     mode: room.mode || 'public',
+    gameMode: room.gameMode || 'classic',
+    requestedRounds: room.requestedRounds || 10,
+    estimatedDuration: Math.ceil((room.requestedRounds || 10) * Math.max(2, room.members.length || 2) * 45 / 60),
     host: room.members[0] === member,
     seat: member.seat,
     started: !!s,
@@ -2791,6 +2850,7 @@ function snapshot(room, member) {
     shoppingPlayers: room.shoppingChallenges
       ? [...room.shoppingChallenges.values()].filter(c => c.status === 'open').map(c => c.targetId)
       : [],
+    foogleChallenge: room.foogleChallenge ? FoogleChallenge.publicState(room.foogleChallenge) : null,
     phoenixTubeChallenge: phoenixTube ? {
       token: phoenixTube.token,
       expiresAt: phoenixTube.expiresAt,
@@ -3004,6 +3064,9 @@ function closeRoom(room, reason) {
       if (challenge.timer) clearTimeout(challenge.timer);
       if (challenge.status === 'open') challenge.status = 'cancelled';
     });
+  }
+  if (room.foogleChallenge && room.foogleChallenge.visit && room.foogleChallenge.visit.timer) {
+    clearTimeout(room.foogleChallenge.visit.timer);
   }
   room.interactionTimer = null;
   room.pendingInteraction = null;
@@ -3630,7 +3693,11 @@ async function handle(ws, data) {
         members: [],
         state: null,
         phase: 'lobby',
-        requestedRounds: 10,
+         requestedRounds: data.gameMode === 'foogle' || data.allowLongRounds
+           ? Math.min(100, Math.max(5, Number(data.rounds) || 10))
+           : Math.min(20, Math.max(5, Number(data.rounds) || 10)),
+         gameMode: data.gameMode === 'foogle' ? 'foogle' : 'classic',
+         allowLongRounds: data.allowLongRounds === true,
         log: ['Private room created. Invite at least one friend to start.']
       };
 
@@ -3715,9 +3782,16 @@ async function handle(ws, data) {
       members: [],
       shoppingChallenges: new Map(),
       phoenixTubeChallenges: new Map(),
+      gameMode: 'classic',
+      allowLongRounds: false,
+      foogleChallenge: null,
       state: null,
       phase: 'lobby',
-      requestedRounds: 10,
+       requestedRounds: data.gameMode === 'foogle' || data.allowLongRounds
+         ? Math.min(100, Math.max(5, Number(data.rounds) || 10))
+         : Math.min(20, Math.max(5, Number(data.rounds) || 10)),
+       gameMode: data.gameMode === 'foogle' ? 'foogle' : 'classic',
+       allowLongRounds: data.allowLongRounds === true,
       log: [
         visibility === 'public'
           ? 'Public lobby created. Anyone on the site can join.'
@@ -3856,6 +3930,19 @@ async function handle(ws, data) {
     send(ws, snapshot(room, m));
     return;
   }
+  if (data.type === 'foogle_visit') {
+    const result=startFoogleVisit(room,m); if (result.ok) broadcast(room); else error(ws,result.message); return;
+  }
+  if (data.type === 'foogle_start_puzzle') {
+    const result=fooglePuzzleStart(room,m,String(data.puzzleId||'')); if (result.ok) broadcast(room); else error(ws,result.message); return;
+  }
+  if (data.type === 'foogle_action') {
+    const result=fooglePuzzleAction(room,m,String(data.action||'')); if (result.ok) broadcast(room); else error(ws,result.message); return;
+  }
+  if (data.type === 'foogle_place_piece') {
+    const result=placeFooglePiece(room,m,String(data.puzzleId||'')); if (result.ok) broadcast(room); else error(ws,result.message); return;
+  }
+  if (data.type === 'foogle_end') { finishFoogleVisit(room); return; }
   if (room.phase !== 'lobby' && room.members.some(member => !member.ws)) {
     return error(ws, 'A player disconnected. The match is paused.');
   }
@@ -3883,7 +3970,8 @@ async function handle(ws, data) {
       );
     }
 
-    room.requestedRounds = Math.min(100, Math.max(5, Number(data.rounds) || 10));
+    if (!room.settingsLocked) room.requestedRounds = Math.min(100, Math.max(5, Number(data.rounds) || room.requestedRounds || 10));
+    room.settingsLocked = true;
 
     beginRollStage(room, 'turnDice');
     broadcast(room);
@@ -4063,6 +4151,9 @@ async function handle(ws, data) {
     const s = room.state;
     if (!s || s.over) {
       return error(ws, 'No active match.');
+    }
+    if (room.foogleChallenge && room.foogleChallenge.visit) {
+      return error(ws, 'The current player is visiting FOOGLE.');
     }
     if (room.members.some(p => !p.ws)) {
       return error(ws, 'A player disconnected. The match is paused.');
