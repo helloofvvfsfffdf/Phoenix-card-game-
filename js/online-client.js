@@ -1282,7 +1282,7 @@ function renderFoogleTurn(actions) {
     } else {
       const progress=fc.progress[assigned]||{stage:0};
       box.append(el('p','','Assigned puzzle: '+assigned.toUpperCase()+' · stage '+progress.stage+' / '+fc.difficulty.stages));
-      if (!fc.completed[assigned]) { const solve=el('button','online-primary','SOLVE NEXT CLUE');solve.type='button';solve.onclick=()=>send({type:'foogle_action',action:'advance'});box.append(solve); }
+       if (!fc.completed[assigned]) { box.append(el('p','','Continue solving on the Foogle website. Your puzzle progress is saved automatically.')); const openFoogle=el('button','online-primary','RETURN TO FOOGLE');openFoogle.type='button';openFoogle.onclick=()=>{fooglePuzzleWindow=window.open('/foogle.html','foogle-search');};box.append(openFoogle); }
       else box.append(el('p','','PUZZLE WON! +10,000 POINTS · A new jigsaw piece is unlocked.'));
     }
     Object.keys(fc.completed||{}).filter(id=>!fc.placements[id]).forEach(id=>{const b=el('button','online-secondary','PLACE '+id.toUpperCase()+' PIECE');b.type='button';b.onclick=()=>send({type:'foogle_place_piece',puzzleId:id});box.append(b);});

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>PHOENIX - Immersive Table</title>
+  <link rel="stylesheet" href="css/immersive.css" />
+  <!-- The overlays a card can put on the screen: the same ones the 2D game
+       uses, so a player answers a challenge the same way in either. -->
+  <link rel="stylesheet" href="css/interactive.css" />
+  <link rel="stylesheet" href="css/interactive-wheel.css" />
+  <link rel="stylesheet" href="css/rickroll.css" />
+  <link rel="stylesheet" href="css/victory-scene.css" />
+  <link rel="stylesheet" href="css/defeat-scene.css" />
+</head>
+<body class="immersive-body" data-map="modern-gaming-lounge">
+  <!-- The 3D stage. Everything else is drawn on top of it. -->
+  <div id="immersive-stage" class="immersive-stage"></div>
+
+  <!-- The loading and the failure. A browser without WebGL is told plainly
+       instead of being shown a black screen. -->
+  <div id="immersive-loading" class="immersive-loading">
+    <p class="immersive-loading-title">PHOENIX</p>
+    <p class="immersive-loading-line">Setting the table</p>
+  </div>
+  <div id="immersive-failure" class="immersive-failure" hidden>
+    <h1>THIS BROWSER CANNOT RUN THE 3D TABLE</h1>
+    <p>
+      The immersive table needs WebGL 2, and this browser does not have it.
+      The ordinary 2D game works everywhere, so carry on with that - or try
+      a different browser, or turn hardware acceleration on.
+    </p>
+    <p><a href="index.html">BACK TO THE MENU</a></p>
+  </div>
+
+  <!-- The caption the cinematics speak through. -->
+  <div id="immersive-caption" class="immersive-caption" aria-live="polite"></div>
+
+  <!-- The connection, the lobby and the table. -->
+  <div id="immersive-net" class="immersive-net">
+    <div class="immersive-net-bar">
+      <span id="immersive-net-status" class="immersive-net-status">Not connected</span>
+      <span id="immersive-room-code" class="immersive-net-code"></span>
+    </div>
+
+    <div id="immersive-lobby" class="immersive-lobby">
+      <label class="immersive-lobby-label" for="immersive-code">ROOM CODE</label>
+      <input id="immersive-code" class="immersive-code" maxlength="6" placeholder="ABC123" autocomplete="off" />
+      <button id="immersive-create" type="button" class="immersive-small">CREATE</button>
+      <button id="immersive-join" type="button" class="immersive-small">JOIN</button>
+      <button id="immersive-leave" type="button" class="immersive-small">LEAVE</button>
+      <button id="immersive-start" type="button" class="immersive-small" hidden>START THE MATCH</button>
+      <button id="immersive-roll" type="button" class="immersive-small" hidden>ROLL</button>
+      <div id="immersive-rooms" class="immersive-rooms"></div>
+      <div id="immersive-allies" class="immersive-allies" hidden></div>
+    </div>
+
+    <div id="immersive-table" class="immersive-table" hidden>
+      <p id="immersive-turn" class="immersive-turn">Waiting</p>
+      <ul id="immersive-players" class="immersive-players"></ul>
+    </div>
+  </div>
+
+  <!-- Who a card is aimed at. -->
+  <div id="immersive-targets" class="immersive-targets" hidden></div>
+
+  <!-- The HUD. Small, out of the way, and never over the cards. -->
+  <div id="immersive-hud" class="immersive-hud">
+    <div class="immersive-hud-top">
+      <div class="immersive-hud-block immersive-hud-hand-block">
+        <p class="immersive-hud-label">IN HAND</p>
+        <p id="immersive-hand" class="immersive-hud-value">0 of 7 cards in hand</p>
+        <p id="immersive-selected" class="immersive-hud-selected">Nothing selected</p>
+        <p id="immersive-status" class="immersive-hud-status"></p>
+      </div>
+      <div class="immersive-hud-block immersive-hud-block-right">
+        <label class="immersive-hud-label" for="immersive-quality">QUALITY</label>
+        <select id="immersive-quality">
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+      <div class="immersive-hud-block">
+        <label class="immersive-hud-label" for="immersive-sensitivity">LOOK SPEED</label>
+        <input id="immersive-sensitivity" type="range" min="0.3" max="2" step="0.1" value="1" />
+      </div>
+      <div class="immersive-hud-block">
+        <label class="immersive-hud-label" for="immersive-reduced">REDUCED MOTION</label>
+        <input id="immersive-reduced" type="checkbox" />
+      </div>
+    </div>
+
+    <div class="immersive-hud-bottom">
+      <div class="immersive-hud-actions">
+        <button id="immersive-play" type="button">PLAY CARD</button>
+        <button id="immersive-rehearse" type="button">CINEMATICS</button>
+        <a href="index.html">BACK TO THE MENU</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- The card registry, the effects journal, and the overlays a card can
+       put on the screen. The same ones the 2D game uses. -->
+  <script src="js/cards.js"></script>
+  <script src="js/sound-design.js"></script>
+  <script src="js/effects.js"></script>
+  <!-- The victory and defeat shows the game already has. -->
+  <script src="assets/victory/vendor/gsap.min.js"></script>
+  <script src="assets/victory/vendor/effekseer.min.js"></script>
+  <script src="js/particle-runtime.js"></script>
+  <script src="js/victory-scene.js"></script>
+  <script src="js/defeat-scene.js"></script>
+  <script src="js/interactive-minigames.js"></script>
+  <script src="js/interactive-dice.js"></script>
+  <script src="js/interactive-rps.js"></script>
+  <script src="js/interactive-betrayal.js"></script>
+  <script src="js/interactive-speed.js"></script>
+  <script src="js/interactive-wheel.js"></script>
+  <script src="js/interactive-linkedfate.js"></script>
+  <script src="js/interactive-impostor.js"></script>
+  <script src="js/interactive-swapper.js"></script>
+  <script src="js/interactive-expansion.js"></script>
+  <script src="js/mimic-rickroll.js"></script>
+  <script type="module" src="js/immersive/prototype.js"></script>
+</body>
+</html>
