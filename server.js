@@ -1883,7 +1883,10 @@ function startFoogleVisit(room, member) {
   if (!challenge || room.gameMode !== 'foogle') return { ok:false, message:'FOOGLE Challenge is not active.' };
   if (challenge.visit) return { ok:false, message:'Another FOOGLE visit is already active.' };
   const id = fooglePlayerId(room, member);
-  if (!room.state || room.state.players[room.state.turnInRound].id !== id) return { ok:false, message:'It is not your turn.' };
+  // The server's seat index is authoritative. Comparing player ids here was
+  // fragile after the lobby's turn-order shuffle, because the member seat and
+  // the fixed Rules player id can legitimately be represented differently.
+  if (!room.state || room.state.turnInRound !== member.seat) return { ok:false, message:'It is not your turn.' };
   const now = Date.now();
   challenge.visit = { playerId:id, startedAt:now, expiresAt:now + FOOGLE_VISIT_MS };
   challenge.visit.timer = setTimeout(() => finishFoogleVisit(room), FOOGLE_VISIT_MS + 50);

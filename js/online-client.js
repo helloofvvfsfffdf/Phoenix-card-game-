@@ -1298,7 +1298,7 @@ function renderFoogleTurn(actions) {
     event.preventDefault();
     openHostSettings();
   });
-  if (state.acting && !fc.visit) { const visit=el('button','online-primary','VISIT FOOGLE');visit.type='button';visit.onclick=()=>send({type:'foogle_visit'});box.append(el('p','','Choose to play a PHOENIX card or spend this turn solving a website puzzle.'),visit); }
+  if (state.acting && !fc.visit) { const visit=el('button','online-primary','VISIT FOOGLE');visit.type='button';visit.onclick=()=>{visit.disabled=true;feedback('Starting FOOGLE visit…');if(!send({type:'foogle_visit'}))visit.disabled=false;};box.append(el('p','','Choose to play a PHOENIX card or spend this turn solving a website puzzle.'),visit); }
   else if (fc.visit) box.append(el('p','',''+playerName(fc.visit.playerId)+' is visiting FOOGLE. Their 60-second puzzle turn is in progress.'));
   actions.append(box); return false;
 }
