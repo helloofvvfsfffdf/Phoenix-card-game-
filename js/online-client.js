@@ -826,16 +826,16 @@
   function openHostSettings(hostType) {
     hostType = hostType === 'owner' ? 'owner' : 'public';
     const dialog=$('host-settings-dialog'); if (!dialog) return join('create');
-    const mode=$('host-game-mode'), rounds=$('host-rounds'), long=$('host-long-rounds'), invite=$('host-invite-code');
+    const mode=$('host-game-mode'), rounds=$('host-rounds'), custom=$('host-custom-rounds'), invite=$('host-invite-code');
     const account=(window.PhoenixAccount&&typeof window.PhoenixAccount.current==='function'&&window.PhoenixAccount.current())||PhoenixOnline.account||{};
     const ownerPermission=account.role==='owner';
-    function refresh(){const foogle=mode.value==='foogle';$('host-long-label').hidden=foogle;const values=foogle?[5,10,15,20,25,30,40,50,60,75,80,90,100]:[5,10,15,20].concat(long.checked?[100]:[]);const selected=Number(rounds.value)||10;rounds.replaceChildren(...values.map(value=>{const o=document.createElement('option');o.value=value;o.textContent=value;return o;}));rounds.value=values.includes(selected)?String(selected):'10';const minutes=Math.ceil(Number(rounds.value)*1.5);$('host-duration').textContent='Estimated duration: approximately '+minutes+'–'+(minutes*2)+' minutes'+(foogle?' · cooperative puzzles may finish earlier':'');$('host-foogle-note').hidden=!foogle;$('host-owner-password-label').hidden=hostType!=='owner'||ownerPermission;}
+    function refresh(){const foogle=mode.value==='foogle';const values=[5,10,15,20,25,30,35,40,45,50,'custom'];const selected=rounds.value||'10';rounds.replaceChildren(...values.map(value=>{const o=document.createElement('option');o.value=value;o.textContent=value==='custom'?'Custom':value;return o;}));rounds.value=values.includes(selected)?selected:'10';const isCustom=rounds.value==='custom';$('host-custom-rounds-label').hidden=!isCustom;const count=isCustom?Math.min(100,Math.max(5,Number(custom.value)||55)):Number(rounds.value);const minutes=Math.ceil(count*1.5);$('host-duration').textContent='Estimated duration: approximately '+minutes+'–'+(minutes*2)+' minutes'+(foogle?' · cooperative puzzles may finish earlier':'');$('host-foogle-note').hidden=!foogle;$('host-owner-password-label').hidden=hostType!=='owner'||ownerPermission;}
     const close=()=>{if(typeof dialog.close==='function')dialog.close();dialog.removeAttribute('open');dialog.classList.remove('host-settings-visible');};
     if (dialog.open || dialog.classList.contains('host-settings-visible')) return;
-    mode.onchange=refresh;long.onchange=refresh;rounds.onchange=refresh;refresh();
+    mode.onchange=refresh;rounds.onchange=refresh;custom.oninput=refresh;refresh();
     if(typeof dialog.showModal==='function')dialog.showModal();else{dialog.setAttribute('open','');dialog.classList.add('host-settings-visible');}
     $('host-settings-close').onclick=close;$('host-settings-cancel').onclick=close;
-    $('host-settings-form').onsubmit=event=>{event.preventDefault();$('online-game-mode').value=mode.value;$('online-lobby-rounds').value=rounds.value;$('online-long-rounds').checked=long.checked;$('online-create-code').value=invite.value;if(hostType==='owner')$('online-owner-password').value=ownerPermission?'':$('host-owner-password').value;close();join(hostType==='owner'?'ownerCreate':'create');};
+    $('host-settings-form').onsubmit=event=>{event.preventDefault();const count=rounds.value==='custom'?Math.min(100,Math.max(5,Number(custom.value)||55)):Number(rounds.value);$('online-game-mode').value=mode.value;$('online-lobby-rounds').value=rounds.value;$('online-rounds-custom').value=count;$('online-long-rounds').checked=false;$('online-create-code').value=invite.value;if(hostType==='owner')$('online-owner-password').value=ownerPermission?'':$('host-owner-password').value;close();join(hostType==='owner'?'ownerCreate':'create');};
   }
 
   function join(request) {
@@ -858,7 +858,10 @@
       // a 3-6 character code creates a PRIVATE lobby joinable with that code.
       const code = $('online-create-code').value.trim();
       const gameMode = $('online-game-mode') ? $('online-game-mode').value : 'classic';
-      const rounds = $('online-lobby-rounds') ? Number($('online-lobby-rounds').value) : 10;
+      const roundSelect=$('online-lobby-rounds');
+      const rounds = roundSelect && roundSelect.value === 'custom'
+        ? Math.min(100, Math.max(5, Number($('online-rounds-custom')?.value) || 55))
+        : (roundSelect ? Number(roundSelect.value) : 10);
       const allowLongRounds = !!($('online-long-rounds') && $('online-long-rounds').checked);
       connect(() => {
         send({ type: 'create', code, gameMode, rounds, allowLongRounds });
@@ -887,7 +890,9 @@
       connect(() => {
         send({ type: 'create', code: '', ownerPassword,
           gameMode: $('online-game-mode') ? $('online-game-mode').value : 'classic',
-          rounds: $('online-lobby-rounds') ? Number($('online-lobby-rounds').value) : 10,
+           rounds: $('online-lobby-rounds') && $('online-lobby-rounds').value === 'custom'
+             ? Math.min(100, Math.max(5, Number($('online-rounds-custom')?.value) || 55))
+             : ($('online-lobby-rounds') ? Number($('online-lobby-rounds').value) : 10),
           allowLongRounds: !!($('online-long-rounds') && $('online-long-rounds').checked) });
         $('online-owner-password').value = '';
       });
@@ -2006,12 +2011,12 @@ function render() {
       if (!lobbyMode || !lobbyRounds) return;
       const foogle = lobbyMode.value === 'foogle';
       if (longLabel) longLabel.hidden = foogle;
-      const values = foogle ? [5,10,15,20,25,30,40,50,60,75,80,90,100] : [5,10,15,20].concat(longRounds && longRounds.checked ? [100] : []);
+       const values = [5,10,15,20,25,30,35,40,45,50,'custom'];
       const selected = Number(lobbyRounds.value) || 10;
       lobbyRounds.replaceChildren(...values.map(value => { const option=document.createElement('option'); option.value=String(value); option.textContent=String(value); return option; }));
-      lobbyRounds.value = values.includes(selected) ? String(selected) : '10';
-      const estimate = $('online-duration-estimate');
-       if (estimate) { const minutes=Math.ceil(Number(lobbyRounds.value)*1.5); estimate.textContent='Estimated duration: approximately '+minutes+'–'+(minutes*2)+' minutes'+(foogle?' · cooperative puzzle may finish earlier':''); }
+       lobbyRounds.value = values.includes(selected) ? String(selected) : '10';
+       const estimate = $('online-duration-estimate');
+       if (estimate) { const count=lobbyRounds.value==='custom'?Math.min(100,Math.max(5,Number($('online-rounds-custom')?.value)||55)):Number(lobbyRounds.value); const minutes=Math.ceil(count*1.5); estimate.textContent='Estimated duration: approximately '+minutes+'–'+(minutes*2)+' minutes'+(foogle?' · cooperative puzzle may finish earlier':''); }
     }
     if (lobbyMode) lobbyMode.addEventListener('change', refreshLobbySettings);
     if (longRounds) longRounds.addEventListener('change', refreshLobbySettings);
