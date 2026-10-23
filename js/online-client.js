@@ -1272,7 +1272,6 @@ function renderFoogleTurn(actions) {
   const mine=(state.players[state.seat]||{}).id;
   const box=el('div','foogle-challenge-panel');
   box.append(el('h3','','🧩 THE PUZZLE — '+Object.keys(fc.placements||{}).length+'/9 PIECES'));
-   const board=el('button','online-secondary','OPEN THE PUZZLE BOARD');board.type='button';board.onclick=()=>{fooglePuzzleWindow=window.open('/the-puzzle.html','foogle-board');};box.append(board);
   if (fc.visit && fc.visit.playerId===mine) {
     const left=Math.max(0,Math.ceil((fc.visit.expiresAt-Date.now())/1000));
     box.append(el('p','','FOOGLE visit active: '+left+' seconds remaining. Progress saves automatically.'));
