@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>PHOENIX - character conversion</title>
+  <style>
+    body { background: #0b1120; color: #e8e0cf; font: 14px system-ui, sans-serif; padding: 24px; }
+    pre { background: #111a2c; padding: 14px; border-radius: 10px; }
+    .ok { color: #7ee0a8; }
+    .bad { color: #ff9d7a; }
+  </style>
+</head>
+<body>
+  <h1>Character conversion</h1>
+  <p>
+    Takes a Mixamo FBX and writes a much smaller glTF file: the same model, the
+    same rig, the same clothes and hair, with the pictures made a sensible
+    size instead of four thousand by four thousand.
+  </p>
+  <pre id="log">Waiting…</pre>
+
+  <script src="/vendor/three/three.module.js" type="module"></script>
+  <script type="module">
+    import * as THREE from '/vendor/three/three.module.js';
+    import { FBXLoader } from '/vendor/three/loaders/FBXLoader.js';
+    import { GLTFExporter } from '/vendor/three/exporters/GLTFExporter.js';
+
+    const log = document.getElementById('log');
+    const say = (line, cls) => {
+      const span = document.createElement('span');
+      if (cls) span.className = cls;
+      span.textContent = line + '\n';
+      log.appendChild(span);
+    };
+
+    /** Wait until a picture has actually decoded. */
+    async function ready(texture) {
+      const image = texture.image;
+      if (!image) return texture;
+      if (image.complete === false && typeof image.decode === 'function') {
+        try { await image.decode(); } catch (error) { /* the browser will do it */ }
+      }
+      return texture;
+    }
+
+    /**
+     * A copy of a picture on a canvas, no bigger than the limit.
+     *
+     * The picture is always redrawn, even when it is small enough already:
+     * the exporter wants a canvas or a block of pixels, and a picture loaded
+     * from a file is neither.
+     */
+    function resize(texture, limit) {
+      const image = texture.image;
+      const width = image.naturalWidth || image.width || limit;
+      const height = image.naturalHeight || image.height || limit;
+      const scale = Math.min(1, limit / Math.max(width, height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const smaller = new THREE.CanvasTexture(canvas);
+      smaller.colorSpace = THREE.SRGBColorSpace;
+      smaller.anisotropy = 4;
+      smaller.flipY = texture.flipY;
+      // The exporter takes the picture's format from the texture itself, and
+      // a photograph of a shirt is much smaller as a picture than as a
+      // screenshot of one.
+      smaller.userData.mimeType = 'image/jpeg';
+      smaller.needsUpdate = true;
+      return smaller;
+    }
+
+    window.__convert = async function (url, limit) {
+      try {
+        say('Loading ' + url + '…');
+        const loader = new FBXLoader();
+        const group = await loader.loadAsync(url);
+        say('  loaded: ' + group.children.length + ' roots, ' +
+          (group.animations || []).length + ' animations');
+
+        // The pictures inside the file are unpacked AFTER the model is, so wait
+        // for them: a texture with no picture yet cannot be drawn or exported.
+        const deadline = Date.now() + 90000;
+        while (Date.now() < deadline) {
+          let waiting = 0;
+          group.traverse(function (object) {
+            if (!object.isMesh || !object.material) return;
+            const materials = Array.isArray(object.material) ? object.material : [object.material];
+            materials.forEach(function (material) {
+              Object.keys(material).forEach(function (key) {
+                const texture = material[key];
+                if (texture && texture.isTexture && !texture.image) waiting++;
+              });
+            });
+          });
+          if (!waiting) break;
+          await new Promise(function (resolve) { setTimeout(resolve, 200); });
+        }
+        say('  the pictures are here');
+
+        let resized = 0;
+        let skipped = 0;
+        let meshes = 0;
+        const seen = new Map();
+        const walk = async (object) => {
+          if (object.isMesh && object.material) {
+            meshes++;
+            const materials = Array.isArray(object.material) ? object.material : [object.material];
+            for (const material of materials) {
+              if (!seen.size) {
+                say('  material ' + material.type + ' with ' +
+                  Object.keys(material).filter((k) => material[k] && material[k].isTexture).join(', '));
+              }
+              for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap']) {
+                const texture = material[key];
+                if (!texture || !texture.image || seen.has(texture)) continue;
+                seen.set(texture, key);
+                await ready(texture);
+                const before = texture.image.naturalWidth || texture.image.width || 0;
+                const smaller = resize(texture, limit || 1024);
+                if (smaller !== texture) {
+                  material[key] = smaller;
+                  resized++;
+                  const after = smaller.image.width;
+                  say('  ' + key + ': ' + before + ' -> ' + after);
+                } else {
+                  skipped++;
+                }
+              }
+            }
+          }
+          for (const child of object.children) await walk(child);
+        };
+        await walk(group);
+        say('  ' + meshes + ' meshes, ' + resized + ' pictures made smaller, ' +
+          skipped + ' left alone');
+
+        say('Writing the glTF…');
+        const exporter = new GLTFExporter();
+        const result = await exporter.parseAsync(group, {
+          binary: true,
+          mimeType: 'image/jpeg',
+          onlyVisible: false,
+          truncateDrawRange: true,
+          maxTextureSize: limit || 1024
+        });
+        const bytes = new Uint8Array(result);
+        let binary = '';
+        const chunk = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunk) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+        }
+        const base64 = btoa(binary);
+        say('  done: ' + Math.round(bytes.length / 1024) + ' KB', 'ok');
+        window.__converted = { base64: base64, size: bytes.length };
+        return window.__converted;
+      } catch (error) {
+        say('  FAILED: ' + (error && error.message ? error.message : String(error)), 'bad');
+        window.__converted = { error: String(error && error.message ? error.message : error) };
+        return window.__converted;
+      }
+    };
+    say('Ready.');
+  </script>
+</body>
+</html>
