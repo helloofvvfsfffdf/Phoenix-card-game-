@@ -828,6 +828,7 @@
     const mode=$('host-game-mode'), rounds=$('host-rounds'), long=$('host-long-rounds'), invite=$('host-invite-code');
     function refresh(){const foogle=mode.value==='foogle';$('host-long-label').hidden=foogle;const values=foogle?[5,10,15,20,25,30,40,50,60,75,80,90,100]:[5,10,15,20].concat(long.checked?[100]:[]);const selected=Number(rounds.value)||10;rounds.replaceChildren(...values.map(value=>{const o=document.createElement('option');o.value=value;o.textContent=value;return o;}));rounds.value=values.includes(selected)?String(selected):'10';const minutes=Math.ceil(Number(rounds.value)*5/2);$('host-duration').textContent='Estimated duration: approximately '+minutes+'–'+(minutes*2)+' minutes'+(foogle?' · cooperative puzzles may finish earlier':'');$('host-foogle-note').hidden=!foogle;}
     const close=()=>{if(typeof dialog.close==='function')dialog.close();dialog.removeAttribute('open');dialog.classList.remove('host-settings-visible');};
+    if (dialog.open || dialog.classList.contains('host-settings-visible')) return;
     mode.onchange=refresh;long.onchange=refresh;refresh();
     if(typeof dialog.showModal==='function')dialog.showModal();else{dialog.setAttribute('open','');dialog.classList.add('host-settings-visible');}
     $('host-settings-close').onclick=close;$('host-settings-cancel').onclick=close;
@@ -1301,6 +1302,15 @@ function renderFoogleTurn(actions) {
     Object.keys(fc.completed||{}).filter(id=>!fc.placements[id]).forEach(id=>{const b=el('button','online-secondary','PLACE '+id.toUpperCase()+' PIECE');b.type='button';b.onclick=()=>send({type:'foogle_place_piece',puzzleId:id});box.append(b);});
     const end=el('button','online-secondary','END FOOGLE VISIT');end.type='button';end.onclick=()=>send({type:'foogle_end'});box.append(end);actions.append(box);return true;
   }
+
+  // Defensive delegation: the lobby markup can be revealed after this module
+  // initializes, so the host button must still open settings when that happens.
+  document.addEventListener('click', function(event) {
+    const button=event.target && event.target.closest ? event.target.closest('#online-create') : null;
+    if (!button) return;
+    event.preventDefault();
+    openHostSettings();
+  });
   if (state.acting && !fc.visit) { const visit=el('button','online-primary','VISIT FOOGLE');visit.type='button';visit.onclick=()=>send({type:'foogle_visit'});box.append(el('p','','Choose to play a PHOENIX card or spend this turn solving a website puzzle.'),visit); }
   else if (fc.visit) box.append(el('p','',''+playerName(fc.visit.playerId)+' is visiting FOOGLE. Their 60-second puzzle turn is in progress.'));
   actions.append(box); return false;
@@ -1976,7 +1986,7 @@ function render() {
         if (box) box.classList.toggle('is-open', open);
       };
     }
-    $('online-create').onclick = openHostSettings;
+    $('online-create').onclick = null;
     $('online-join').onclick = () => join('join');
 
     // Owner & Friends, kept separate from the public lobby system.
@@ -2084,5 +2094,5 @@ const roundsSelect = $('online-rounds');
     }
   });
 
-  window.PhoenixOnline = { enter, leave, join, openAdmin, getState: () => state };
+  window.PhoenixOnline = { enter, leave, join, openAdmin, openHostSettings, getState: () => state };
 })();
