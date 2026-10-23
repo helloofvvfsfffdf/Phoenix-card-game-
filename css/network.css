@@ -3,3 +3,4 @@ body[data-site=steam]{font-family:Arial,Helvetica,sans-serif;font-size:16px;line
  .puzzle-launch{background:var(--accent);border:0;border-radius:6px;color:#fff;cursor:pointer;font-size:.75rem;font-weight:800;margin-left:auto;padding:.55rem .8rem}.home-link{margin-left:0}
 .foogle-countdown{background:#2a1b35;border-left:3px solid #f7c948;color:#ffd666;font-size:1.05rem;font-weight:800;padding:.65rem}
 .puzzle-hints{background:#17243a;border-left:3px solid #8fb8ff;color:#e4edff;margin:.8rem 0;padding:.7rem}.puzzle-hints ul{margin:.45rem 0 0;padding-left:1.2rem}.puzzle-hints li{margin:.25rem 0}
+.puzzle-help{background:#241a2d;border:1px solid #c08bff;border-radius:8px;color:#f2ecf7;margin:.8rem 0;padding:.7rem}.puzzle-help summary{color:#ffd666;cursor:pointer;font-weight:900;letter-spacing:.08em}.puzzle-help p{margin:.55rem 0 0}
