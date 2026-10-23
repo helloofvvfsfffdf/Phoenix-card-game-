@@ -1043,31 +1043,9 @@
       const start = el('button', 'online-primary', 'START MATCH');
       start.type = 'button';
       start.onclick = () => {
-        // The round count comes from the SELECT, unless "Custom" is chosen - in
-        // which case it comes from the number box beside it. The two are read
-        // SEPARATELY and never through one another: a select whose value is
-        // the word "custom" is not a number, and treating it as one is how a
-        // custom match silently became a ten-round match.
-        const select = $('online-rounds');
-        const custom = $('online-rounds-custom');
-        let rounds = 10;
-
-        if (select && select.value === 'custom') {
-          const typed = custom ? parseInt(custom.value, 10) : NaN;
-          rounds = isFinite(typed) ? typed : 10;
-        } else if (select) {
-          const chosen = parseInt(select.value, 10);
-          rounds = isFinite(chosen) ? chosen : 10;
-        }
-
-        // The same bounds the server enforces, so the number the host sees is
-        // the number they get.
-        rounds = Math.min(100, Math.max(5, rounds));
-
-        send({
-          type: 'start',
-          rounds: rounds
-        });
+        // Round settings were chosen before the room was created. Starting the
+        // match must use that saved server-approved value, not a second control.
+        send({ type: 'start', rounds: state.requestedRounds });
       };
       actions.append(start);
 
