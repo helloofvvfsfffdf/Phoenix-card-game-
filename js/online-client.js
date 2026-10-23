@@ -827,9 +827,11 @@
     const dialog=$('host-settings-dialog'); if (!dialog) return join('create');
     const mode=$('host-game-mode'), rounds=$('host-rounds'), long=$('host-long-rounds'), invite=$('host-invite-code');
     function refresh(){const foogle=mode.value==='foogle';$('host-long-label').hidden=foogle;const values=foogle?[5,10,15,20,25,30,40,50,60,75,80,90,100]:[5,10,15,20].concat(long.checked?[100]:[]);const selected=Number(rounds.value)||10;rounds.replaceChildren(...values.map(value=>{const o=document.createElement('option');o.value=value;o.textContent=value;return o;}));rounds.value=values.includes(selected)?String(selected):'10';const minutes=Math.ceil(Number(rounds.value)*5/2);$('host-duration').textContent='Estimated duration: approximately '+minutes+'–'+(minutes*2)+' minutes'+(foogle?' · cooperative puzzles may finish earlier':'');$('host-foogle-note').hidden=!foogle;}
-    mode.onchange=refresh;long.onchange=refresh;refresh();dialog.showModal();
-    $('host-settings-close').onclick=()=>dialog.close();$('host-settings-cancel').onclick=()=>dialog.close();
-    $('host-settings-form').onsubmit=event=>{event.preventDefault();$('online-game-mode').value=mode.value;$('online-lobby-rounds').value=rounds.value;$('online-long-rounds').checked=long.checked;$('online-create-code').value=invite.value;dialog.close();join('create');};
+    const close=()=>{if(typeof dialog.close==='function')dialog.close();dialog.removeAttribute('open');dialog.classList.remove('host-settings-visible');};
+    mode.onchange=refresh;long.onchange=refresh;refresh();
+    if(typeof dialog.showModal==='function')dialog.showModal();else{dialog.setAttribute('open','');dialog.classList.add('host-settings-visible');}
+    $('host-settings-close').onclick=close;$('host-settings-cancel').onclick=close;
+    $('host-settings-form').onsubmit=event=>{event.preventDefault();$('online-game-mode').value=mode.value;$('online-lobby-rounds').value=rounds.value;$('online-long-rounds').checked=long.checked;$('online-create-code').value=invite.value;close();join('create');};
   }
 
   function join(request) {
