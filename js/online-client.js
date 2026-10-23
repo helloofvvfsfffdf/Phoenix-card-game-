@@ -823,6 +823,15 @@
    * dice, and it ignores anything sent now - so asking for one at this point
    * would be asking for a choice that is thrown away.
    */
+  function openHostSettings() {
+    const dialog=$('host-settings-dialog'); if (!dialog) return join('create');
+    const mode=$('host-game-mode'), rounds=$('host-rounds'), long=$('host-long-rounds'), invite=$('host-invite-code');
+    function refresh(){const foogle=mode.value==='foogle';$('host-long-label').hidden=foogle;const values=foogle?[5,10,15,20,25,30,40,50,60,75,80,90,100]:[5,10,15,20].concat(long.checked?[100]:[]);const selected=Number(rounds.value)||10;rounds.replaceChildren(...values.map(value=>{const o=document.createElement('option');o.value=value;o.textContent=value;return o;}));rounds.value=values.includes(selected)?String(selected):'10';const minutes=Math.ceil(Number(rounds.value)*5/2);$('host-duration').textContent='Estimated duration: approximately '+minutes+'–'+(minutes*2)+' minutes'+(foogle?' · cooperative puzzles may finish earlier':'');$('host-foogle-note').hidden=!foogle;}
+    mode.onchange=refresh;long.onchange=refresh;refresh();dialog.showModal();
+    $('host-settings-close').onclick=()=>dialog.close();$('host-settings-cancel').onclick=()=>dialog.close();
+    $('host-settings-form').onsubmit=event=>{event.preventDefault();$('online-game-mode').value=mode.value;$('online-lobby-rounds').value=rounds.value;$('online-long-rounds').checked=long.checked;$('online-create-code').value=invite.value;dialog.close();join('create');};
+  }
+
   function join(request) {
     // Accept either a plain action string ('create' / 'join' typed by the main
     // buttons) or a { type, code } object from a public-lobby row's JOIN button.
@@ -1965,7 +1974,7 @@ function render() {
         if (box) box.classList.toggle('is-open', open);
       };
     }
-    $('online-create').onclick = () => join('create');
+    $('online-create').onclick = openHostSettings;
     $('online-join').onclick = () => join('join');
 
     // Owner & Friends, kept separate from the public lobby system.
