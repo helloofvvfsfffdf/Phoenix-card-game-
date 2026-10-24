@@ -1929,6 +1929,17 @@ function placeFooglePiece(room, member, puzzleId) {
 }
 
 const httpServer = http.createServer(async (req, res) => {
+  // HTTPS is this site's only real origin. Note that the scheme a VISITOR
+  // arrived on never actually reaches this process: Render computes
+  // X-Forwarded-Proto from its own upstream hop (which is HTTPS behind the
+  // CDN), so the redirect below only fires if a proxy ever forwards the true
+  // client scheme. This header is what does the work on this hosting - after
+  // one HTTPS visit the browser refuses plain HTTP for a year, which is what
+  // collapses the duplicate http:// copy of every page. Browsers ignore HSTS
+  // on plain-http connections, so local development on http://localhost and
+  // the test suites never see it.
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+
   // HTTPS only. Render serves this app over both schemes with no redirect of
   // its own, so without this the same page is reachable at http:// AND
   // https:// - two URLs for one page, which search engines index as
