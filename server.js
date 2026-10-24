@@ -1517,6 +1517,14 @@ function finishInteraction(room, provided) {
     clearTimeout(room.interactionTimer);
     room.interactionTimer = null;
   }
+  // Game mode batch hook (isolated, no rules change)
+  try {
+    const modeDispatcher = require('./js/game-modes/dispatcher');
+    if (room.gameMode && modeDispatcher.applyHook) {
+      const eventResult = modeDispatcher.applyHook(room, 'onRoundComplete', (room.currentRound || 0));
+      if (eventResult) room.activeEvents = room.activeEvents || []; room.activeEvents.push(eventResult);
+    }
+  } catch (e) { /* isolated hook failure must not break classic */ }
   if (pi.countdownTimer) clearTimeout(pi.countdownTimer);
 
   if (result && result.events) recordEvents(room, result.events);
