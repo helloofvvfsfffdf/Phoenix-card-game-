@@ -99,4 +99,14 @@ function init() {
   }
 }
 
+  // Fallback: bind cancel buttons explicitly by ID in case earlier selectors missed
+  ['recovery-key-cancel', 'recovery-key-reset-cancel'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.addEventListener('click', () => {
+      const overlay = document.getElementById('recovery-key-overlay');
+      if (overlay) { overlay.hidden = true; document.body.style.overflow = ''; }
+    });
+  });
+}
+
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
