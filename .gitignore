@@ -4,6 +4,11 @@ npm-debug.log*
 test-output*.txt
 .phoenix-server-state.json
 
+# Desktop shell (Electron) - own install and build output.
+desktop/node_modules/
+desktop/dist/
+desktop/*.log
+
 # The raw Mixamo downloads are enormous and the converted characters are
 # what the game loads. The originals stay in Downloads.
 assets/mixamo/*.fbx

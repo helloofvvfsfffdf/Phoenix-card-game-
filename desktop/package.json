@@ -1,0 +1,51 @@
+{
+  "name": "phoenix-online-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PHOENIX Online Windows desktop shell - private development build, not for publication.",
+  "main": "main.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "electron .",
+    "smoke": "electron . --smoke",
+    "dist": "electron-builder --win portable nsis"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.phoenix.online.desktop",
+    "productName": "PHOENIX Online",
+    "artifactName": "PHOENIX-Online-${version}-${os}.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "icon.png"
+    ],
+    "win": {
+      "icon": "icon.png",
+      "target": [
+        "portable",
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PHOENIX Online",
+      "uninstallDisplayName": "PHOENIX Online"
+    },
+    "portable": {
+      "artifactName": "PHOENIX-Online-Portable-${version}.exe"
+    },
+    "publish": null
+  }
+}
