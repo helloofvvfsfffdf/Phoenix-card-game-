@@ -1956,6 +1956,23 @@ const httpServer = http.createServer(async (req, res) => {
     return;
   }
 
+  // The site also still answers on its original Render hostname, which makes
+  // two URLs for one site - search engines index the pair as duplicates. Every
+  // sitemap entry and canonical now names the -1 hostname, so the old one
+  // sends visitors and crawlers straight across. This only fires on the old
+  // hostname (local tests and the real hostname never match), and WebSocket
+  // upgrades never pass through here, so multiplayer rooms opened on the old
+  // hostname keep working; only page loads redirect.
+  const host = (req.headers.host || '').split(':')[0].toLowerCase();
+  if (host === 'phoenix-card-game.onrender.com') {
+    res.writeHead(301, {
+      Location: 'https://phoenix-card-game-1.onrender.com' + req.url,
+      'X-Content-Type-Options': 'nosniff'
+    });
+    res.end();
+    return;
+  }
+
   let pathname;
 
   try {
