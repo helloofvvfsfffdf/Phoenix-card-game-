@@ -1,125 +1,82 @@
-/* PHOENIX — client-side password recovery.
- * Wire the overlay forms to /api/account/recover/* server endpoints.
- * Keeps all interaction inside the game interface (no external redirects).
- */
 'use strict';
-
+/* PHOENIX — recovery-key client (replaces old email-based recovery). */
 function init() {
-  const overlay = document.getElementById('recover-overlay');
+  const overlay = document.getElementById('recovery-key-overlay');
   const openBtn = document.getElementById('account-forgot');
-  const closeBtn = document.getElementById('recover-close');
-  const emailForm = document.getElementById('recover-email-form');
-  const codeForm = document.getElementById('recover-code-form');
-  const resetForm = document.getElementById('recover-reset-form');
+  const closeBtn = document.getElementById('recovery-key-cancel') || document.getElementById('recovery-key-reset-cancel');
+  const generateForm = document.getElementById('recovery-key-generate-form');
+  const resetForm = document.getElementById('recovery-key-reset-form');
+  const feedback = document.getElementById('recovery-key-feedback');
 
-  if (!overlay || !openBtn || !emailForm) {
-    console.warn('[PHOENIX recover] overlay elements not found; recovery not initialized.');
+  if (!overlay || !openBtn) {
+    console.warn('[PHOENIX recover-key] overlay elements not found; recovery not initialized.');
     return;
   }
 
-  function show() { overlay.hidden = false; document.body.style.overflow = 'hidden'; emailForm.hidden = false; codeForm.hidden = true; resetForm.hidden = true; document.getElementById('recover-email').value = ''; document.getElementById('recover-feedback').textContent = ''; document.getElementById('recover-email').focus(); }
+  function show() { overlay.hidden = false; document.body.style.overflow = 'hidden'; generateForm.hidden = false; resetForm.hidden = false; if (feedback) feedback.textContent = ''; }
   function hide() { overlay.hidden = true; document.body.style.overflow = ''; }
 
-  const backBtn = document.getElementById('recover-back');
-  const backToCodeBtn = document.getElementById('recover-back-to-code');
-  if (backBtn) backBtn.addEventListener('click', () => { emailForm.hidden = false; codeForm.hidden = true; resetForm.hidden = true; document.getElementById('recover-email').focus(); });
-  if (backToCodeBtn) backToCodeBtn.addEventListener('click', () => { resetForm.hidden = true; codeForm.hidden = false; document.getElementById('recover-code').focus(); });
-
-  openBtn.addEventListener('click', () => { show(); });
-  closeBtn.addEventListener('click', () => { hide(); });
+  openBtn.addEventListener('click', () => show());
+  if (closeBtn) closeBtn.addEventListener('click', () => hide());
   overlay.addEventListener('click', (e) => { if (e.target === overlay) hide(); });
 
-  // Email submit: request the reset code.
-  emailForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email = document.getElementById('recover-email').value.trim();
-    const feedback = document.getElementById('recover-feedback');
-    feedback.textContent = '';
-    if (!email || email.indexOf('@') < 1) {
-      feedback.textContent = 'Enter a valid email address.';
-      return;
-    }
-    try {
-      const res = await fetch('/api/account/recover/request', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin', body: JSON.stringify({ email })
-      });
-      const data = await res.json();
-      // Always generic message (prevents enumeration).
-      feedback.textContent = data.message || 'If that account exists, a six-digit code has been sent.';
-      if (data.ok) {
-        emailForm.hidden = true;
-        codeForm.hidden = false;
-        document.getElementById('recover-code').focus();
+  // Generate new key (signed-in only; server validates session + password)
+  if (generateForm) {
+    generateForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pw = document.getElementById('recovery-key-current-password').value.trim();
+      if (!pw) { if (feedback) feedback.textContent = 'Enter your current password.'; return; }
+      try {
+        const res = await fetch('/api/account/recovery-key/generate', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin', body: JSON.stringify({ password: pw })
+        });
+        const data = await res.json();
+        if (feedback) feedback.textContent = data.message || (data.ok ? 'New key generated. Save it securely.' : 'Failed.');
+        if (data.ok && data.key) {
+          generateForm.hidden = true;
+          // Show the generated key briefly (only in this response)
+          const note = document.createElement('p');
+          note.textContent = 'YOUR KEY: ' + data.key;
+          note.style.fontWeight = 'bold'; note.style.color = '#ffcc00';
+          generateForm.parentNode.insertBefore(note, generateForm.nextSibling);
+          setTimeout(() => { if (note.parentNode) note.parentNode.removeChild(note); }, 15000);
+        }
+      } catch (err) {
+        if (feedback) feedback.textContent = 'Something went wrong. Please try again.';
       }
-    } catch (err) {
-      feedback.textContent = 'Something went wrong. Please try again.';
-    }
-  });
+    });
+  }
 
-  // Code submit: verify the six-digit code.
-  codeForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email = document.getElementById('recover-email').value.trim();
-    const code = document.getElementById('recover-code').value.trim();
-    const feedback = document.getElementById('recover-feedback');
-    feedback.textContent = '';
-    if (!/^\d{6}$/.test(code)) {
-      feedback.textContent = 'Enter the six-digit code from the recovery email.';
-      return;
-    }
-    try {
-      const res = await fetch('/api/account/recover/verify', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin', body: JSON.stringify({ email, code })
-      });
-      const data = await res.json();
-      if (data.ok) {
-        codeForm.hidden = true;
-        resetForm.hidden = false;
-        document.getElementById('recover-new-password').value = '';
-        document.getElementById('recover-confirm-password').value = '';
-        document.getElementById('recover-new-password').focus();
-      } else {
-        feedback.textContent = data.message || 'That code is not correct or has expired. Request a new one.';
+  // Reset password with recovery key (public; server verifies key + updates atomically)
+  if (resetForm) {
+    resetForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('recovery-key-username').value.trim();
+      const key = document.getElementById('recovery-key-input').value.trim();
+      const newPass = document.getElementById('recovery-key-new-password').value;
+      if (!username) { if (feedback) feedback.textContent = 'Enter your username.'; return; }
+      if (!key) { if (feedback) feedback.textContent = 'Enter your recovery key.'; return; }
+      if (newPass.length < 8) { if (feedback) feedback.textContent = 'Password must be 8+ characters.'; return; }
+      try {
+        const res = await fetch('/api/account/recovery-key/reset', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin', body: JSON.stringify({ username, key, newPassword: newPass })
+        });
+        const data = await res.json();
+        if (feedback) feedback.textContent = data.message || (data.ok ? 'Password reset successfully. New recovery key generated.' : 'Reset failed.');
+        if (data.ok && data.new_key) {
+          const note = document.createElement('p');
+          note.textContent = 'NEW KEY: ' + data.new_key;
+          note.style.fontWeight = 'bold'; note.style.color = '#ffcc00';
+          resetForm.parentNode.insertBefore(note, resetForm.nextSibling);
+          setTimeout(() => { if (note.parentNode) note.parentNode.removeChild(note); }, 15000);
+        }
+      } catch (err) {
+        if (feedback) feedback.textContent = 'Something went wrong. Please try again.';
       }
-    } catch (err) {
-      feedback.textContent = 'Something went wrong. Please try again.';
-    }
-  });
-
-  // Reset submit: set new password.
-  resetForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email = document.getElementById('recover-email').value.trim();
-    const code = document.getElementById('recover-code').value.trim();
-    const newPass = document.getElementById('recover-new-password').value;
-    const confirmPass = document.getElementById('recover-confirm-password').value;
-    const feedback = document.getElementById('recover-feedback');
-    feedback.textContent = '';
-    if (newPass.length < 8) { feedback.textContent = 'Password must be at least 8 characters.'; return; }
-    if (newPass !== confirmPass) { feedback.textContent = 'Passwords do not match.'; return; }
-    try {
-      const res = await fetch('/api/account/recover/reset', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin', body: JSON.stringify({ email, code, newPassword: newPass })
-      });
-      const data = await res.json();
-      if (data.ok) {
-        feedback.textContent = 'Password reset. You will be returned to sign in.';
-        setTimeout(() => { hide(); document.getElementById('account-form').reset(); }, 1500);
-      } else {
-        feedback.textContent = data.message || 'Reset failed. Please request a new code.';
-      }
-    } catch (err) {
-      feedback.textContent = 'Something went wrong. Please try again.';
-    }
-  });
+    });
+  }
 }
 
-// Initialize once the overlay exists (before or after DOMContentLoaded).
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

@@ -44,9 +44,9 @@ function run() {
 
   // 7. SQL has new table only, old table untouched
   const sqlNew = fs.readFileSync('sql/recovery-keys.sql', 'utf8');
-  const sqlOld = fs.readFileSync('sql/password-recovery.sql', 'utf8');
+  const sqlOldExists = fs.existsSync('sql/password-recovery.sql');
   check('new SQL has recovery_keys', sqlNew.includes('public.recovery_keys'));
-  check('old SQL preserved', sqlOld.includes('password_resets'));
+  check('old SQL removed', !sqlOldExists);
 
   // 8. Module never exposes plain key in log function
   const moduleSource = fs.readFileSync('js/recovery-keys.js', 'utf8');
