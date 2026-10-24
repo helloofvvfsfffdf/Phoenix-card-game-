@@ -3944,6 +3944,32 @@ async function handle(ws, data) {
       return error(ws, 'Room is full.');
     }
 
+    // One account, one seat - unless the account IS the owner.
+    //
+    // Every player here is signed in through the httpOnly session, so the
+    // account id and role on this socket are the server's own facts and
+    // nothing the client could send. A regular account that is already
+    // seated in this match is refused a second seat outright, so one person
+    // can never stack a lobby with several copies of themselves.
+    //
+    // The owner is the single exception, and it exists purely for
+    // multi-device testing: the same owner account may sit in this match
+    // from several devices at once - desktop and phone, say - each
+    // connection an ordinary participant with its own hand, score and turn,
+    // all shown under the same account name. The check runs here on the
+    // server, where the role is read from the database row behind the
+    // session; a client cannot claim the exception for itself, and nothing
+    // about owner status is revealed to anyone else.
+    if (ws.account && ws.account.role !== 'owner') {
+      const alreadySeated = room.members.some(
+        member => member.account && member.account.id === ws.account.id
+      );
+
+      if (alreadySeated) {
+        return error(ws, 'This account is already playing in this match.');
+      }
+    }
+
     const m = {
       seat: room.members.length,
       name: playerName(ws, data),
