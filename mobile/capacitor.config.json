@@ -1,0 +1,22 @@
+{
+  "appId": "com.phoenix.online.mobile",
+  "appName": "PHOENIX Online",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://phoenix-card-game-1.onrender.com",
+    "cleartext": true,
+    "hostname": "phoenix-card-game-1.onrender.com"
+  },
+  "android": {
+    "scheme": "https"
+  },
+  "plugins": {
+    "InAppBrowser": {
+      "preferredBrowser": "SFSafariViewController",
+      "toolbarPosition": "bottom",
+      "closeModalTitle": "Close",
+      "closeModalMessage": "Close this page."
+    }
+  }
+}

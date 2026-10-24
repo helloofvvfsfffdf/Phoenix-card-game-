@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>PHOENIX Online</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0b0d12; }
+    iframe { width: 100%; height: 100%; border: none; }
+  </style>
+</head>
+<body>
+  <!-- The remote site serves itself through Capacitor's server.url
+       configuration; this page is not used in that mode. The build
+       keeps it as a minimal fallback only. -->
+  <script>
+    // Redirect to the remote server URL configured in capacitor.config.json.
+    // This is a defensive fallback: the Capacitor Android WebView already
+    // points at server.url, so in practice this load never happens in the
+    // packaged app.
+    window.location.href = 'https://phoenix-card-game-1.onrender.com';
+  </script>
+</body>
+</html>
