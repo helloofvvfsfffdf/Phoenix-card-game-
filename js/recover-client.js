@@ -9,7 +9,7 @@ function init() {
 
   const settingsBtn = document.getElementById('settings-recover-key-btn');
   const settingsOverlay = document.getElementById('recovery-key-settings-overlay');
-  const settingsForm = document.getElementById('recovery-key-settings-form');
+  const settingsForm = document.getElementById('recovery-key-settings-form-overlay');
   const settingsFeedback = document.getElementById('recovery-key-settings-feedback');
   const settingsCancel = document.getElementById('recovery-key-settings-cancel');
 
