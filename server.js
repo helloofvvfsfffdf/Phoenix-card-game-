@@ -1929,6 +1929,22 @@ function placeFooglePiece(room, member, puzzleId) {
 }
 
 const httpServer = http.createServer(async (req, res) => {
+  // HTTPS only. Render serves this app over both schemes with no redirect of
+  // its own, so without this the same page is reachable at http:// AND
+  // https:// - two URLs for one page, which search engines index as
+  // duplicates. Only a request the proxy marked as plain HTTP is redirected;
+  // a direct local request carries no such header and is left alone, so this
+  // can never loop. `auth.js` reads the same header to decide what a secure
+  // cookie means, so it is known to be set in production.
+  if (req.headers['x-forwarded-proto'] === 'http') {
+    res.writeHead(301, {
+      Location: 'https://' + (req.headers.host || 'localhost') + req.url,
+      'X-Content-Type-Options': 'nosniff'
+    });
+    res.end();
+    return;
+  }
+
   let pathname;
 
   try {

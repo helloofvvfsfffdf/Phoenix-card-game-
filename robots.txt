@@ -5,4 +5,4 @@ Allow: /
 # nothing there for a search engine to read.
 Disallow: /api/
 
-Sitemap: https://phoenix-card-game.onrender.com/sitemap.xml
+Sitemap: https://phoenix-card-game-1.onrender.com/sitemap.xml
