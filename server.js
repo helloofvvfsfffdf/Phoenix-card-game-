@@ -2254,7 +2254,7 @@ const httpServer = http.createServer(async (req, res) => {
   // ---- Password recovery (public; no session required) --------------------
   // Separate from email verification (`/api/account/email/*`) by design:
   // a verification code never works here and vice-versa. Rate limits apply.
-  const recoverModule = pathname.indexOf('/api/account/recover') === 0 ? require('./js/password-recovery.js') : null;
+  const recoverModule = null; // old email-based recovery removed; replaced by recovery-keys
   if (recoverModule && pathname.indexOf('/api/account/recover') === 0) {
     try {
       if (req.method === 'POST' && pathname === '/api/account/recover/request') {
@@ -2276,6 +2276,33 @@ const httpServer = http.createServer(async (req, res) => {
     } catch (err) {
       console.error('[PHOENIX recover] unhandled error in ' + pathname + ' -> ' + Auth.describeError(err));
       return sendJson({ ok: false, message: 'Something went wrong on the server. Please try again.', code: 'SERVER-ERROR' }, 500);
+    }
+  }
+
+  // ---- Recovery-key endpoints (new; old /api/account/recover untouched) ------
+  const recoveryServer = pathname.indexOf('/api/account/recovery-key') === 0 ? require('./js/recovery-keys-server.js') : null;
+  if (recoveryServer && pathname.indexOf('/api/account/recovery-key') === 0) {
+    try {
+      if (req.method === 'POST' && pathname === '/api/account/recovery-key/generate') {
+        const session = await Auth.getSessionAccount(req);
+        const body = await readJsonBody();
+        req.body = body;
+        return recoveryServer.handleGenerate(req, res, { account: session || null });
+      }
+      if (req.method === 'POST' && pathname === '/api/account/recovery-key/verify') {
+        const body = await readJsonBody();
+        req.body = body;
+        return recoveryServer.handleVerify(req, res, { account: null });
+      }
+      if (req.method === 'POST' && pathname === '/api/account/recovery-key/reset') {
+        const body = await readJsonBody();
+        req.body = body;
+        return recoveryServer.handleReset(req, res, { account: null });
+      }
+      return sendJson({ ok: false, message: 'Not found.' }, 404);
+    } catch (err) {
+      console.error('[PHOENIX recover-key] unhandled error in ' + pathname + ' -> ' + Auth.describeError(err));
+      return sendJson({ ok: false, message: 'Something went wrong.', code: 'SERVER-ERROR' }, 500);
     }
   }
 

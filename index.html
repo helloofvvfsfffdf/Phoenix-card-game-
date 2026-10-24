@@ -560,6 +560,37 @@
   </div>
 </div>
 
+<!-- Recovery-key overlay (replaces old email-based recovery) -->
+<div class="account-overlay" id="recovery-key-overlay" hidden>
+  <div class="account-shell" role="dialog" aria-modal="true" aria-labelledby="recovery-key-title">
+    <p class="account-eyebrow">PHOENIX · RECOVERY KEY</p>
+    <h2 id="recovery-key-title">RECOVERY KEY</h2>
+    <p class="account-note">A 24-letter key (XXXX-XXXX-XXXX-XXXX-XXXX-XXXX) is required. Save it securely.</p>
+    <form id="recovery-key-generate-form" autocomplete="off" hidden>
+      <input id="recovery-key-current-password" name="current-password" type="password" autocomplete="current-password"
+             maxlength="128" placeholder="Current password" aria-label="Current password" required />
+      <div class="account-actions">
+        <button type="button" id="recovery-key-cancel">CANCEL</button>
+        <button type="submit" id="recovery-key-submit">GENERATE KEY &rarr;</button>
+      </div>
+    </form>
+    <form id="recovery-key-reset-form" autocomplete="new-password">
+      <input id="recovery-key-username" name="username" type="text" autocomplete="username"
+             maxlength="22" placeholder="Username" aria-label="Username" required />
+      <input id="recovery-key-input" name="key" type="text" autocomplete="off"
+             maxlength="29" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" aria-label="Recovery key" required />
+      <input id="recovery-key-new-password" name="new-password" type="password" autocomplete="new-password"
+             maxlength="128" placeholder="New password (8+ chars)" aria-label="New password" required />
+      <div class="account-actions">
+        <button type="button" id="recovery-key-reset-cancel">CANCEL</button>
+        <button type="submit">RESET PASSWORD &rarr;</button>
+      </div>
+    </form>
+    <p id="recovery-key-feedback" class="account-feedback" aria-live="polite"></p>
+    <p class="account-fineprint">Your key is shown once. Store it securely. It is never stored in plain text.</p>
+  </div>
+</div>
+
 <div class="badge-overlay" id="badge-overlay" hidden>
   <div class="badge-shell" role="dialog" aria-modal="true" aria-labelledby="badge-title">
     <div class="badge-top">
