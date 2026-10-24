@@ -405,17 +405,17 @@
         <h3>ACCOUNT</h3>
         <p class="settings-note" id="settings-account-note"></p>
         <button id="settings-account-action" type="button">ADD &amp; VERIFY EMAIL</button>
-        <button id="settings-recover-key-btn" type="button">RECOVERY KEY</button>
         <p id="settings-account-status" class="settings-status" aria-live="polite"></p>
       </div>
-      <div class="settings-section" id="settings-recovery-key-section" hidden>
+      <div class="settings-section" id="settings-recovery-key-section">
         <h3>RECOVERY KEY</h3>
         <p class="settings-note" id="settings-recover-key-note">Generate a new 24-letter key here. Save it now — you'll need it if you forget your password.</p>
+        <button id="settings-recover-key-btn" type="button">RECOVERY KEY</button>
         <form id="recovery-key-settings-form" autocomplete="off" hidden>
           <input id="recovery-key-current-password" name="current-password" type="password" autocomplete="current-password"
                  maxlength="128" placeholder="Current password" aria-label="Current password" required />
           <div class="account-actions">
-            <button type="button" id="recovery-key-settings-cancel" class="online-secondary">CANCEL</button>
+            <button type="button" id="recovery-key-settings-cancel" onclick="document.getElementById('recovery-key-settings-overlay').hidden=true;document.body.style.overflow=''">CANCEL</button>
             <button type="submit">GENERATE KEY &rarr;</button>
           </div>
         </form>
@@ -541,7 +541,7 @@
       <input id="recovery-key-current-password" name="current-password" type="password" autocomplete="current-password"
              maxlength="128" placeholder="Current password" aria-label="Current password" required />
       <div class="account-actions">
-        <button type="button" id="recovery-key-cancel">CANCEL</button>
+        <button type="button" id="recovery-key-cancel" onclick="document.getElementById('recovery-key-overlay').hidden=true;document.body.style.overflow=''">CANCEL</button>
         <button type="submit" id="recovery-key-submit">GENERATE KEY &rarr;</button>
       </div>
     </form>
@@ -553,7 +553,7 @@
       <input id="recovery-key-new-password" name="new-password" type="password" autocomplete="new-password"
              maxlength="128" placeholder="New password (8+ chars)" aria-label="New password" required />
       <div class="account-actions">
-        <button type="button" id="recovery-key-reset-cancel">CANCEL</button>
+        <button type="button" id="recovery-key-reset-cancel" onclick="document.getElementById('recovery-key-overlay').hidden=true;document.body.style.overflow=''">CANCEL</button>
         <button type="submit">RESET PASSWORD &rarr;</button>
       </div>
     </form>
