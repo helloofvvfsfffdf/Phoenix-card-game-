@@ -2608,10 +2608,23 @@ const httpServer = http.createServer(async (req, res) => {
       return;
     }
 
-    res.writeHead(200, {
+    const headers = {
       'Content-Type': mime[path.extname(file)],
       'X-Content-Type-Options': 'nosniff'
-    });
+    };
+
+    // robots.txt and sitemap.xml change about once a year, but they are the
+    // two files that MUST stay fetchable even when this free-tier instance is
+    // asleep or restarting: a failed robots.txt fetch is precisely what makes
+    // Google's live URL inspection report the whole site as "blocked by
+    // robots.txt". A long CDN TTL lets Cloudflare keep answering them from
+    // edge cache while the origin is down, and Google tunes its own
+    // robots.txt cache lifetime to the max-age we send here.
+    if (pathname === '/robots.txt' || pathname === '/sitemap.xml') {
+      headers['Cache-Control'] = 'public, max-age=86400';
+    }
+
+    res.writeHead(200, headers);
 
     res.end(data);
   });
