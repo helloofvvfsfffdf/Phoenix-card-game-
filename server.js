@@ -2251,6 +2251,34 @@ const httpServer = http.createServer(async (req, res) => {
     return sendJson({ ok: true });
   }
 
+  // ---- Password recovery (public; no session required) --------------------
+  // Separate from email verification (`/api/account/email/*`) by design:
+  // a verification code never works here and vice-versa. Rate limits apply.
+  const recoverModule = pathname.indexOf('/api/account/recover') === 0 ? require('./js/password-recovery.js') : null;
+  if (recoverModule && pathname.indexOf('/api/account/recover') === 0) {
+    try {
+      if (req.method === 'POST' && pathname === '/api/account/recover/request') {
+        const body = await readJsonBody();
+        const result = await recoverModule.requestReset(body.email || '', Moderation.trustedIp(req));
+        return sendJson(result, result.ok ? 200 : (result.status || 400));
+      }
+      if (req.method === 'POST' && pathname === '/api/account/recover/verify') {
+        const body = await readJsonBody();
+        const result = await recoverModule.verifyResetCode(body.email || '', body.code || '');
+        return sendJson(result, result.ok ? 200 : (result.status || 400));
+      }
+      if (req.method === 'POST' && pathname === '/api/account/recover/reset') {
+        const body = await readJsonBody();
+        const result = await recoverModule.resetPassword(body.email || '', body.code || '', body.newPassword || '');
+        return sendJson(result, result.ok ? 200 : (result.status || 400));
+      }
+      return sendJson({ ok: false, message: 'Not found.' }, 404);
+    } catch (err) {
+      console.error('[PHOENIX recover] unhandled error in ' + pathname + ' -> ' + Auth.describeError(err));
+      return sendJson({ ok: false, message: 'Something went wrong on the server. Please try again.', code: 'SERVER-ERROR' }, 500);
+    }
+  }
+
   // ---- Account security: verified email + moderation ------------------------
   // Everything below sits behind the httpOnly session cookie. A browser can ask
   // for any of it, but every operation re-reads the role from the database and
