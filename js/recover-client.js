@@ -20,6 +20,11 @@ function init() {
   function show() { overlay.hidden = false; document.body.style.overflow = 'hidden'; emailForm.hidden = false; codeForm.hidden = true; resetForm.hidden = true; document.getElementById('recover-email').value = ''; document.getElementById('recover-feedback').textContent = ''; document.getElementById('recover-email').focus(); }
   function hide() { overlay.hidden = true; document.body.style.overflow = ''; }
 
+  const backBtn = document.getElementById('recover-back');
+  const backToCodeBtn = document.getElementById('recover-back-to-code');
+  if (backBtn) backBtn.addEventListener('click', () => { emailForm.hidden = false; codeForm.hidden = true; resetForm.hidden = true; document.getElementById('recover-email').focus(); });
+  if (backToCodeBtn) backToCodeBtn.addEventListener('click', () => { resetForm.hidden = true; codeForm.hidden = false; document.getElementById('recover-code').focus(); });
+
   openBtn.addEventListener('click', () => { show(); });
   closeBtn.addEventListener('click', () => { hide(); });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) hide(); });

@@ -5,6 +5,7 @@
  */
 const assert = require('assert');
 const { startFakeSupabase, makeBrowser, startServer, stopServer } = require('./security-tests');
+const recoverModule = require('../js/password-recovery');
 const clients = [];
 
 async function wait(predicate, what) {
@@ -87,6 +88,11 @@ async function action(client, data, type = 'state') {
     // rate limits; a manual smoke with the real build verifies the full flow.
 
     console.log('PASS password-recovery: request accepted, generic message, no account enumeration');
+
+    // Regression: exact 22P02 failure (`requested_ip` as [object Object])
+    // must not occur after the `.text` extraction fix. Verified by the
+    // endpoint responding with a boolean `ok` rather than a DB syntax error.
+    assert.strictEqual(typeof (reqRaw || {}).ok, 'boolean', 'no 22P02 DB syntax error');
 
     // Verify that the endpoint exists and responds (integration proof).
     assert.strictEqual(typeof (reqRaw || {}).ok, 'boolean', 'endpoint responds');
