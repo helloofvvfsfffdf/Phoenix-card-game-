@@ -18,6 +18,20 @@ const CODE_LENGTH = 6;
 function isConfigured() { return Auth.isConfigured(); }
 
 /* ------------------------------------------------------------------ */
+/* Safe diagnostic logging (never logs codes, hashes, passwords)        */
+/* ------------------------------------------------------------------ */
+function logRecover(action, safeContext) {
+  const context = safeContext || {};
+  const domain = context.email ? String(context.email).split('@')[1] || 'unknown' : 'none';
+  console.log('[PHOENIX recover] action=' + String(action) +
+    ' | domain=' + domain +
+    ' | dbError=' + (context.dbError || 'none') +
+    ' | rate=' + (context.rate ? 'limited' : 'ok') +
+    ' | provider=' + (context.provider || 'unknown') +
+    ' | attempts=' + (context.attempts === undefined ? 'n/a' : String(context.attempts)));
+}
+
+/* ------------------------------------------------------------------ */
 /* Secure random 6-digit code and its hash                               */
 /* ------------------------------------------------------------------ */
 function generateCode() {
@@ -148,8 +162,7 @@ async function requestReset(emailRaw, ip) {
 
   const accountRow = await findAccountByEmail(target);
   if (!accountRow) {
-    // Generic response for non-existent email (prevents enumeration).
-    // No code sent; no DB state changed.
+    logRecover('request-no-account', { dbError: 'none', rate: false, provider: 'none' });
     return { ok: true, message: genericMessage };
   }
 
@@ -174,10 +187,11 @@ async function requestReset(emailRaw, ip) {
     attempts: 0,
     sent_count: freshWindow ? 1 : Number(existing.sent_count || 0) + 1,
     window_started: freshWindow ? new Date(nowMs).toISOString() : existing.window_started,
-    requested_ip: ip ? String(ip) : null,
+    requested_ip: (ip && typeof ip === 'object' && ip.text) ? String(ip.text) : (ip ? String(ip) : null),
     used_at: null
   });
   if (!saved.ok) {
+    logRecover('request-write-failed', { dbError: 'DB-WRITE', rate: false, provider: 'none' });
     return { ok: false, message: 'Recovery is temporarily unavailable. Try again shortly.', code: 'DB-ERROR' };
   }
 

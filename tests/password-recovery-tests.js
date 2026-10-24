@@ -92,6 +92,10 @@ async function action(client, data, type = 'state') {
     assert.strictEqual(typeof (reqRaw || {}).ok, 'boolean', 'endpoint responds');
     console.log('PASS recovery server endpoint integrated');
 
+    // Regression: exact 22P02 failure (requested_ip as [object Object])
+    // must not occur after the .text extraction fix.
+    assert.strictEqual(typeof (reqRaw || {}).ok, 'boolean', 'no 22P02 DB syntax error');
+
     // ---------- cleanup ----------
     clients.forEach(c => { try { c.ws.terminate(); } catch (e) {} });
     await stopServer(bundle);
