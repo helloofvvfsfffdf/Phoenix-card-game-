@@ -212,10 +212,13 @@
       var text0 = $('ai-response').value;
       if (!text0 || !text0.trim()) {
         setRelayError('Paste ' + pending.chooserName + '\'s choice first.',
-          'Expected something like:\nPLAY: ' +
-          (pending.options[0]
-            ? Rules.formatCard(pending.options[0].cardId)
-            : 'Zombie'));
+          'Expected something like:\n' +
+          (pending.kind === Rules.PENDING_CHOICE_KINDS.MINIGAME
+            ? pending.options[0].name
+            : 'PLAY: ' +
+            (pending.options[0]
+              ? Rules.formatCard(pending.options[0].cardId)
+              : 'Zombie')));
         return;
       }
       var choice = game.submitForcedChoice(text0);
@@ -227,7 +230,13 @@
       setRelayError('');
       $('ai-response').value = '';
       render();
-      toast(pending.chooserName + ' made their choice.', 'ok');
+      // A challenge hands the question straight on to the next player, so say
+      // who now has to answer rather than leaving it looking finished.
+      toast(choice.waiting
+        ? pending.chooserName + ' answered. Now ' +
+          (choice.nextChooser || 'the next player') + ' picks.'
+        : pending.chooserName + ' made their choice.',
+        'ok');
       return;
     }
 
@@ -368,12 +377,18 @@
     $('ai-title').textContent = choice
       ? (choice.kind === Rules.PENDING_CHOICE_KINDS.BURN
         ? 'Choose a card to destroy'
-        : 'Choose a card for ' + choice.targetName)
+        : choice.kind === Rules.PENDING_CHOICE_KINDS.MINIGAME
+          ? choice.label
+          : 'Choose a card for ' + choice.targetName)
       : Prompt.turnTitle(chooserName);
     $('ai-help').textContent = choice
-      ? ('Copy the prompt below into ' + chooserName + '. It has to pick a card ' +
-        'for ' + choice.targetName + ', and the game will do exactly what it ' +
-        'chooses. The reply uses the same "PLAY:" format as a normal turn.')
+      ? (choice.kind === Rules.PENDING_CHOICE_KINDS.MINIGAME
+        ? ('Copy the prompt below into ' + chooserName + ' and let it answer - ' +
+          'the game takes exactly the choice it makes. It answers with a single ' +
+          'word, so a reply like "rock" is all it needs to send back.')
+        : ('Copy the prompt below into ' + chooserName + '. It has to pick a card ' +
+          'for ' + choice.targetName + ', and the game will do exactly what it ' +
+          'chooses. The reply uses the same "PLAY:" format as a normal turn.'))
       : ('Copy the prompt below into ' + chooserName + ', let it decide, then paste ' +
         'its reply under the prompt. The game plays exactly what that AI chooses.');
 
@@ -388,6 +403,8 @@
   /** The options list for a forced choice, in the same plain-text style. */
   function choiceHint(choice) {
     return choice.options.map(function (option) {
+      // A challenge offers words rather than cards: Rock, Paper, Scissors...
+      if (option.pickId || option.id) return option.name;
       return Rules.formatCard(option.cardId) +
         (option.targetId
           ? ' -> ' + Rules.displayName(game.state, Rules.playerById(game.state, option.targetId))
@@ -414,15 +431,34 @@
     if (!pending) return;
 
     var burning = pending.kind === Rules.PENDING_CHOICE_KINDS.BURN;
-    $('choice-title').textContent = burning
-      ? 'Choose one card of ' + pending.targetName + "'s hand to destroy"
-      : 'Choose the card ' + pending.targetName + ' plays this turn';
-    $('choice-help').textContent = burning
-      ? ('That card leaves the game for good - not in the discard pile, never ' +
-        'drawn again. Every other card they are holding is untouched.')
-      : (pending.targetName + ' still takes this turn and still draws normally; ' +
-        'you are only choosing which card they play, and it has to be one they ' +
-        'could legally play right now.');
+    var challenging = pending.kind === Rules.PENDING_CHOICE_KINDS.MINIGAME;
+    var otherPicker = challenging
+      ? pending.participants.filter(function (player) { return player.id !== pending.chooserId; })[0]
+      : null;
+
+    if (challenging) {
+      $('choice-title').textContent = pending.game === 'rps'
+        ? 'Rock Paper Scissors - your throw'
+        : 'Betrayal - Share or Steal';
+      $('choice-help').textContent = pending.game === 'rps'
+        ? ('Both throw at once and neither can see the other throw. ' +
+          (pending.beatsLine || '') +
+          ' The loser is eliminated for one round. A tie throws again.')
+        : ('You and ' + (otherPicker ? otherPicker.name : 'your opponent') +
+          ' each choose in secret. Share and Share: both gain 10,000. ' +
+          'Steal against Share: the stealer takes 20,000. ' +
+          'Steal against Steal: nobody gains anything.');
+    } else {
+      $('choice-title').textContent = burning
+        ? 'Choose one card of ' + pending.targetName + "'s hand to destroy"
+        : 'Choose the card ' + pending.targetName + ' plays this turn';
+      $('choice-help').textContent = burning
+        ? ('That card leaves the game for good - not in the discard pile, never ' +
+          'drawn again. Every other card they are holding is untouched.')
+        : (pending.targetName + ' still takes this turn and still draws normally; ' +
+          'you are only choosing which card they play, and it has to be one they ' +
+          'could legally play right now.');
+    }
 
     var grid = $('choice-grid');
     clear(grid);
@@ -432,9 +468,21 @@
     game.choiceOptions().forEach(function (option) {
       var button = make('button', 'choice-option');
       button.type = 'button';
-      var card = Cards.byId(option.cardId);
+      var card = option.cardId ? Cards.byId(option.cardId) : null;
       if (card) button.setAttribute('data-tone', card.tone);
       button.appendChild(make('span', 'choice-option-name', option.name));
+
+      // A challenge's options are words: no target step, no tone, and the
+      // click carries the PICK rather than a card.
+      if (option.pickId) {
+        button.appendChild(make('span', 'choice-option-note',
+          pending.game === 'rps' ? 'your throw' : 'your choice'));
+        button.addEventListener('click', function () {
+          settleChoice(option.pickId);
+        });
+        grid.appendChild(button);
+        return;
+      }
 
       // What the note says depends on WHY the card is on offer. An Alvin burn
       // destroys a card rather than playing it, so a card that would normally
@@ -475,6 +523,13 @@
       return;
     }
     setChoiceError('');
+    // A challenge's throw is deliberately NOT written to the log - the other
+    // player must not see it before committing their own - so the feedback has
+    // to come from here instead.
+    if (result.waiting) {
+      toast('Thrown. Waiting for ' + (result.nextChooser || 'the other player') + '...',
+        'ok');
+    }
     render();
   }
 
@@ -531,6 +586,12 @@
           "'s turn - then " +
           (pending.chooserId === 'human' ? 'you' : pending.chooserName) +
           ' choose their card';
+      } else if (pending.kind === Rules.PENDING_CHOICE_KINDS.MINIGAME) {
+        $('turn-label').textContent =
+          (pending.chooserId === 'human' ? 'You' : pending.chooserName) +
+          (pending.game === 'rps'
+            ? ' must throw for Rock Paper Scissors'
+            : ' must choose for Betrayal');
       } else {
         $('turn-label').textContent = (pending.chooserId === 'human' ? 'You' : pending.chooserName) +
           ' must choose a card' +

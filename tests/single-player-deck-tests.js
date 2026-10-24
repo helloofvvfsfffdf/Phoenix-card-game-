@@ -194,6 +194,23 @@ test('a full Single Player match never sees a human-only card, and stays conserv
   }
   let guard = 0;
   while (!s.over && guard++ < 300) {
+    // A challenge - Rock Paper Scissors, Betrayal - stops the table until the
+    // players it pulled in have answered, in exactly the order the relay and
+    // the buttons ask them. Each answers in turn, and the answers stay out of
+    // the log until the challenge settles.
+    if (s.pendingChoice &&
+      s.pendingChoice.kind === Rules.PENDING_CHOICE_KINDS.MINIGAME) {
+      const info = Rules.minigameInfo(s);
+      assert(info && info.options.length, 'a challenge always offers a choice');
+      // Answer in order so both sides commit: for Rock Paper Scissors the
+      // first thrower takes the first option and the second takes the second,
+      // which can never tie, so the challenge always settles.
+      const chooserIndex = s.pendingChoice.index;
+      const pick = Rules.resolveMinigameChoice(s, info.options[chooserIndex].id);
+      assert(pick.ok, 'a challenge answer settles: ' + (pick.error || ''));
+      checkNothingSmuggledIn('through a challenge');
+      continue;
+    }
     // A forced choice - Steal a Turn, Alvin - has to be answered before the
     // table can move on, in exactly the order a real match takes.
     if (choiceDue()) {

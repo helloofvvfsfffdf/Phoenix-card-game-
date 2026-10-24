@@ -396,6 +396,50 @@
       ''
     ];
 
+    // A challenge is answered with one word rather than a card, so it gets its
+    // own whole prompt - including its own answer format, which is deliberately
+    // NOT the PLAY:/TARGET: one the card choices use.
+    if (info.kind === 'minigame') {
+      var others = info.participants.filter(function (player) {
+        return player.id !== chooser.id;
+      });
+      var other = others.length ? others[0] : null;
+
+      if (info.game === 'rps') {
+        lines.push('ROCK PAPER SCISSORS: ' +
+          (info.actorName === chooser.name
+            ? 'YOU challenged ' + other.name + ' to a throw.'
+            : other.name + ' challenged YOU to a throw.') +
+          ' Both throw at the same time and neither can see the other throw.');
+        lines.push(info.beatsLine);
+        lines.push('The loser is eliminated for one round. A tie simply throws again.');
+      } else {
+        lines.push('BETRAYAL: ' + info.actorName + ' played Betrayal, and you are one of the '
+          + 'two opponents caught in it. You and ' + other.name +
+          ' each choose in secret.');
+        lines.push('Share and Share: both gain 10,000. Steal against Share: the stealer '
+          + 'takes 20,000. Steal against Steal: nobody gains anything.');
+      }
+
+      lines.push('');
+      lines.push('=== HOW TO ANSWER ===');
+      lines.push('Reply with exactly ONE word - no PLAY: line, no explanation:');
+      lines.push('');
+      lines.push(info.options.map(function (option) { return option.name; }).join(' or ').toLowerCase());
+      lines.push('');
+      lines.push('- The game takes exactly the word you reply with.');
+      if (log && log.length) {
+        lines.push('');
+        lines.push('=== RECENT PLAY ===');
+        log.slice(-HISTORY_LIMIT).forEach(function (entry) {
+          lines.push('- ' + entry.text);
+        });
+      }
+      lines.push('');
+      lines.push('Reply now with your choice.');
+      return lines.join('\n');
+    }
+
     if (info.kind === 'move') {
       lines.push('STEAL A TURN: it is ' + target.name + "'s turn, but YOU choose "
         + 'which card they play. They draw and take the turn as normal - you are '

@@ -1114,8 +1114,39 @@
   /* Steal a Turn and Alvin - handing the choice back                     */
   /* --------------------------------------------------------------------- */
 
-  /** The two kinds of pending choice, and what the chooser is picking from. */
-  var PENDING_CHOICE_KINDS = { MOVE: 'move', BURN: 'burn' };
+  /**
+   * The kinds of pending choice, and what the chooser is picking from.
+   *
+   * MINIGAME is the single-player exception. Rock Paper Scissors and Betrayal
+   * are decided by what the players themselves choose, so in Single Player -
+   * where every opponent is an AI played through the copy-and-paste relay -
+   * the game stops and asks them, exactly like Steal a Turn asks for a card.
+   * In multiplayer the server runs these as its own timed interactions (see
+   * `pendingInteraction` in server.js), so this kind never appears there.
+   */
+  var PENDING_CHOICE_KINDS = { MOVE: 'move', BURN: 'burn', MINIGAME: 'minigame' };
+
+  /**
+   * The cards whose outcome is a players' CHOICE rather than a roll, and the
+   * words they choose between.
+   *
+   * `beats` is only for the guessing games - which throw beats which. Betrayal
+   * has no hierarchy: its four outcomes are settled from the pair.
+   */
+  var MINIGAMES = {
+    rps: {
+      label: 'Rock Paper Scissors',
+      choices: ['rock', 'paper', 'scissors'],
+      names: { rock: 'Rock', paper: 'Paper', scissors: 'Scissors' },
+      beats: { rock: 'scissors', paper: 'rock', scissors: 'paper' },
+      beatsLine: 'Rock beats Scissors. Paper beats Rock. Scissors beats Paper.'
+    },
+    betrayal: {
+      label: 'Betrayal',
+      choices: ['share', 'steal'],
+      names: { share: 'Share', steal: 'Steal' }
+    }
+  };
 
   /**
    * Steal a Turn: the target's next turn is still theirs to take, but the actor
@@ -1164,6 +1195,14 @@
 
   function resolveRps(state, actor, target) {
     if (!target) return actor.name + ' played Rock Paper Scissors but had no opponent.';
+    // In Single Player the throw is not a roll: the players choose it. The
+    // challenge stops the turn here and waits for both throws, exactly as the
+    // card plays at a table - nobody can see either throw until both are in.
+    if (state.singlePlayer) {
+      return startMinigame(state, 'rps', [actor.id, target.id], {
+        actorId: actor.id, targetId: target.id
+      });
+    }
     var choices = ['rock', 'paper', 'scissors'];
     var a = choices[Math.floor(Math.random() * 3)];
     var t = choices[Math.floor(Math.random() * 3)];
@@ -1192,6 +1231,13 @@
     });
     if (!others.length) return actor.name + ' played Betrayal but there was no second opponent.';
     var second = others[Math.floor(Math.random() * others.length)];
+    // Same again in Single Player: the two opponents choose Share or Steal for
+    // themselves, through the relay or the buttons, rather than being rolled.
+    if (state.singlePlayer) {
+      return startMinigame(state, 'betrayal', [target.id, second.id], {
+        actorId: actor.id, targetId: target.id, secondId: second.id
+      });
+    }
     var c1 = Math.random() < 0.5 ? 'share' : 'steal';
     var c2 = Math.random() < 0.5 ? 'share' : 'steal';
     if (c1 === 'share' && c2 === 'share') {
@@ -1378,6 +1424,10 @@
   function pendingChoiceOptions(state) {
     var pending = state.pendingChoice;
     if (!pending) return null;
+
+    // A challenge: the options are words rather than cards, and the chooser is
+    // whoever is answering next rather than a fixed seat.
+    if (pending.kind === PENDING_CHOICE_KINDS.MINIGAME) return minigameInfo(state);
 
     var target = playerById(state, pending.targetId);
     var chooser = playerById(state, pending.chooserId);
@@ -1679,6 +1729,20 @@
     // A Steal a Turn that is not due yet is none of this seat's business, and
     // they carry on playing normally. `resolvePendingChoice` clears the choice
     // before it calls playCard, so the forced play itself is not blocked.
+    //
+    // A challenge is different: it belongs to nobody's turn, so NOBODY may play
+    // anything while it is open. The table is waiting on Rock Paper Scissors or
+    // Betrayal, and the next card has to wait for it to settle.
+    if (state.pendingChoice &&
+      state.pendingChoice.kind === PENDING_CHOICE_KINDS.MINIGAME) {
+      var challenge = MINIGAMES[state.pendingChoice.game];
+      return {
+        ok: false,
+        error: 'The ' + (challenge ? challenge.label : 'challenge') +
+          ' challenge has to settle first.',
+        events: []
+      };
+    }
     if (state.pendingChoice) {
       if (state.pendingChoice.kind === PENDING_CHOICE_KINDS.BURN &&
         state.pendingChoice.chooserId === state.players[seat].id) {
@@ -1786,11 +1850,18 @@
     // settling the choice later would hand the turn on twice - once here and
     // again when the burn is resolved - which skips a seat each time and can
     // leave the table pointed at somebody who is not playing.
+    //
+    // A Single Player challenge stops the turn for the same reason, and for a
+    // stronger one: the challenge is answered by whichever players it pulled
+    // in, whoever's turn it happens to be, and the turn only resumes when it
+    // has settled.
     var waitingToBurn = state.pendingChoice &&
       state.pendingChoice.kind === PENDING_CHOICE_KINDS.BURN &&
       state.pendingChoice.chooserId === actor.id;
+    var waitingOnMinigame = state.pendingChoice &&
+      state.pendingChoice.kind === PENDING_CHOICE_KINDS.MINIGAME;
 
-    if (waitingToBurn) {
+    if (waitingToBurn || waitingOnMinigame) {
       events.push(forcedChoiceEvent(state));
     } else {
       // Both branches push onto a FRESH array. keepTheTurn takes `events`
@@ -1882,6 +1953,14 @@
     if (!info) {
       return { type: 'choice', text: 'A choice is pending.' };
     }
+    if (info.kind === PENDING_CHOICE_KINDS.MINIGAME) {
+      return {
+        type: 'choice',
+        seat: state.turnInRound,
+        text: info.chooserName + ' has to answer the ' + info.label +
+          ' challenge.'
+      };
+    }
     if (info.kind === PENDING_CHOICE_KINDS.MOVE) {
       return {
         type: 'choice',
@@ -1930,6 +2009,17 @@
     var pending = state.pendingChoice;
     if (!pending) {
       return { ok: false, error: 'There is no choice waiting.', events: [] };
+    }
+    // A challenge is answered with a word - Rock, Paper, Scissors, Share or
+    // Steal - never a card, so it has its own path and must not fall through
+    // into the card options below.
+    if (pending.kind === PENDING_CHOICE_KINDS.MINIGAME) {
+      return {
+        ok: false,
+        error: 'Answer the ' + (MINIGAMES[pending.game] || {}).label +
+          ' challenge with resolveMinigameChoice.',
+        events: []
+      };
     }
     var info = pendingChoiceOptions(state);
     if (!info) {
@@ -2001,6 +2091,254 @@
     if (state.over) events.push({ type: 'over', text: winnerLine(state) });
 
     return { ok: true, events: events, nextSeat: state.over ? -1 : state.turnInRound };
+  }
+
+  /* --------------------------------------------------------------------- */
+  /* Rock Paper Scissors and Betrayal - the players' own throw             */
+  /* --------------------------------------------------------------------- */
+
+  /**
+   * Opens a challenge whose result is a players' CHOICE, and stops the turn
+   * until every named player has answered.
+   *
+   * The order of `order` is the order they answer in, and the first name is
+   * who is asked first. Nothing about the answers is written to the log while
+   * the challenge is open: a pick that shows up before the other player has
+   * committed would hand them the win, so the log only ever sees the result.
+   *
+   * @returns {string} the line that goes on the card's result event.
+   */
+  function startMinigame(state, gameId, order, extra) {
+    var game = MINIGAMES[gameId];
+    var pending = {
+      kind: PENDING_CHOICE_KINDS.MINIGAME,
+      game: gameId,
+      order: order.slice(),
+      index: 0,
+      // Who is answering right now: the first name in the order. The UI reads
+      // this off the raw state to decide between the buttons and the relay.
+      chooserId: order[0],
+      picks: {}
+    };
+    Object.keys(extra || {}).forEach(function (key) { pending[key] = extra[key]; });
+    state.pendingChoice = pending;
+
+    var names = pending.order.map(function (id) {
+      var player = playerById(state, id);
+      return player ? player.name : id;
+    });
+    var first = playerById(state, pending.order[0]);
+    if (gameId === 'rps') {
+      return 'Rock Paper Scissors - ' + names[0] + ' challenges ' + names[1] +
+        '. Both throw at once and neither can see the other throw. ' +
+        (first ? first.name + ' throws first.' : '');
+    }
+    return 'Betrayal - ' + names[0] + ' and ' + names[1] +
+      ' are caught in it. Each secretly chooses Share or Steal. ' +
+      (first ? first.name + ' chooses first.' : '');
+  }
+
+  /**
+   * One answer to the challenge that is waiting.
+   *
+   * Each answer is recorded silently: the next player is simply told it is
+   * their turn, and the log stays empty until the challenge settles. When the
+   * last answer comes in the challenge is resolved and the held turn finally
+   * moves on - the turn belongs to whoever played the card until then, which
+   * is why it was never advanced when the card was played.
+   *
+   * A tie in Rock Paper Scissors clears both throws and starts again, which is
+   * what the card says ties do.
+   *
+   * @param {object} state
+   * @param {string} choiceId one of the game's own choices
+   * @param {function} [beforeAdvance] multiplayer scoring hook, settled before
+   *   standings are frozen - same contract as `resolvePendingChoice`
+   * @returns {{ok: boolean, error?: string, events: Array, waiting?: boolean}}
+   */
+  function resolveMinigameChoice(state, choiceId, beforeAdvance) {
+    var pending = state.pendingChoice;
+    if (!pending || pending.kind !== PENDING_CHOICE_KINDS.MINIGAME) {
+      return { ok: false, error: 'There is no challenge waiting.', events: [] };
+    }
+    var game = MINIGAMES[pending.game];
+    var chooser = playerById(state, pending.order[pending.index]);
+    if (!game || !chooser) {
+      state.pendingChoice = null;
+      return { ok: false, error: 'That challenge is no longer possible.', events: [] };
+    }
+    if (game.choices.indexOf(choiceId) === -1) {
+      return {
+        ok: false,
+        error: chooser.name + ' must pick one of: ' +
+          game.choices.map(function (id) { return game.names[id]; }).join(', ') + '.',
+        events: []
+      };
+    }
+
+    pending.picks[chooser.id] = choiceId;
+    pending.index++;
+
+    // Somebody is still owed an answer: hand the question on, in silence.
+    // `targetId`/`secondId` stay put - they are the challenge's own context,
+    // read when it settles - only the current chooser moves.
+    if (pending.index < pending.order.length) {
+      var next = playerById(state, pending.order[pending.index]);
+      if (next) pending.chooserId = next.id;
+      return { ok: true, events: [], waiting: true, chooserId: pending.chooserId };
+    }
+
+    var events = [];
+    var outcome;
+
+    if (pending.game === 'rps') {
+      outcome = settleRps(state, pending, game);
+    } else {
+      outcome = settleBetrayal(state, pending, game);
+    }
+    if (outcome.tie) {
+      // Both threw the same: the throws are wiped and they go again from the
+      // top, with the first player asked first as before.
+      pending.picks = {};
+      pending.index = 0;
+      pending.chooserId = pending.order[0];
+      events.push({
+        type: 'result',
+        cardId: pending.game,
+        text: outcome.tie
+      });
+      return { ok: true, events: events, waiting: true, chooserId: pending.chooserId };
+    }
+
+    events.push({
+      type: 'result',
+      cardId: pending.game,
+      text: outcome.text
+    });
+    state.pendingChoice = null;
+    if (beforeAdvance) beforeAdvance();
+    var advanced = advanceTurn(state);
+    for (var i = 0; i < advanced.length; i++) events.push(advanced[i]);
+    if (state.over) events.push({ type: 'over', text: winnerLine(state) });
+
+    return { ok: true, events: events, nextSeat: state.over ? -1 : state.turnInRound };
+  }
+
+  /** Both throws are in: work out the winner, or report the tie. */
+  function settleRps(state, pending, game) {
+    var actor = playerById(state, pending.actorId);
+    var target = playerById(state, pending.targetId);
+    if (!actor || !target) return { text: 'Rock Paper Scissors - the challenge was dropped.' };
+    var a = pending.picks[actor.id];
+    var b = pending.picks[target.id];
+    var nameA = game.names[a];
+    var nameB = game.names[b];
+    if (a === b) {
+      return {
+        tie: 'Rock Paper Scissors - both threw ' + nameA + '. A tie: they throw again.'
+      };
+    }
+    // The throw the winner made beats the loser's: `beats[winner] === loser`.
+    var actorWins = game.beats[a] === b;
+    var winner = actorWins ? actor : target;
+    var loser = actorWins ? target : actor;
+    eliminate(state, loser);
+    return {
+      text: 'Rock Paper Scissors - ' + actor.name + ' threw ' + nameA + ', ' +
+        target.name + ' threw ' + nameB + '. ' + winner.name + ' wins. ' +
+        loser.name + ' is eliminated for 1 round.'
+    };
+  }
+
+  /** Both answers are in: apply the four outcomes exactly as the card does. */
+  function settleBetrayal(state, pending, game) {
+    var first = playerById(state, pending.targetId);
+    var second = playerById(state, pending.secondId);
+    if (!first || !second) return { text: 'Betrayal - the challenge was dropped.' };
+    var c1 = pending.picks[first.id];
+    var c2 = pending.picks[second.id];
+    if (c1 === 'share' && c2 === 'share') {
+      first.points += 10000;
+      second.points += 10000;
+      return {
+        text: 'Betrayal - ' + first.name + ' chose Share, ' + second.name +
+          ' chose Share. Both gain 10,000.'
+      };
+    }
+    if (c1 === 'steal' && c2 === 'share') {
+      first.points += 20000;
+      return {
+        text: 'Betrayal - ' + first.name + ' chose Steal, ' + second.name +
+          ' chose Share. ' + first.name + ' gains 20,000.'
+      };
+    }
+    if (c1 === 'share' && c2 === 'steal') {
+      second.points += 20000;
+      return {
+        text: 'Betrayal - ' + first.name + ' chose Share, ' + second.name +
+          ' chose Steal. ' + second.name + ' gains 20,000.'
+      };
+    }
+    return { text: 'Betrayal - both chose Steal. Nobody gains anything.' };
+  }
+
+  /**
+   * Pulls the pick out of an AI's reply: the LAST whole-word match of one of
+   * the game's choices, in the order they appear in the reply.
+   *
+   * "ROCK" and "I think rock." both read as rock, and a reply that names two
+   * of them goes with the one written last - the same rule the card parser
+   * uses for a repeated PLAY line. "I would never steal. Share." is Share,
+   * because Share is what comes last, not because steal is later in the list
+   * of choices. A reply with no match in it is not an answer.
+   */
+  function minigamePickFrom(text, gameId) {
+    var game = MINIGAMES[gameId];
+    if (!game) return null;
+    var source = String(text || '');
+    var found = null;
+    var foundAt = -1;
+    game.choices.forEach(function (choice) {
+      var pattern = new RegExp('\\b' + choice + '\\b', 'ig');
+      var match;
+      while ((match = pattern.exec(source))) {
+        if (match.index > foundAt) {
+          foundAt = match.index;
+          found = choice;
+        }
+      }
+    });
+    return found;
+  }
+
+  /** The challenge that is waiting, described the way the UI needs it. */
+  function minigameInfo(state) {
+    var pending = state.pendingChoice;
+    if (!pending || pending.kind !== PENDING_CHOICE_KINDS.MINIGAME) return null;
+    var game = MINIGAMES[pending.game];
+    var chooser = playerById(state, pending.order[pending.index]);
+    if (!game || !chooser) return null;
+    return {
+      kind: pending.kind,
+      game: pending.game,
+      label: game.label,
+      beatsLine: game.beatsLine || null,
+      chooserId: chooser.id,
+      chooserName: chooser.name,
+      // The chooser is their own "target" for the generic lookups the rest of
+      // the UI already does with these two fields.
+      targetId: chooser.id,
+      targetName: chooser.name,
+      actorName: (playerById(state, pending.actorId) || {}).name || null,
+      participants: pending.order.map(function (id) {
+        var player = playerById(state, id);
+        return { id: id, name: player ? player.name : id };
+      }),
+      picks: Object.assign({}, pending.picks),
+      options: game.choices.map(function (id) {
+        return { id: id, name: game.names[id] };
+      })
+    };
   }
 
   /* --------------------------------------------------------------------- */
@@ -2419,6 +2757,15 @@
    * picker, the AI prompt and the AI relay all read it, so they cannot disagree.
    */
   function legalMoves(state, seat) {
+    // A challenge is on the table: nothing can be played until it settles, so
+    // there is nothing to offer. The blank list keeps the hand, the prompt and
+    // the relay all in step with `playCard`, which refuses the same plays.
+    // Only a challenge gets this - a pending Steal a Turn still has to read the
+    // target's legal moves to build its own options.
+    if (state.pendingChoice &&
+      state.pendingChoice.kind === PENDING_CHOICE_KINDS.MINIGAME) {
+      return [];
+    }
     var me = state.players[seat];
     var moves = [];
     handOf(state, me.id).forEach(function (cardId) {
@@ -2688,6 +3035,11 @@
     resolvePendingChoice: resolvePendingChoice,
     isStealTurnDue: isStealTurnDue,
     clearStaleChoice: clearStaleChoice,
+    // Rock Paper Scissors and Betrayal, in Single Player
+    MINIGAMES: MINIGAMES,
+    resolveMinigameChoice: resolveMinigameChoice,
+    minigamePickFrom: minigamePickFrom,
+    minigameInfo: minigameInfo,
     destroyCard: destroyCard,
     burnableCards: burnableCards,
     moveCardToDiscard: moveCardToDiscard,

@@ -164,6 +164,14 @@
     // keep playing their own turn exactly as normal.
     var pending = Rules.pendingChoiceOptions(s);
     if (pending) {
+      // A challenge stops everybody, the human included: the next card waits
+      // for it to settle, and the throw itself is made on the choice panel
+      // rather than from the hand.
+      if (pending.kind === Rules.PENDING_CHOICE_KINDS.MINIGAME) {
+        return this.fail('The ' + pending.label +
+          ' challenge has to settle first' +
+          (pending.chooserId === 'human' ? ': pick your throw.' : '.'));
+      }
       if (pending.kind === Rules.PENDING_CHOICE_KINDS.BURN) {
         return this.fail(pending.chooserName +
           ' still has to choose which card Alvin destroys.');
@@ -264,6 +272,9 @@
     if (!this.state || !this.state.pendingChoice) return false;
     var pending = this.state.pendingChoice;
     if (pending.kind === Rules.PENDING_CHOICE_KINDS.BURN) return true;
+    // A challenge is answerable the moment it is opened - it does not wait for
+    // anybody's turn, it pulled its own players in.
+    if (pending.kind === Rules.PENDING_CHOICE_KINDS.MINIGAME) return true;
     return this.state.players[this.state.turnInRound].id === pending.targetId;
   };
 
@@ -300,6 +311,37 @@
     var pending = this.pendingChoice();
     if (!pending) {
       return { ok: false, error: 'There is no choice waiting.', hint: '' };
+    }
+
+    // A challenge is answered with a WORD - Rock, Paper, Scissors, Share or
+    // Steal - not a card, so it never goes through the card parser.
+    if (pending.kind === Rules.PENDING_CHOICE_KINDS.MINIGAME) {
+      var pick = Rules.minigamePickFrom(text, pending.game);
+      if (!pick) {
+        var game = Rules.MINIGAMES[pending.game];
+        return {
+          ok: false,
+          error: pending.chooserName + ' has to answer with one word: ' +
+            (game ? game.choices.map(function (id) { return game.names[id]; }).join(', ') : '?') + '.',
+          hint: 'Reply with just the one word - no PLAY: line needed.'
+        };
+      }
+      var challenge = Rules.resolveMinigameChoice(this.state, pick);
+      if (!challenge.ok) {
+        this.lastError = challenge.error;
+        return { ok: false, error: challenge.error, hint: '' };
+      }
+      this.lastError = null;
+      this.record(challenge.events);
+      return {
+        ok: true,
+        events: challenge.events,
+        pick: pick,
+        waiting: challenge.waiting === true,
+        nextChooser: challenge.waiting === true
+          ? (Rules.minigameInfo(this.state) || {}).chooserName || null
+          : null
+      };
     }
 
     // An Alvin burn picks a card to destroy, not a card to aim, so it is parsed
@@ -339,6 +381,19 @@
   Game.prototype.choiceOptions = function () {
     var pending = this.pendingChoice();
     if (!pending) return [];
+    // A challenge's options are words, not cards: they carry the pick id the
+    // buttons and the reply both use, and no target at all.
+    if (pending.kind === Rules.PENDING_CHOICE_KINDS.MINIGAME) {
+      return pending.options.map(function (option) {
+        return {
+          pickId: option.id,
+          cardId: null,
+          targetId: null,
+          name: option.name,
+          targetName: null
+        };
+      });
+    }
     return pending.options.map(function (option) {
       return {
         cardId: option.cardId,
@@ -350,11 +405,34 @@
     }, this);
   };
 
-  /** Settles a forced choice the human made by clicking, for the UI. */
+  /**
+   * Settles a forced choice the human made by clicking, for the UI.
+   *
+   * For a challenge the argument is the PICK itself - 'rock', 'paper',
+   * 'scissors', 'share' or 'steal' - which is why it goes down its own branch
+   * rather than through the card options.
+   */
   Game.prototype.playForcedChoice = function (cardId, targetId) {
     var pending = this.pendingChoice();
     if (!pending) {
       return { ok: false, error: 'There is no choice waiting.' };
+    }
+    if (pending.kind === Rules.PENDING_CHOICE_KINDS.MINIGAME) {
+      var challenge = Rules.resolveMinigameChoice(this.state, cardId);
+      if (!challenge.ok) {
+        this.lastError = challenge.error;
+        return { ok: false, error: challenge.error };
+      }
+      this.lastError = null;
+      this.record(challenge.events);
+      return {
+        ok: true,
+        events: challenge.events,
+        waiting: challenge.waiting === true,
+        nextChooser: challenge.waiting === true
+          ? (Rules.minigameInfo(this.state) || {}).chooserName || null
+          : null
+      };
     }
     var result = Rules.resolvePendingChoice(this.state, cardId, targetId);
     if (!result.ok) {
@@ -369,7 +447,7 @@
   /** "Pick one of these cards." - the error hint for a refused choice. */
   function hintForChoice(state, pending) {
     var names = pending.options.map(function (option) {
-      return Rules.formatCard(option.cardId);
+      return option.id ? option.name : Rules.formatCard(option.cardId);
     });
     return 'Choose one of: ' + (names.length ? names.join(', ') : 'nothing') + '.';
   }
